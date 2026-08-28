@@ -2,21 +2,23 @@ name = "radamantis"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
 
-# Etapa 1 — secrets (NO van en este archivo; usar `wrangler secret put <NOMBRE>` en prod,
+# Etapa 1-2 — secrets (NO van en este archivo; usar `wrangler secret put <NOMBRE>` en prod,
 # y un archivo `.dev.vars` local — ya está en .gitignore — para `wrangler dev`):
 #   TELEGRAM_BOT_TOKEN       — token del bot de @BotFather
 #   TELEGRAM_WEBHOOK_SECRET  — string aleatorio propio; valida el header
 #                              X-Telegram-Bot-Api-Secret-Token en cada request
+#   OPENAI_API_KEY           — API key de OpenAI con billing activo (no la sub. ChatGPT Plus/Pro)
 
-# Etapa 3 en adelante — no provisionado todavía (memoria de conversación + tenant_id):
+# Etapa 2 — D1 solo para usage_log (costos); persistencia de conversación llega en Etapa 3.
+[[d1_databases]]
+binding = "DB"
+database_name = "radamantis"
+database_id = "37fd29a1-ddc2-4aa4-ab16-4d44648d0abb"
+
+# Etapa 3 en adelante — no provisionado todavía (memoria de conversación + tenant_id real):
 # [[durable_objects.bindings]]
 # name = "AGENT"
 # class_name = "SupportAgent"
-
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "radamantis"
-# database_id = ""
 
 # Etapa 5 en adelante (requiere Workers Paid):
 # [[vectorize]]

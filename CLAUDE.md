@@ -6,7 +6,7 @@ Plataforma multi-tenant de asistentes virtuales con IA (Telegram/WhatsApp/Instag
 ## Estado
 - Fase 1 (reverse engineering de Forja): completa.
 - Fase 2 (arquitectura propia de Radamantis): completa y aprobada. Ver `docs/05-arquitectura-radamantis.md`.
-- Fase 3 (implementación): en curso, Etapa 2. Etapa 0 y Etapa 1 completas y con prueba de aceptación pasada: bot de Telegram sandbox "Dr. Vet CH" (@Dr_Vet_CH_bot) desplegado en `radamantis.latinosworkflowmxag.workers.dev`, webhook registrado, mensaje de ida y vuelta confirmado por Oscar (2026-08-28).
+- Fase 3 (implementación): en curso, Etapa 3. Etapas 0, 1 y 2 completas con prueba de aceptación pasada: bot de Telegram sandbox "Dr. Vet CH" (@Dr_Vet_CH_bot) desplegado en `radamantis.latinosworkflowmxag.workers.dev`, responde con GPT-4o-mini (OpenAI) usando prompt de sistema fijo de sandbox, tokens quedan en D1 `usage_log` (confirmado con filas reales, 2026-08-28).
 
 ## Reglas permanentes
 - Multi-tenant desde el diseño: todo dato lleva `tenant_id`; nunca 1 deploy = 1 cliente.

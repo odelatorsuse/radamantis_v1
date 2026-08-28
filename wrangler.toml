@@ -2,14 +2,20 @@ name = "radamantis"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
 
-# Etapa 1-2 — secrets (NO van en este archivo; usar `wrangler secret put <NOMBRE>` en prod,
+# Etapa 1-4 — secrets (NO van en este archivo; usar `wrangler secret put <NOMBRE>` en prod,
 # y un archivo `.dev.vars` local — ya está en .gitignore — para `wrangler dev`):
-#   TELEGRAM_BOT_TOKEN       — token del bot de @BotFather
 #   TELEGRAM_WEBHOOK_SECRET  — string aleatorio propio; valida el header
-#                              X-Telegram-Bot-Api-Secret-Token en cada request
+#                              X-Telegram-Bot-Api-Secret-Token en cada request (compartido
+#                              entre todos los bots/tenants, no es sensible por tenant)
 #   OPENAI_API_KEY           — API key de OpenAI con billing activo (no la sub. ChatGPT Plus/Pro)
+#
+# Nota Etapa 4: el token de cada bot de Telegram YA NO es un secret de Worker.
+# Vive en la tabla channel_bindings (D1) — alta de canal = INSERT, no
+# `wrangler secret put` ni deploy (D8). El token llega en la URL del webhook
+# (`/webhook/telegram/:botToken`, patrón recomendado por Telegram) y sirve a
+# la vez para resolver el tenant y para llamar a la API de Telegram.
 
-# Etapa 2-3 — D1: usage_log (costos) + messages (memoria de conversación, tenant_id obligatorio).
+# Etapa 2-4 — D1: usage_log (costos), messages (memoria) y tenants/channel_bindings (D2/D3).
 [[d1_databases]]
 binding = "DB"
 database_name = "radamantis"

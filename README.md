@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 3 completa — el bot responde con GPT y recuerda el contexto de la conversación: un Durable Object por `tenantId:channel:chatId` respalda la memoria en D1 (`messages`, con `tenant_id`). Sin multi-tenant real todavía (llega en Etapa 4: segundo tenant + aislamiento).
+Etapa 4 completa — multi-tenant real: el router resuelve el tenant dinámicamente vía `channel_bindings` (D1) a partir del token de Telegram en la URL, ya no hay ningún tenant hardcodeado. Aislamiento cross-tenant probado con un test dedicado. Sin RAG todavía (llega en Etapa 5).
 
 ## Requisitos
 - Node.js 20+
@@ -71,6 +71,29 @@ Un `ConversationAgent` (Durable Object, uno por `tenantId:channel:chatId`) carga
 3. Prueba de aceptación de Etapa 3: mándale al bot dos mensajes relacionados (ej. "me llamo X y tengo una mascota llamada Y" y luego "¿cómo se llama mi mascota?") y confirma que la segunda respuesta usa el dato del primer mensaje. Verifica el historial guardado:
    ```bash
    npx wrangler d1 execute radamantis --remote --command="SELECT * FROM messages ORDER BY id ASC"
+   ```
+
+## Etapa 4 — multi-tenant real (channel_bindings)
+
+El token de cada bot de Telegram ya **no** es un secret de Worker: vive en la tabla `channel_bindings` (alta de canal = INSERT, sin `wrangler secret put` ni deploy, D8). El webhook es `/webhook/telegram/:botToken` — el mismo token de la URL sirve para resolver el tenant y para llamar a la API de Telegram.
+
+1. Aplica la migración (crea `tenants` + `channel_bindings`, y siembra el tenant piloto + un segundo tenant de prueba):
+   ```bash
+   npx wrangler d1 execute radamantis --remote --file=migrations/0003_tenants.sql
+   ```
+2. Registra el canal de cada bot con un `INSERT` directo (nunca en un archivo versionado, para no filtrar el token):
+   ```bash
+   npx wrangler d1 execute radamantis --remote --command="INSERT INTO channel_bindings (channel, external_id, tenant_id) VALUES ('telegram', '<TOKEN_DEL_BOT>', '<TENANT_ID>')"
+   ```
+3. `npx wrangler deploy`, y re-registra el webhook de cada bot en Telegram con la nueva URL (incluye el token en el path):
+   ```bash
+   curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
+     -H "Content-Type: application/json" \
+     -d '{"url": "https://<tu-worker>.workers.dev/webhook/telegram/<TOKEN>", "secret_token": "<TELEGRAM_WEBHOOK_SECRET>"}'
+   ```
+4. Prueba de aceptación de Etapa 4: `npm test` corre `test/isolation.test.ts`, un test dedicado (D3) que verifica que dos tenants con el mismo `channel`+`chat_id` nunca comparten historial. En producción, confirma que los mensajes nuevos llevan el `tenant_id` correcto:
+   ```bash
+   npx wrangler d1 execute radamantis --remote --command="SELECT id, tenant_id, chat_id, role FROM messages ORDER BY id DESC LIMIT 5"
    ```
 
 ## Documentación

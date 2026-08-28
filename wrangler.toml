@@ -1,0 +1,22 @@
+name = "radamantis"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+# Etapa 1 en adelante — no provisionado todavía:
+# [[durable_objects.bindings]]
+# name = "AGENT"
+# class_name = "SupportAgent"
+
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "radamantis"
+# database_id = ""
+
+# Etapa 5 en adelante (requiere Workers Paid):
+# [[vectorize]]
+# binding = "VECTORIZE"
+# index_name = "radamantis-kb"
+
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "radamantis-media"

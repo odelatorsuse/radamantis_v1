@@ -1,11 +1,14 @@
 import { OpenAIProvider } from "./llm/openai";
 import { buildMessages, type LLMMessage } from "./llm/provider";
 import { appendMessage, getHistory, type ConversationRef } from "./messages";
-import { SANDBOX_SYSTEM_PROMPT } from "./prompts";
+import { buildRagSystemPrompt } from "./prompts";
+import { embedText } from "./rag/embeddings";
+import { searchKb } from "./rag/search";
 import { logUsage } from "./usage";
 
 interface Env {
   DB: D1Database;
+  VECTORIZE: VectorizeIndex;
   OPENAI_API_KEY: string;
 }
 
@@ -28,8 +31,12 @@ export class ConversationAgent {
     const history = await getHistory(this.env.DB, ref);
     const historyMessages: LLMMessage[] = history.map((m) => ({ role: m.role, content: m.content }));
 
+    const queryEmbedding = await embedText(this.env.OPENAI_API_KEY, userText);
+    const kbMatches = await searchKb(this.env.VECTORIZE, queryEmbedding, tenantId);
+    const systemPrompt = buildRagSystemPrompt(kbMatches);
+
     const llm = new OpenAIProvider(this.env.OPENAI_API_KEY);
-    const messages = buildMessages(SANDBOX_SYSTEM_PROMPT, historyMessages, userText);
+    const messages = buildMessages(systemPrompt, historyMessages, userText);
     const completion = await llm.complete(messages);
 
     await appendMessage(this.env.DB, ref, { role: "user", content: userText });

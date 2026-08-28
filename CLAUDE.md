@@ -6,7 +6,7 @@ Plataforma multi-tenant de asistentes virtuales con IA (Telegram/WhatsApp/Instag
 ## Estado
 - Fase 1 (reverse engineering de Forja): completa.
 - Fase 2 (arquitectura propia de Radamantis): completa y aprobada. Ver `docs/05-arquitectura-radamantis.md`.
-- Fase 3 (implementación): en curso, Etapa 5. Etapas 0-4 completas con prueba de aceptación pasada: bot de Telegram piloto "Dr. Vet CH" (@Dr_Vet_CH_bot) desplegado en `radamantis.latinosworkflowmxag.workers.dev`, responde con GPT-4o-mini (OpenAI), tokens en D1 `usage_log`, memoria de conversación por Durable Object respaldada en D1 `messages` con `tenant_id`, y resolución real de tenant vía `channel_bindings` (D2) — tenant ya no hardcodeado, el token del bot en D1 (no secret) resuelve `vet-ch` en producción; segundo tenant `segundo-tenant-test` provisionado en el schema y aislamiento cross-tenant probado con test automatizado dedicado (`test/isolation.test.ts`, D3) — confirmado 2026-08-28.
+- Fase 3 (implementación): en curso, Etapa 6. Etapas 0-5 completas con prueba de aceptación pasada: bot de Telegram piloto "Dr. Vet CH" (@Dr_Vet_CH_bot) desplegado en `radamantis.latinosworkflowmxag.workers.dev`, responde con GPT-4o-mini (OpenAI), tokens en D1 `usage_log`, memoria de conversación por Durable Object respaldada en D1 `messages` con `tenant_id`, resolución real de tenant vía `channel_bindings` (D2, sin hardcode) con aislamiento cross-tenant probado (`test/isolation.test.ts`, D3), y RAG básico con Vectorize (tier gratuito, filtrado por `tenant_id`, D4) — el bot responde con datos reales de la KB y rechaza inventar cuando no los tiene, confirmado con preguntas reales en Telegram (2026-08-28).
 
 ## Reglas permanentes
 - Multi-tenant desde el diseño: todo dato lleva `tenant_id`; nunca 1 deploy = 1 cliente.
@@ -44,7 +44,7 @@ No avanzar de etapa sin pasar la prueba de aceptación de la etapa actual.
 - Un solo consultorio para probar, pero modelado multi-tenant desde el schema (no un atajo de single-tenant).
 
 ## Infraestructura confirmada
-- Cloudflare: Free plan cubre Etapas 0-4 (Workers, D1, Durable Objects, R2). Vectorize (Etapa 5) requiere Workers Paid ($5/mes).
+- Cloudflare: Free plan cubre Etapas 0-4 (Workers, D1, Durable Objects, R2). Vectorize (Etapa 5) también tiene tier gratuito en Workers Free (30M dimensiones de vector consultadas/mes, 5M almacenadas) — no requiere Workers Paid para prototipar; verificado en developers.cloudflare.com/vectorize/platform/pricing el 2026-08-28 (corrige una suposición anterior de este documento).
 - OpenAI: API key con billing activo ya disponible (no es la suscripción ChatGPT Plus/Pro — son cuentas distintas).
 - LLM principal: OpenAI. Anthropic debe quedar enchufable sin reescribir el core (ver D5 en el doc de arquitectura).
 - Costos: sin límite fijo aún; instrumentar tabla `usage_log` (tokens OpenAI, requests Cloudflare) desde Etapa 2 para proyectar antes de escalar a ~10 clientes.

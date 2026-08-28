@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 4 completa — multi-tenant real: el router resuelve el tenant dinámicamente vía `channel_bindings` (D1) a partir del token de Telegram en la URL, ya no hay ningún tenant hardcodeado. Aislamiento cross-tenant probado con un test dedicado. Sin RAG todavía (llega en Etapa 5).
+Etapa 5 completa — RAG básico: el bot responde con datos reales de la base de conocimiento (Vectorize, filtrado por `tenant_id`) y rechaza inventar cuando la pregunta no está cubierta. Vectorize corre en el tier gratuito de Workers Free, sin costo adicional. El blindaje anti-invento completo como superpower CORE llega en Etapa 6.
 
 ## Requisitos
 - Node.js 20+
@@ -95,6 +95,26 @@ El token de cada bot de Telegram ya **no** es un secret de Worker: vive en la ta
    ```bash
    npx wrangler d1 execute radamantis --remote --command="SELECT id, tenant_id, chat_id, role FROM messages ORDER BY id DESC LIMIT 5"
    ```
+
+## Etapa 5 — RAG básico (Vectorize)
+
+Vectorize corre en el tier gratuito de Workers Free (30M dimensiones consultadas/mes, 5M almacenadas) — no requiere Workers Paid para un KB de este tamaño.
+
+1. Crea el índice (una sola vez, dimensiones 1536 para `text-embedding-3-small`):
+   ```bash
+   npx wrangler vectorize create radamantis-kb --dimensions=1536 --metric=cosine
+   ```
+2. **Antes de cargar vectores**, crea el índice de metadata sobre `tenant_id` — sin esto, filtrar por tenant en las queries devuelve siempre 0 resultados, y Cloudflare **no reindexa retroactivamente** vectores ya insertados (hay que resembrarlos si el orden se invierte, como nos pasó):
+   ```bash
+   npx wrangler vectorize create-metadata-index radamantis-kb --property-name=tenant_id --type=string
+   ```
+3. Genera embeddings de la KB e insértalos (usa `upsert`, no `insert` — `insert` falla con error de auth en esta versión de wrangler contra el índice GA):
+   ```bash
+   OPENAI_API_KEY=<tu key> node scripts/seed-kb.mjs vet-ch kb/vet-ch.json /tmp/vectors.ndjson
+   npx wrangler vectorize upsert radamantis-kb --file=/tmp/vectors.ndjson
+   ```
+4. `npx wrangler deploy`.
+5. Prueba de aceptación de Etapa 5: pregúntale al bot algo que SÍ está en `kb/<tenant>.json` (ej. horario) y confirma que responde con el dato real; luego pregúntale algo que NO está (ej. si atienden una especie que no ofrecen) y confirma que dice que no tiene esa información en vez de inventar.
 
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "horario",
+    "content": "Horario de atención de Dr. Vet CH: lunes a viernes de 9:00 a 18:00, sábados de 9:00 a 13:00. Domingos cerrado."
+  },
+  {
+    "id": "precios",
+    "content": "Precio de consulta general: $350 MXN. Vacunación desde $250 MXN dependiendo de la vacuna. Desparasitación desde $150 MXN."
+  },
+  {
+    "id": "cancelaciones",
+    "content": "Puedes cancelar o reagendar tu cita hasta con 2 horas de anticipación sin costo. Cancelaciones con menos tiempo pueden tener un cargo del 20% del valor de la consulta."
+  },
+  {
+    "id": "ubicacion",
+    "content": "Dr. Vet CH está ubicado en Av. Reforma 123, Ciudad de México."
+  },
+  {
+    "id": "servicios",
+    "content": "Servicios disponibles en Dr. Vet CH: consulta general, vacunación, desparasitación, cirugía menor, estética y baño."
+  }
+]

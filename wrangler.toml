@@ -30,11 +30,14 @@ class_name = "ConversationAgent"
 tag = "v1"
 new_sqlite_classes = ["ConversationAgent"]
 
-# Etapa 5 en adelante (requiere Workers Paid):
-# [[vectorize]]
-# binding = "VECTORIZE"
-# index_name = "radamantis-kb"
+# Etapa 5 — RAG. Vectorize tiene tier gratuito en Workers Free (30M dimensiones
+# consultadas/mes, 5M almacenadas) — no requiere Workers Paid para este KB pequeño.
+# D4: un índice compartido, filtrado por metadata { tenant_id, doc_id } por query.
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "radamantis-kb"
 
+# Etapa 5 en adelante (requiere Workers Paid si se necesita almacenar archivos):
 # [[r2_buckets]]
 # binding = "MEDIA"
 # bucket_name = "radamantis-media"

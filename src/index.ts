@@ -11,7 +11,7 @@ interface Env {
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-4" }));
+app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-5" }));
 
 // D2: el bot_token en la URL identifica el canal (patrón recomendado por
 // Telegram) y a la vez resuelve el tenant vía channel_bindings, sin

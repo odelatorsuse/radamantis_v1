@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { extractIncomingMessage, sendTelegramMessage } from "./telegram";
-import { resolveTenantId } from "./tenants";
+import { resolveTenant } from "./tenants";
 
 interface Env {
   DB: D1Database;
@@ -11,11 +11,11 @@ interface Env {
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-6" }));
+app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-7" }));
 
 // D2: el bot_token en la URL identifica el canal (patrón recomendado por
-// Telegram) y a la vez resuelve el tenant vía channel_bindings, sin
-// hardcodear ningún tenant en el core.
+// Telegram) y a la vez resuelve tenant + vertical vía channel_bindings/tenants,
+// sin hardcodear ningún tenant ni vertical en el core.
 app.post("/webhook/telegram/:botToken", async (c) => {
   const secretHeader = c.req.header("X-Telegram-Bot-Api-Secret-Token");
   if (secretHeader !== c.env.TELEGRAM_WEBHOOK_SECRET) {
@@ -23,10 +23,11 @@ app.post("/webhook/telegram/:botToken", async (c) => {
   }
 
   const botToken = c.req.param("botToken");
-  const tenantId = await resolveTenantId(c.env.DB, "telegram", botToken);
-  if (!tenantId) {
+  const resolved = await resolveTenant(c.env.DB, "telegram", botToken);
+  if (!resolved) {
     return c.text("Unknown channel", 404);
   }
+  const { tenantId, verticalId } = resolved;
 
   const update = await c.req.json();
   const incoming = extractIncomingMessage(update);
@@ -42,7 +43,7 @@ app.post("/webhook/telegram/:botToken", async (c) => {
   const agentRes = await stub.fetch("https://agent/reply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tenantId, channel: "telegram", chatId, userText: incoming.text }),
+    body: JSON.stringify({ tenantId, channel: "telegram", chatId, userText: incoming.text, verticalId }),
   });
   const { replyText } = await agentRes.json<{ replyText: string | null }>();
 

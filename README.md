@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 6 completa — superpowers CORE: blindaje anti-invento aplicado siempre (no solo con contexto de KB) y handoff a humano (detecta la solicitud, dispara una vez, y el bot se calla mientras la conversación esté en handoff). Vertical Template piloto (veterinaria) llega en Etapa 7.
+Etapa 7 completa — Vertical Template declarativo (D6): el prompt base, las tools habilitadas (`searchKb`, `handoffHuman`) y los superpowers default ahora vienen del template del `vertical_id` del tenant, cargado en runtime — agregar un giro nuevo es un archivo en `src/verticals/` + una entrada en el registry, sin tocar `agent.ts`/`index.ts`/`prompts.ts`. Dashboard admin mínimo llega en Etapa 8.
 
 ## Requisitos
 - Node.js 20+
@@ -129,6 +129,19 @@ Vectorize corre en el tier gratuito de Workers Free (30M dimensiones consultadas
   npx wrangler d1 execute radamantis --remote --command="UPDATE handoffs SET resolved_at = datetime('now') WHERE tenant_id = '<TENANT>' AND channel = 'telegram' AND chat_id = '<CHAT_ID>' AND resolved_at IS NULL"
   ```
 - Prueba de aceptación: (1) pregúntale al bot algo que requiera un sistema que no tiene (ej. disponibilidad de citas en tiempo real) y confirma que lo dice en vez de inventar; (2) escríbele una frase de handoff y confirma que responde una vez y luego se queda en silencio con el siguiente mensaje.
+
+## Etapa 7 — Vertical Template declarativo
+
+Cada tenant tiene un `vertical_id` (columna en `tenants`, ya existe desde Etapa 4). El router resuelve `{tenantId, verticalId}` en una sola query (`resolveTenant`) y se lo pasa al `ConversationAgent`, que carga el template correspondiente vía `getVerticalTemplate(verticalId)` (`src/verticals/registry.ts`).
+
+Un `VerticalTemplate` (`src/verticals/types.ts`) define:
+- `promptBase` — reemplaza el prompt fijo que hasta Etapa 6 vivía hardcodeado.
+- `toolsEnabled` — hoy gatea dos capacidades reales: `searchKb` (si no está, no se llama a embeddings ni a Vectorize) y `handoffHuman` (si no está, `detectsHandoffRequest` ni se evalúa).
+- `kbSchema` / `superpowersDefault` — documentación/config para cuando exista un editor de tenants (Etapa 8+); no se validan en runtime todavía.
+
+**Agregar un giro nuevo = un archivo en `src/verticals/` + una línea en `registry.ts`.** No requiere tocar `agent.ts`, `index.ts` ni `prompts.ts` — es exactamente lo que prueba `test/verticals.test.ts` comparando el vertical `veterinaria` (con KB y handoff) contra `sandbox` (sin ninguno, ya asignado a `segundo-tenant-test` desde Etapa 4).
+
+Prueba de aceptación: `npm test` (incluye `test/verticals.test.ts`), más una confirmación en vivo de que el bot piloto (`veterinaria`) sigue funcionando igual después del refactor (sin regresión).
 
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)

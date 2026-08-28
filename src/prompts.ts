@@ -1,13 +1,8 @@
 import type { KbMatch } from "./rag/search";
 
-// Etapa 2: prompt fijo de sandbox. El Vertical Template (Etapa 7) lo reemplaza por giro.
-export const SANDBOX_SYSTEM_PROMPT =
-  "Eres el asistente virtual de una veterinaria. Responde en español, de forma breve, " +
-  "clara y amable.";
-
 // Etapa 6 (superpower CORE, D7): blindaje anti-invento — aplica siempre,
-// no solo cuando hay contexto de KB. Cubre los casos donde el modelo tiende
-// a alucinar aunque no haya nada que buscar en la base de conocimiento
+// para cualquier vertical, no solo cuando hay contexto de KB. Cubre los
+// casos donde el modelo tiende a alucinar aunque no haya nada que buscar
 // (disponibilidad de citas, diagnósticos, datos de una mascota específica).
 export const CORE_ANTI_INVENTION_RULES =
   "Reglas obligatorias, sin excepción:\n" +
@@ -23,19 +18,26 @@ export const CORE_ANTI_INVENTION_RULES =
 // Vectorize se cuele y el modelo lo use como si fuera información confiable.
 const MIN_RELEVANCE_SCORE = 0.5;
 
-export function buildRagSystemPrompt(matches: KbMatch[]): string {
-  const relevant = matches.filter((m) => m.score >= MIN_RELEVANCE_SCORE);
+// Etapa 7: promptBase viene del Vertical Template del tenant (D6), ya no
+// hardcodeado aquí. kbMatches === null significa que ese vertical no tiene
+// la tool "searchKb" habilitada (no se buscó nada, a diferencia de buscar
+// y no encontrar resultados relevantes).
+export function buildSystemPrompt(promptBase: string, kbMatches: KbMatch[] | null): string {
+  let prompt = `${promptBase}\n\n${CORE_ANTI_INVENTION_RULES}`;
 
-  const contextBlock =
-    relevant.length > 0
-      ? relevant.map((m, i) => `[${i + 1}] ${m.content}`).join("\n")
-      : "(sin resultados relevantes en la base de conocimiento)";
+  if (kbMatches !== null) {
+    const relevant = kbMatches.filter((m) => m.score >= MIN_RELEVANCE_SCORE);
+    const contextBlock =
+      relevant.length > 0
+        ? relevant.map((m, i) => `[${i + 1}] ${m.content}`).join("\n")
+        : "(sin resultados relevantes en la base de conocimiento)";
 
-  return (
-    `${SANDBOX_SYSTEM_PROMPT}\n\n${CORE_ANTI_INVENTION_RULES}\n\n` +
-    "Para preguntas sobre el consultorio (horarios, precios, servicios, ubicación, políticas), " +
-    "usa EXCLUSIVAMENTE la información de la base de conocimiento de abajo. Si no está ahí, " +
-    "dilo explícitamente y sugiere que contacten directamente al consultorio.\n\n" +
-    `Contexto:\n${contextBlock}`
-  );
+    prompt +=
+      "\n\nPara preguntas sobre el negocio (horarios, precios, servicios, ubicación, políticas), " +
+      "usa EXCLUSIVAMENTE la información de la base de conocimiento de abajo. Si no está ahí, " +
+      "dilo explícitamente y sugiere que contacten directamente.\n\n" +
+      `Contexto:\n${contextBlock}`;
+  }
+
+  return prompt;
 }

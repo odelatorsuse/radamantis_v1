@@ -11,7 +11,7 @@ interface Env {
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-5" }));
+app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-6" }));
 
 // D2: el bot_token en la URL identifica el canal (patrón recomendado por
 // Telegram) y a la vez resuelve el tenant vía channel_bindings, sin
@@ -44,9 +44,13 @@ app.post("/webhook/telegram/:botToken", async (c) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tenantId, channel: "telegram", chatId, userText: incoming.text }),
   });
-  const { replyText } = await agentRes.json<{ replyText: string }>();
+  const { replyText } = await agentRes.json<{ replyText: string | null }>();
 
-  await sendTelegramMessage(botToken, incoming.chatId, replyText);
+  // Etapa 6: replyText es null mientras la conversación está en handoff —
+  // el bot se calla a propósito, un humano se hace cargo.
+  if (replyText) {
+    await sendTelegramMessage(botToken, incoming.chatId, replyText);
+  }
 
   return c.text("ok");
 });

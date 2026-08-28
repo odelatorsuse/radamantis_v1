@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 5 completa — RAG básico: el bot responde con datos reales de la base de conocimiento (Vectorize, filtrado por `tenant_id`) y rechaza inventar cuando la pregunta no está cubierta. Vectorize corre en el tier gratuito de Workers Free, sin costo adicional. El blindaje anti-invento completo como superpower CORE llega en Etapa 6.
+Etapa 6 completa — superpowers CORE: blindaje anti-invento aplicado siempre (no solo con contexto de KB) y handoff a humano (detecta la solicitud, dispara una vez, y el bot se calla mientras la conversación esté en handoff). Vertical Template piloto (veterinaria) llega en Etapa 7.
 
 ## Requisitos
 - Node.js 20+
@@ -115,6 +115,20 @@ Vectorize corre en el tier gratuito de Workers Free (30M dimensiones consultadas
    ```
 4. `npx wrangler deploy`.
 5. Prueba de aceptación de Etapa 5: pregúntale al bot algo que SÍ está en `kb/<tenant>.json` (ej. horario) y confirma que responde con el dato real; luego pregúntale algo que NO está (ej. si atienden una especie que no ofrecen) y confirma que dice que no tiene esa información en vez de inventar.
+
+## Etapa 6 — superpowers CORE (anti-invento + handoff)
+
+- **Blindaje anti-invento**: `CORE_ANTI_INVENTION_RULES` (`src/prompts.ts`) se incluye siempre en el prompt de sistema, no solo cuando hay contexto de KB — cubre disponibilidad de citas, diagnósticos y datos específicos de mascotas/clientes.
+- **Handoff a humano**: `detectsHandoffRequest` (`src/handoff.ts`) detecta frases explícitas ("hablar con una persona", "operador", "es una emergencia", etc.). Al dispararse: se registra un `handoff` en D1, el bot responde una sola vez avisando que un humano va a contactar, y mientras el handoff siga sin resolver (`resolved_at IS NULL`) el bot **no vuelve a responder** en esa conversación — solo sigue guardando los mensajes.
+- No hay migración nueva más allá de `0004_handoffs.sql`:
+  ```bash
+  npx wrangler d1 execute radamantis --remote --file=migrations/0004_handoffs.sql
+  ```
+- Para reactivar una conversación en handoff (manual hasta el dashboard de Etapa 8):
+  ```bash
+  npx wrangler d1 execute radamantis --remote --command="UPDATE handoffs SET resolved_at = datetime('now') WHERE tenant_id = '<TENANT>' AND channel = 'telegram' AND chat_id = '<CHAT_ID>' AND resolved_at IS NULL"
+  ```
+- Prueba de aceptación: (1) pregúntale al bot algo que requiera un sistema que no tiene (ej. disponibilidad de citas en tiempo real) y confirma que lo dice en vez de inventar; (2) escríbele una frase de handoff y confirma que responde una vez y luego se queda en silencio con el siguiente mensaje.
 
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)

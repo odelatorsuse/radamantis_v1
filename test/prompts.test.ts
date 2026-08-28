@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildRagSystemPrompt } from "../src/prompts";
+import { buildRagSystemPrompt, CORE_ANTI_INVENTION_RULES } from "../src/prompts";
 
 describe("buildRagSystemPrompt", () => {
+  it("incluye siempre las reglas CORE anti-invento, con o sin matches (Etapa 6)", () => {
+    expect(buildRagSystemPrompt([])).toContain(CORE_ANTI_INVENTION_RULES);
+    expect(buildRagSystemPrompt([{ content: "algo", score: 0.9 }])).toContain(CORE_ANTI_INVENTION_RULES);
+  });
+
   it("incluye los matches relevantes como contexto numerado", () => {
     const prompt = buildRagSystemPrompt([
       { content: "Horario: lunes a viernes 9 a 18.", score: 0.9 },
@@ -20,6 +25,5 @@ describe("buildRagSystemPrompt", () => {
   it("indica que no hay contexto cuando no hay matches", () => {
     const prompt = buildRagSystemPrompt([]);
     expect(prompt).toContain("sin resultados relevantes");
-    expect(prompt).toContain("nunca inventes");
   });
 });

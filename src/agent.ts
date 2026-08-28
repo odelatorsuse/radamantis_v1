@@ -1,3 +1,4 @@
+import { createHandoff, detectsHandoffRequest, HANDOFF_REPLY_MESSAGE, isPaused } from "./handoff";
 import { OpenAIProvider } from "./llm/openai";
 import { buildMessages, type LLMMessage } from "./llm/provider";
 import { appendMessage, getHistory, type ConversationRef } from "./messages";
@@ -27,6 +28,20 @@ export class ConversationAgent {
   async fetch(request: Request): Promise<Response> {
     const { tenantId, channel, chatId, userText } = (await request.json()) as ReplyRequest;
     const ref: ConversationRef = { tenantId, channel, chatId };
+
+    // Etapa 6 (CORE): mientras la conversación esté en handoff, el bot deja
+    // de auto-responder — solo registra el mensaje para que lo vea un humano.
+    if (await isPaused(this.env.DB, ref)) {
+      await appendMessage(this.env.DB, ref, { role: "user", content: userText });
+      return Response.json({ replyText: null });
+    }
+
+    if (detectsHandoffRequest(userText)) {
+      await appendMessage(this.env.DB, ref, { role: "user", content: userText });
+      await createHandoff(this.env.DB, ref, userText);
+      await appendMessage(this.env.DB, ref, { role: "assistant", content: HANDOFF_REPLY_MESSAGE });
+      return Response.json({ replyText: HANDOFF_REPLY_MESSAGE });
+    }
 
     const history = await getHistory(this.env.DB, ref);
     const historyMessages: LLMMessage[] = history.map((m) => ({ role: m.role, content: m.content }));

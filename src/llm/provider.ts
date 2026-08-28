@@ -20,9 +20,6 @@ export interface LLMProvider {
   complete(messages: LLMMessage[]): Promise<LLMResponse>;
 }
 
-export function buildMessages(systemPrompt: string, userText: string): LLMMessage[] {
-  return [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userText },
-  ];
+export function buildMessages(systemPrompt: string, history: LLMMessage[], userText: string): LLMMessage[] {
+  return [{ role: "system", content: systemPrompt }, ...history, { role: "user", content: userText }];
 }

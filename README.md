@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 2 completa — el bot responde con GPT (OpenAI) usando un prompt de sistema fijo de sandbox, e instrumenta tokens en D1 (`usage_log`). Sin persistencia de conversación ni multi-tenant todavía (llegan en Etapas 3-4).
+Etapa 3 completa — el bot responde con GPT y recuerda el contexto de la conversación: un Durable Object por `tenantId:channel:chatId` respalda la memoria en D1 (`messages`, con `tenant_id`). Sin multi-tenant real todavía (llega en Etapa 4: segundo tenant + aislamiento).
 
 ## Requisitos
 - Node.js 20+
@@ -57,6 +57,20 @@ npm test
 5. Prueba de aceptación de Etapa 2: escríbele al bot en Telegram y confirma que responde con GPT (ya no es un eco literal). Verifica que quedó el registro de tokens:
    ```bash
    npx wrangler d1 execute radamantis --remote --command="SELECT * FROM usage_log ORDER BY id DESC LIMIT 5"
+   ```
+
+## Etapa 3 — memoria de conversación (Durable Object + D1)
+
+Un `ConversationAgent` (Durable Object, uno por `tenantId:channel:chatId`) carga el historial de D1, arma `[system, ...historial, mensaje nuevo]`, llama al LLM y guarda ambos mensajes de vuelta en D1.
+
+1. Aplica la migración de `messages`:
+   ```bash
+   npx wrangler d1 execute radamantis --remote --file=migrations/0002_messages.sql
+   ```
+2. `npx wrangler deploy` (el binding de Durable Objects y la migración `new_sqlite_classes` ya están en `wrangler.toml` — Workers Free requiere DO con storage SQLite).
+3. Prueba de aceptación de Etapa 3: mándale al bot dos mensajes relacionados (ej. "me llamo X y tengo una mascota llamada Y" y luego "¿cómo se llama mi mascota?") y confirma que la segunda respuesta usa el dato del primer mensaje. Verifica el historial guardado:
+   ```bash
+   npx wrangler d1 execute radamantis --remote --command="SELECT * FROM messages ORDER BY id ASC"
    ```
 
 ## Documentación

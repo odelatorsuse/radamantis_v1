@@ -1,24 +1,21 @@
 import { Hono } from "hono";
-import { OpenAIProvider } from "./llm/openai";
-import { buildMessages } from "./llm/provider";
-import { SANDBOX_SYSTEM_PROMPT } from "./prompts";
 import { extractIncomingMessage, sendTelegramMessage } from "./telegram";
-import { logUsage } from "./usage";
 
 interface Env {
   DB: D1Database;
+  AGENT: DurableObjectNamespace;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_WEBHOOK_SECRET: string;
   OPENAI_API_KEY: string;
 }
 
-// Etapa 2: un solo tenant sandbox hardcodeado. La resolución real de
-// tenant/canal (D2) llega en Etapa 4.
+// Etapa 3: un solo tenant sandbox hardcodeado. La resolución real de
+// tenant/canal (D2, channel_bindings) llega en Etapa 4.
 const SANDBOX_TENANT_ID = "sandbox";
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-2" }));
+app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-3" }));
 
 app.post("/webhook/telegram", async (c) => {
   const secretHeader = c.req.header("X-Telegram-Bot-Api-Secret-Token");
@@ -33,20 +30,26 @@ app.post("/webhook/telegram", async (c) => {
     return c.text("ok");
   }
 
-  const llm = new OpenAIProvider(c.env.OPENAI_API_KEY);
-  const messages = buildMessages(SANDBOX_SYSTEM_PROMPT, incoming.text);
-  const completion = await llm.complete(messages);
+  const chatId = String(incoming.chatId);
+  const conversationKey = `${SANDBOX_TENANT_ID}:telegram:${chatId}`;
+  const stub = c.env.AGENT.get(c.env.AGENT.idFromName(conversationKey));
 
-  await sendTelegramMessage(c.env.TELEGRAM_BOT_TOKEN, incoming.chatId, completion.text);
-
-  await logUsage(c.env.DB, {
-    tenantId: SANDBOX_TENANT_ID,
-    channel: "telegram",
-    model: llm.model,
-    usage: completion.usage,
+  const agentRes = await stub.fetch("https://agent/reply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tenantId: SANDBOX_TENANT_ID,
+      channel: "telegram",
+      chatId,
+      userText: incoming.text,
+    }),
   });
+  const { replyText } = await agentRes.json<{ replyText: string }>();
+
+  await sendTelegramMessage(c.env.TELEGRAM_BOT_TOKEN, incoming.chatId, replyText);
 
   return c.text("ok");
 });
 
+export { ConversationAgent } from "./agent";
 export default app;

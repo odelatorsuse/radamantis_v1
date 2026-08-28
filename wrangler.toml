@@ -9,16 +9,20 @@ compatibility_date = "2026-08-01"
 #                              X-Telegram-Bot-Api-Secret-Token en cada request
 #   OPENAI_API_KEY           — API key de OpenAI con billing activo (no la sub. ChatGPT Plus/Pro)
 
-# Etapa 2 — D1 solo para usage_log (costos); persistencia de conversación llega en Etapa 3.
+# Etapa 2-3 — D1: usage_log (costos) + messages (memoria de conversación, tenant_id obligatorio).
 [[d1_databases]]
 binding = "DB"
 database_name = "radamantis"
 database_id = "37fd29a1-ddc2-4aa4-ab16-4d44648d0abb"
 
-# Etapa 3 en adelante — no provisionado todavía (memoria de conversación + tenant_id real):
-# [[durable_objects.bindings]]
-# name = "AGENT"
-# class_name = "SupportAgent"
+# Etapa 3 — un Durable Object por conversación (tenantId:channel:chatId), D2/D1.
+[[durable_objects.bindings]]
+name = "AGENT"
+class_name = "ConversationAgent"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ConversationAgent"]
 
 # Etapa 5 en adelante (requiere Workers Paid):
 # [[vectorize]]

@@ -53,8 +53,7 @@ Oscar pidió una consola separada por tenant (para el dueño del negocio, no par
 
 | # (§7) | Estado a 2026-08-29 |
 |---|---|
-| 1, 3, 6, 8, 10 | **Ya cubiertos** (anti-invento, handoff, tono configurable, idioma configurable, no-shows — este último recién completado hoy). |
-| 2 (alertas proactivas al operador) | No construido. |
+| 1, 2, 3, 6, 8, 10 | **Ya cubiertos** (anti-invento, alertas proactivas al dueño ["Vigilante", parcial — detección determinista, no scoring de sentimiento con IA], handoff, tono configurable, idioma configurable, no-shows). |
 | 4 (reenganche de leads fríos) | No construido. |
 | 5 (voz/imágenes) | No construido — requiere capacidad multimodal nueva. |
 | 7 (reporte diario automático) | No construido. |
@@ -65,6 +64,11 @@ Oscar pidió una consola separada por tenant (para el dueño del negocio, no par
 | Mejoras (detecta huecos de conocimiento) | No construido — nuevo, requiere trackear preguntas sin match relevante en el RAG. |
 
 **Consola del cliente — aceptada, construida esta misma ronda (Etapa 10):** portal en `/console`, login propio por tenant (usuario/contraseña — decisión de Oscar, más familiar para un dueño de negocio no técnico que una API key), identidad visual propia (verde esmeralda + ámbar, ni la paleta admin ni la del bot). Contenido: stats de hoy, gráfica de 7 días, citas, clientes únicos, salud simple de conexión, conversaciones con pausar/reactivar (el cliente sí puede, no solo Oscar). Ver `CLAUDE.md` para el detalle técnico.
+
+**Ampliaciones sobre la consola, misma ronda:**
+- **Manejo de chats (responder desde el panel):** disparado por otro pantallazo real de Oscar (el panel en vivo de Forja+ con un compositor "Responde como humano") — confirma que la función es real ahí, construida con diseño propio, sin las categorías de sentimiento (Molestos/Contentos), el botón "Sugerir" (borrador con IA) ni el costo por mensaje que aparecen en esa misma captura — quedan como features aparte, no pedidas todavía.
+- **Preparación multi-canal:** abstracción `ChannelProvider` (D5-style) para que agregar WhatsApp/Messenger/Instagram no requiera tocar el manejo de chats, no-shows ni alta de canal — sin construir ningún adaptador real todavía (sin credenciales de Meta).
+- **Superpower #2 "Vigilante" (alertas proactivas):** ver arriba en la tabla — completado en esta misma ronda tras la consola.
 
 ## Roadmap de etapas actualizado
 

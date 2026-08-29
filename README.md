@@ -270,6 +270,23 @@ interface ChannelProvider {
 
 Hoy solo existe `src/channels/telegram.ts`, registrado en `src/channels/registry.ts` (`getChannelProvider(channel)`). Agregar WhatsApp/Messenger/Instagram cuando haya credenciales reales de Meta es: un archivo nuevo en `src/channels/` implementando la interfaz + una línea en el registro — sin tocar `noShowSweep.ts`, `client/routes.ts` ni `admin/routes.ts`, que ya solo hablan con `ChannelProvider`, nunca comparan contra `"telegram"` directamente. `GET /api/admin/channels/supported` expone el catálogo real (hoy solo Telegram).
 
+## Etapa 10 — superpower "Vigilante" (alertas proactivas)
+
+Antes, cuando el bot detectaba que un cliente pedía un humano, se pausaba **en silencio** — nadie se enteraba hasta revisar `/admin` o `/console`. Ahora se le avisa al dueño del negocio en tiempo real por Telegram (`src/vigilante.ts`, `notifyBusinessOwner`, best-effort — si la alerta falla, el handoff ya se creó de todas formas, eso es lo que importa).
+
+Dos disparadores, ambos crean un handoff (el bot se pausa) y mandan la alerta:
+1. **Petición explícita de humano** — ya existía (`detectsHandoffRequest`, Etapa 6).
+2. **Cliente molesto/frustrado** — nueva `detectsUrgentSentiment` en `src/handoff.ts`, misma detección determinista y curada por palabras clave (no un scoring de sentimiento con IA — eso queda como mejora futura, ver `docs/05-arquitectura-radamantis.md` §7).
+
+**Cómo el dueño activa sus alertas (autoservicio desde `/console`, decisión de Oscar — sin que Oscar tenga que configurarlo por él):** Telegram no expone el `chat_id` de nadie en ningún lado de su interfaz, así que en vez de pedirle al dueño que lo busque:
+
+1. La consola (pestaña Salud) genera un código único por tenant (`GET /api/client/alert-settings`, guardado en `tenant_settings.alert_activation_code`).
+2. El dueño le manda ese código, tal cual, a su propio bot por Telegram — una sola vez.
+3. El webhook (`src/index.ts`) lo detecta **antes** de entrar al flujo normal del agente, guarda su `chat_id` (`alert_chat_id`) y le contesta confirmando.
+4. `DELETE /api/client/alert-settings` desactiva las alertas (borra `alert_chat_id`, conserva el código por si las quiere reactivar después mandándolo de nuevo).
+
+Refactor de paso: `upsertTenantSettings` se movió de `admin/repository.ts` a `tenants.ts` (junto a `getTenantSettings`/`TenantSettings`, su lugar natural) porque ahora lo escriben tanto `/admin` (tono/idioma/etc.) como `/console` (alertas) — ninguno de los dos debe depender del otro. `PUT /tenants/:id/settings` preserva `alertChatId`/`alertActivationCode` explícitamente para que guardar la config del negocio nunca los borre por accidente.
+
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)
 - `docs/06-roadmap-agencia.md` — ampliación de roadmap hacia modelo de agencia (Etapa 8.5)

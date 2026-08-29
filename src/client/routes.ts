@@ -16,6 +16,7 @@ import {
   getUpcomingAppointments,
   getWeeklyActivity,
   listConversations,
+  setLeadReengagementEnabled,
   setReviewLink,
 } from "./repository";
 import { createSessionToken, verifySessionToken } from "./session";
@@ -179,5 +180,18 @@ clientApp.put("/review-link", async (c) => {
   const body = await c.req.json<{ reviewLink?: string | null }>();
   const reviewLink = body.reviewLink?.trim() ? body.reviewLink.trim() : null;
   await setReviewLink(c.env.DB, c.get("tenantId"), reviewLink);
+  return c.json({ ok: true });
+});
+
+// Etapa 10 (superpower "Reenganche de leads fríos"): opt-in, el dueño lo
+// activa/desactiva desde /console.
+clientApp.get("/lead-reengagement", async (c) => {
+  const settings = await getTenantSettings(c.env.DB, c.get("tenantId"));
+  return c.json({ enabled: settings.leadReengagementEnabled });
+});
+
+clientApp.put("/lead-reengagement", async (c) => {
+  const body = await c.req.json<{ enabled?: boolean }>();
+  await setLeadReengagementEnabled(c.env.DB, c.get("tenantId"), body.enabled === true);
   return c.json({ ok: true });
 });

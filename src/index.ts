@@ -6,6 +6,7 @@ import { saveCalendarConnection } from "./calendar/repository";
 import { CONSOLE_HTML } from "./client/consoleHtml";
 import { setAlertChatId } from "./client/repository";
 import { clientApp } from "./client/routes";
+import { runColdLeadSweep } from "./coldLeads";
 import { runDailyReportSweep } from "./dailyReport";
 import { runNoShowSweep } from "./noShowSweep";
 import { extractIncomingMessage, sendTelegramMessage } from "./telegram";
@@ -135,11 +136,13 @@ export { ConversationAgent } from "./agent";
 
 export default {
   fetch: app.fetch,
-  // Etapa 10 (superpowers "Recupera no-shows" y "Reporte diario"): mismo
-  // Cron Trigger (wrangler.toml) corre ambos barridos — cada uno hace su
-  // propio chequeo de "¿me toca hacer algo ahora?" y es barato si no.
+  // Etapa 10 (superpowers "Recupera no-shows", "Reporte diario" y
+  // "Reenganche de leads fríos"): mismo Cron Trigger (wrangler.toml) corre
+  // los tres barridos — cada uno hace su propio chequeo de "¿me toca hacer
+  // algo ahora?" y es barato si no.
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runNoShowSweep(env.DB));
     ctx.waitUntil(runDailyReportSweep(env.DB));
+    ctx.waitUntil(runColdLeadSweep(env.DB));
   },
 };

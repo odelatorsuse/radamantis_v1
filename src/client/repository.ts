@@ -260,3 +260,10 @@ export async function setReviewLink(db: D1Database, tenantId: string, reviewLink
   const current = await getTenantSettings(db, tenantId);
   await upsertTenantSettings(db, tenantId, { ...current, reviewLink });
 }
+
+// Etapa 10 (superpower "Reenganche de leads fríos"): opt-in, a diferencia
+// de no-shows/reporte diario que son default-on.
+export async function setLeadReengagementEnabled(db: D1Database, tenantId: string, enabled: boolean): Promise<void> {
+  const current = await getTenantSettings(db, tenantId);
+  await upsertTenantSettings(db, tenantId, { ...current, leadReengagementEnabled: enabled });
+}

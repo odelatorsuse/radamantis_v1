@@ -48,6 +48,7 @@ describe("getTenantSettings", () => {
       alert_chat_id: "12345",
       alert_activation_code: "ABCD1234",
       review_link: "https://g.page/r/tu-negocio/review",
+      lead_reengagement_enabled: 1,
     });
     const bind = vi.fn().mockReturnValue({ first });
     const prepare = vi.fn().mockReturnValue({ bind });
@@ -63,12 +64,13 @@ describe("getTenantSettings", () => {
       alertChatId: "12345",
       alertActivationCode: "ABCD1234",
       reviewLink: "https://g.page/r/tu-negocio/review",
+      leadReengagementEnabled: true,
     });
   });
 });
 
 describe("upsertTenantSettings", () => {
-  it("hace upsert con ON CONFLICT sobre tenant_id, incluyendo los campos de alertas y reseñas", async () => {
+  it("hace upsert con ON CONFLICT sobre tenant_id, incluyendo los campos de alertas, reseñas y reenganche", async () => {
     const run = vi.fn().mockResolvedValue({ success: true });
     const bind = vi.fn().mockReturnValue({ run });
     const prepare = vi.fn().mockReturnValue({ bind });
@@ -85,6 +87,7 @@ describe("upsertTenantSettings", () => {
       alertChatId: "12345",
       alertActivationCode: "ABCD1234",
       reviewLink: "https://g.page/r/tu-negocio/review",
+      leadReengagementEnabled: true,
     });
 
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("ON CONFLICT (tenant_id) DO UPDATE"));
@@ -99,6 +102,7 @@ describe("upsertTenantSettings", () => {
       "12345",
       "ABCD1234",
       "https://g.page/r/tu-negocio/review",
+      1,
     );
   });
 });

@@ -5,6 +5,7 @@ import { deleteCalendarConnection, getCalendarConnection } from "../calendar/rep
 import { getChannelProvider, listSupportedChannels } from "../channels/registry";
 import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
 import { hashPassword } from "../client/passwords";
+import { runColdLeadSweep } from "../coldLeads";
 import { runDailyReportSweep } from "../dailyReport";
 import { runNoShowSweep } from "../noShowSweep";
 import { getTenantSettings, upsertTenantSettings } from "../tenants";
@@ -147,6 +148,7 @@ adminApp.put("/tenants/:id/settings", async (c) => {
     alertChatId: current.alertChatId,
     alertActivationCode: current.alertActivationCode,
     reviewLink: current.reviewLink,
+    leadReengagementEnabled: current.leadReengagementEnabled,
   };
   await upsertTenantSettings(c.env.DB, tenantId, settings);
   await logAdminAction(c.env.DB, { tenantId, action: "update_tenant_settings", details: settings });
@@ -263,6 +265,13 @@ adminApp.post("/no-show-sweep", async (c) => {
 // probarlo bajo demanda sin esperar a que sea la hora local de algún tenant.
 adminApp.post("/daily-report-sweep", async (c) => {
   const result = await runDailyReportSweep(c.env.DB);
+  return c.json(result);
+});
+
+// Etapa 10 (superpower "Reenganche de leads fríos"): mismo patrón que los
+// otros barridos — probarlo bajo demanda sin esperar 5 horas.
+adminApp.post("/cold-lead-sweep", async (c) => {
+  const result = await runColdLeadSweep(c.env.DB);
   return c.json(result);
 });
 

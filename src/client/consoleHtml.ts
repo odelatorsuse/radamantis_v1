@@ -253,6 +253,16 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
           <div class="error" id="reviewLinkMsg"></div>
         </form>
       </div>
+
+      <div class="panel">
+        <h3>Reenganche de leads fríos</h3>
+        <p class="page-sub" style="margin-bottom:14px;">Si un cliente pregunta algo y no vuelve a escribir en unas horas, el bot le manda un mensaje de seguimiento (hasta 2 veces). Apagado por default.</p>
+        <label style="display:flex;align-items:center;gap:10px;font-size:0.92rem;cursor:pointer;">
+          <input type="checkbox" id="leadReengagementToggle" style="width:auto;" />
+          Activar reenganche automático
+        </label>
+        <div class="error" id="leadReengagementMsg"></div>
+      </div>
     </section>
 
     <section class="tab-view" id="tab-mejoras">
@@ -526,6 +536,23 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
   });
 
+  function loadLeadReengagement() {
+    api("/lead-reengagement").then(function (data) {
+      document.getElementById("leadReengagementToggle").checked = !!data.enabled;
+    });
+  }
+
+  document.getElementById("leadReengagementToggle").addEventListener("change", function (e) {
+    var msgEl = document.getElementById("leadReengagementMsg");
+    api("/lead-reengagement", { method: "PUT", body: JSON.stringify({ enabled: e.target.checked }) })
+      .then(function () { msgEl.className = "success-msg"; msgEl.textContent = "Guardado."; })
+      .catch(function (err) {
+        msgEl.className = "error";
+        msgEl.textContent = err.message;
+        e.target.checked = !e.target.checked;
+      });
+  });
+
   function renderConversationList(conversations) {
     var list = document.getElementById("conversationList");
     list.innerHTML = "";
@@ -627,6 +654,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     loadHealth();
     loadAlertSettings();
     loadReviewLink();
+    loadLeadReengagement();
     loadKbGaps();
     loadConversations();
   }

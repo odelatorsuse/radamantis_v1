@@ -5,6 +5,7 @@ import { deleteCalendarConnection, getCalendarConnection } from "../calendar/rep
 import { getChannelProvider, listSupportedChannels } from "../channels/registry";
 import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
 import { hashPassword } from "../client/passwords";
+import { runDailyReportSweep } from "../dailyReport";
 import { runNoShowSweep } from "../noShowSweep";
 import { getTenantSettings, upsertTenantSettings } from "../tenants";
 import { listVerticalTemplates } from "../verticals/registry";
@@ -254,6 +255,13 @@ adminApp.post("/tenants/:id/test-message", async (c) => {
 // corrida programada.
 adminApp.post("/no-show-sweep", async (c) => {
   const result = await runNoShowSweep(c.env.DB);
+  return c.json(result);
+});
+
+// Etapa 10 (superpower "Reporte diario"): mismo patrón que /no-show-sweep —
+// probarlo bajo demanda sin esperar a que sea la hora local de algún tenant.
+adminApp.post("/daily-report-sweep", async (c) => {
+  const result = await runDailyReportSweep(c.env.DB);
   return c.json(result);
 });
 

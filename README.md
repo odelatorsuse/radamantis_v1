@@ -287,6 +287,14 @@ Dos disparadores, ambos crean un handoff (el bot se pausa) y mandan la alerta:
 
 Refactor de paso: `upsertTenantSettings` se movió de `admin/repository.ts` a `tenants.ts` (junto a `getTenantSettings`/`TenantSettings`, su lugar natural) porque ahora lo escriben tanto `/admin` (tono/idioma/etc.) como `/console` (alertas) — ninguno de los dos debe depender del otro. `PUT /tenants/:id/settings` preserva `alertChatId`/`alertActivationCode` explícitamente para que guardar la config del negocio nunca los borre por accidente.
 
+## Etapa 10 — superpower "Reporte diario"
+
+Cada mañana, si el dueño ya activó alertas (sección anterior), también recibe un resumen del día anterior por Telegram — mismo `alert_chat_id`, mismo `ChannelProvider`, sin configuración adicional.
+
+`src/dailyReport.ts` (`runDailyReportSweep`) corre en el mismo Cron Trigger que "Recupera no-shows" (`*/30 * * * *`) y también vía `POST /api/admin/daily-report-sweep` para probar bajo demanda. Dispara a las **8am hora local del tenant** (usa `utcToLocalDateTimeString` para no mandarle el reporte de madrugada a un negocio en otro huso horario), pero el **rango de datos** que resume ("ayer") usa el día calendario UTC — misma simplificación ya aceptada en las estadísticas de la consola (`getTodayStats`/`getWeeklyActivity`), no vale la pena la complejidad de fronteras exactas por zona horaria solo para este resumen.
+
+Contenido: mensajes recibidos/respondidos ayer, clientes distintos, citas agendadas, y conversaciones esperando atención ahora mismo. `tenant_settings.last_daily_report_date` (migración `0015_daily_report.sql`) evita mandarlo dos veces el mismo día — vive fuera de `TenantSettings`/`upsertTenantSettings` a propósito: es estado interno del barrido, nunca algo que `/admin` o `/console` deban poder pisar.
+
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)
 - `docs/06-roadmap-agencia.md` — ampliación de roadmap hacia modelo de agencia (Etapa 8.5)

@@ -53,10 +53,9 @@ Oscar pidió una consola separada por tenant (para el dueño del negocio, no par
 
 | # (§7) | Estado a 2026-08-29 |
 |---|---|
-| 1, 2, 3, 6, 8, 10 | **Ya cubiertos** (anti-invento, alertas proactivas al dueño ["Vigilante", parcial — detección determinista, no scoring de sentimiento con IA], handoff, tono configurable, idioma configurable, no-shows). |
+| 1, 2, 3, 6, 7, 8, 10 | **Ya cubiertos** (anti-invento, alertas proactivas al dueño ["Vigilante", parcial — detección determinista, no scoring de sentimiento con IA], handoff, tono configurable, reporte diario automático, idioma configurable, no-shows). |
 | 4 (reenganche de leads fríos) | No construido. |
 | 5 (voz/imágenes) | No construido — requiere capacidad multimodal nueva. |
-| 7 (reporte diario automático) | No construido. |
 | 9 (encuestas de satisfacción) | No construido. |
 | 11 (pedir reseñas) | No construido. |
 | 12 (cobros por WhatsApp) | No construido — además bloqueado hasta que exista el canal WhatsApp. |

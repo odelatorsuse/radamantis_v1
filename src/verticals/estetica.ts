@@ -8,7 +8,7 @@ export const esteticaTemplate: VerticalTemplate = {
   promptBase:
     "Eres el asistente virtual de un salón de estética. Responde en español, de forma breve, " +
     "cálida y profesional.",
-  toolsEnabled: ["searchKb", "handoffHuman"],
+  toolsEnabled: ["searchKb", "handoffHuman", "checkAvailability", "bookAppointment"],
   kbSchema: ["horario", "precios", "servicios", "ubicacion", "politicas_cancelacion"],
   superpowersDefault: ["blindaje_anti_invento", "handoff"],
 };

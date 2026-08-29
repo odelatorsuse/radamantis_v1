@@ -1,6 +1,9 @@
+import { GoogleCalendarProvider } from "./calendar/google";
+import { getValidAccessToken } from "./calendar/oauth";
+import { CALENDAR_TOOLS, executeCalendarTool } from "./calendar/tools";
 import { createHandoff, detectsHandoffRequest, HANDOFF_REPLY_MESSAGE, isPaused } from "./handoff";
 import { OpenAIProvider } from "./llm/openai";
-import { buildMessages, type LLMMessage } from "./llm/provider";
+import { buildMessages, type LLMMessage, type LLMUsage } from "./llm/provider";
 import { appendMessage, getHistory, type ConversationRef } from "./messages";
 import { buildSystemPrompt } from "./prompts";
 import { embedText } from "./rag/embeddings";
@@ -13,11 +16,17 @@ interface Env {
   DB: D1Database;
   VECTORIZE: VectorizeIndex;
   OPENAI_API_KEY: string;
+  GOOGLE_OAUTH_CLIENT_ID: string;
+  GOOGLE_OAUTH_CLIENT_SECRET: string;
 }
 
 interface ReplyRequest extends ConversationRef {
   userText: string;
   verticalId: string;
+}
+
+function sumUsage(a: LLMUsage, b: LLMUsage): LLMUsage {
+  return { promptTokens: a.promptTokens + b.promptTokens, completionTokens: a.completionTokens + b.completionTokens };
 }
 
 // D2/D1: un Durable Object por conversación (tenantId:channel:chatId) —
@@ -58,18 +67,70 @@ export class ConversationAgent {
       const queryEmbedding = await embedText(this.env.OPENAI_API_KEY, userText);
       kbMatches = await searchKb(this.env.VECTORIZE, queryEmbedding, tenantId);
     }
+
+    // Etapa 10 (Fase B): calendario solo se ofrece como tool si el vertical
+    // lo tiene habilitado Y el tenant ya conectó su propio Google Calendar.
+    let calendarProvider: GoogleCalendarProvider | null = null;
+    const wantsCalendar =
+      template.toolsEnabled.includes("checkAvailability") || template.toolsEnabled.includes("bookAppointment");
+    if (wantsCalendar) {
+      const connection = await getValidAccessToken(
+        this.env.DB,
+        this.env.GOOGLE_OAUTH_CLIENT_ID,
+        this.env.GOOGLE_OAUTH_CLIENT_SECRET,
+        tenantId,
+      );
+      if (connection) {
+        calendarProvider = new GoogleCalendarProvider(connection.accessToken, connection.calendarId);
+      }
+    }
+
     // Etapa 8.5: config en caliente (tono/idioma/moneda/override de prompt),
     // sin redeploy — se lee en cada request, no hay caché.
     const tenantSettings = await getTenantSettings(this.env.DB, tenantId);
-    const systemPrompt = buildSystemPrompt(template.promptBase, kbMatches, tenantSettings);
+    const systemPrompt = buildSystemPrompt(template.promptBase, kbMatches, tenantSettings, calendarProvider !== null);
 
     const llm = new OpenAIProvider(this.env.OPENAI_API_KEY);
     const messages = buildMessages(systemPrompt, historyMessages, userText);
-    const completion = await llm.complete(messages);
+    const tools = calendarProvider ? CALENDAR_TOOLS : undefined;
+
+    let completion = await llm.complete(messages, tools);
+    let usage = completion.usage;
+
+    // Una sola vuelta de tool-calling: si el modelo pidió herramientas, las
+    // ejecutamos contra el calendario real y le devolvemos los resultados
+    // para que dé la respuesta final en texto. No se persisten los pasos
+    // intermedios en `messages`, solo el mensaje final.
+    if (completion.toolCalls.length > 0 && calendarProvider) {
+      const toolResultMessages: LLMMessage[] = [];
+      for (const toolCall of completion.toolCalls) {
+        // Log de auditoría — sin esto, depurar "por qué dijo tal horario"
+        // significa adivinar (ya nos pasó). Visible con `wrangler tail`.
+        console.log("calendar tool call", tenantId, toolCall.name, toolCall.arguments);
+        const result = await executeCalendarTool(
+          toolCall.name,
+          toolCall.arguments,
+          calendarProvider,
+          tenantSettings.timezone,
+          tenantSettings.businessHours,
+        );
+        console.log("calendar tool result", tenantId, toolCall.name, result);
+        toolResultMessages.push({ role: "tool", content: result, toolCallId: toolCall.id });
+      }
+
+      const followUpMessages: LLMMessage[] = [
+        ...messages,
+        { role: "assistant", content: completion.text, toolCalls: completion.toolCalls },
+        ...toolResultMessages,
+      ];
+      const followUp = await llm.complete(followUpMessages);
+      usage = sumUsage(usage, followUp.usage);
+      completion = followUp;
+    }
 
     await appendMessage(this.env.DB, ref, { role: "user", content: userText });
     await appendMessage(this.env.DB, ref, { role: "assistant", content: completion.text });
-    await logUsage(this.env.DB, { tenantId, channel, model: llm.model, usage: completion.usage });
+    await logUsage(this.env.DB, { tenantId, channel, model: llm.model, usage });
 
     return Response.json({ replyText: completion.text });
   }

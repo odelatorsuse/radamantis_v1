@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { DEFAULT_BUSINESS_HOURS, type WeeklyBusinessHours } from "../calendar/businessHours";
 import { buildGoogleAuthUrl } from "../calendar/oauth";
 import { deleteCalendarConnection, getCalendarConnection } from "../calendar/repository";
 import { listVerticalTemplates } from "../verticals/registry";
@@ -122,12 +123,21 @@ adminApp.get("/tenants/:id", async (c) => {
 
 adminApp.put("/tenants/:id/settings", async (c) => {
   const tenantId = c.req.param("id");
-  const body = await c.req.json<{ tone?: string; language?: string; currency?: string; promptOverride?: string | null }>();
+  const body = await c.req.json<{
+    tone?: string;
+    language?: string;
+    currency?: string;
+    promptOverride?: string | null;
+    timezone?: string;
+    businessHours?: WeeklyBusinessHours;
+  }>();
   const settings = {
     tone: body.tone || "calido",
     language: body.language || "es",
     currency: body.currency || "MXN",
     promptOverride: body.promptOverride?.trim() ? body.promptOverride : null,
+    timezone: body.timezone || "America/Mexico_City",
+    businessHours: body.businessHours || DEFAULT_BUSINESS_HOURS,
   };
   await upsertTenantSettings(c.env.DB, tenantId, settings);
   await logAdminAction(c.env.DB, { tenantId, action: "update_tenant_settings", details: settings });

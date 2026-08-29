@@ -37,9 +37,15 @@ describe("getTenantSettings", () => {
   });
 
   it("devuelve la config guardada si existe", async () => {
-    const first = vi
-      .fn()
-      .mockResolvedValue({ tone: "formal", language: "en", currency: "USD", prompt_override: "custom" });
+    const businessHours = { mon: { start: "10:00", end: "14:00" }, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null };
+    const first = vi.fn().mockResolvedValue({
+      tone: "formal",
+      language: "en",
+      currency: "USD",
+      prompt_override: "custom",
+      timezone: "America/Mexico_City",
+      business_hours: JSON.stringify(businessHours),
+    });
     const bind = vi.fn().mockReturnValue({ first });
     const prepare = vi.fn().mockReturnValue({ bind });
     const db = { prepare } as unknown as D1Database;
@@ -49,6 +55,8 @@ describe("getTenantSettings", () => {
       language: "en",
       currency: "USD",
       promptOverride: "custom",
+      timezone: "America/Mexico_City",
+      businessHours,
     });
   });
 });

@@ -216,10 +216,17 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           <option value="pt">Portugués</option>
         </select>
         <input id="settingsCurrency" placeholder="Moneda (ej. MXN)" style="width:100px" />
+        <input id="settingsTimezone" placeholder="Zona horaria (ej. America/Mexico_City)" style="width:220px" />
         <button type="submit">Guardar</button>
       </form>
       <label for="settingsPromptOverride" style="font-size:0.85rem;color:var(--text-muted)">Override de prompt (vacío = usa el del vertical)</label>
       <textarea id="settingsPromptOverride" placeholder="Instrucciones a medida para este tenant..."></textarea>
+
+      <label style="font-size:0.85rem;color:var(--text-muted)">Horario de atención por día (varía por negocio)</label>
+      <table id="businessHoursTable" style="margin-bottom:10px">
+        <thead><tr><th>Día</th><th>Abierto</th><th>Desde</th><th>Hasta</th></tr></thead>
+        <tbody></tbody>
+      </table>
       <p id="settingsError"></p>
 
       <h2 class="section-title">Base de conocimiento (KB)</h2>
@@ -451,6 +458,59 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
   var currentDetailTenantId = null;
   var DETAIL_STATUS_LABELS = { ok: "OK", necesita_atencion: "Necesita atención" };
+  var DAY_ROWS = [["mon", "Lunes"], ["tue", "Martes"], ["wed", "Miércoles"], ["thu", "Jueves"], ["fri", "Viernes"], ["sat", "Sábado"], ["sun", "Domingo"]];
+
+  function renderBusinessHours(businessHours) {
+    var tbody = document.querySelector("#businessHoursTable tbody");
+    tbody.innerHTML = "";
+    DAY_ROWS.forEach(function (row) {
+      var key = row[0];
+      var label = row[1];
+      var day = businessHours[key];
+      var tr = document.createElement("tr");
+      var openCheckbox = document.createElement("input");
+      openCheckbox.type = "checkbox";
+      openCheckbox.checked = !!day;
+      openCheckbox.dataset.day = key;
+      openCheckbox.className = "bh-open";
+      var startInput = document.createElement("input");
+      startInput.type = "time";
+      startInput.value = day ? day.start : "09:00";
+      startInput.dataset.day = key;
+      startInput.className = "bh-start";
+      var endInput = document.createElement("input");
+      endInput.type = "time";
+      endInput.value = day ? day.end : "18:00";
+      endInput.dataset.day = key;
+      endInput.className = "bh-end";
+
+      var tdDay = document.createElement("td");
+      tdDay.textContent = label;
+      var tdOpen = document.createElement("td");
+      tdOpen.appendChild(openCheckbox);
+      var tdStart = document.createElement("td");
+      tdStart.appendChild(startInput);
+      var tdEnd = document.createElement("td");
+      tdEnd.appendChild(endInput);
+      tr.appendChild(tdDay);
+      tr.appendChild(tdOpen);
+      tr.appendChild(tdStart);
+      tr.appendChild(tdEnd);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function readBusinessHoursFromForm() {
+    var result = {};
+    DAY_ROWS.forEach(function (row) {
+      var key = row[0];
+      var openBox = document.querySelector(".bh-open[data-day='" + key + "']");
+      var startInput = document.querySelector(".bh-start[data-day='" + key + "']");
+      var endInput = document.querySelector(".bh-end[data-day='" + key + "']");
+      result[key] = openBox.checked ? { start: startInput.value, end: endInput.value } : null;
+    });
+    return result;
+  }
 
   function metricTile(value, label) {
     var div = document.createElement("div");
@@ -533,6 +593,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       document.getElementById("settingsTone").value = t.settings.tone;
       document.getElementById("settingsLanguage").value = t.settings.language;
       document.getElementById("settingsCurrency").value = t.settings.currency;
+      document.getElementById("settingsTimezone").value = t.settings.timezone;
+      renderBusinessHours(t.settings.businessHours);
+      document.getElementById("settingsBusinessHoursStart").value = t.settings.businessHoursStart;
+      document.getElementById("settingsBusinessHoursEnd").value = t.settings.businessHoursEnd;
       document.getElementById("settingsPromptOverride").value = t.settings.promptOverride || "";
       document.getElementById("settingsError").textContent = "";
       document.getElementById("settingsError").className = "";
@@ -591,6 +655,8 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       tone: document.getElementById("settingsTone").value,
       language: document.getElementById("settingsLanguage").value,
       currency: document.getElementById("settingsCurrency").value,
+      timezone: document.getElementById("settingsTimezone").value,
+      businessHours: readBusinessHoursFromForm(),
       promptOverride: document.getElementById("settingsPromptOverride").value,
     };
     var msgEl = document.getElementById("settingsError");

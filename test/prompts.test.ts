@@ -79,4 +79,22 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("en");
     expect(prompt).toContain("USD");
   });
+
+  it("menciona las tools de calendario, la zona horaria y la hora local solo cuando calendarEnabled=true (Etapa 10 Fase B)", () => {
+    const tenantSettings = {
+      tone: "calido",
+      language: "es",
+      currency: "MXN",
+      promptOverride: null,
+      timezone: "America/Mexico_City",
+      businessHours: { mon: { start: "09:00", end: "18:00" }, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null },
+    };
+    const withCalendar = buildSystemPrompt("prompt base", null, tenantSettings, true);
+    expect(withCalendar).toContain("checkAvailability");
+    expect(withCalendar).toContain("bookAppointment");
+    expect(withCalendar).toContain("America/Mexico_City");
+
+    const withoutCalendar = buildSystemPrompt("prompt base", null, tenantSettings, false);
+    expect(withoutCalendar).not.toContain("checkAvailability");
+  });
 });

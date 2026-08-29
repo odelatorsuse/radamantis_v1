@@ -1,3 +1,5 @@
+import { formatBusinessHours } from "./calendar/businessHours";
+import { getCurrentLocalDateTimeString } from "./calendar/timezone";
 import type { KbMatch } from "./rag/search";
 import type { TenantSettings } from "./tenants";
 
@@ -34,12 +36,46 @@ export function buildSystemPrompt(
   promptBase: string,
   kbMatches: KbMatch[] | null,
   tenantSettings?: TenantSettings,
+  calendarEnabled = false,
 ): string {
   const effectiveBase = tenantSettings?.promptOverride || promptBase;
   let prompt = `${effectiveBase}\n\n${CORE_ANTI_INVENTION_RULES}`;
 
   if (tenantSettings) {
     prompt += `\n\nTono: ${tenantSettings.tone}. Responde en el idioma "${tenantSettings.language}". Usa "${tenantSettings.currency}" como moneda para precios.`;
+  }
+
+  // Etapa 10 (Fase B): cuando el tenant tiene calendario conectado, sí hay
+  // acceso real a la agenda — la regla CORE de arriba sigue aplicando para
+  // cuando NO hay tools (o para datos que la agenda no cubre, como historial
+  // médico), pero aquí el modelo debe usar las tools en vez de declinar.
+  //
+  // Bug real encontrado en producción: sin decirle la zona horaria del
+  // negocio, el modelo confundió tanto el día ("mañana") como la hora
+  // (agendó 12:30 cuando el cliente pidió 13:30) al convertir a UTC por su
+  // cuenta. Ahora se le pide SIEMPRE hora local sin offset — la conversión
+  // real a UTC la hace src/calendar/timezone.ts, no el modelo.
+  if (calendarEnabled && tenantSettings) {
+    const timezone = tenantSettings.timezone;
+    prompt +=
+      "\n\nTienes acceso a herramientas reales de calendario: \"checkAvailability\" para consultar horarios " +
+      "libres y \"bookAppointment\" para agendar. Úsalas siempre que el cliente pregunte por disponibilidad " +
+      "o quiera agendar una cita — nunca inventes ni asumas un horario sin consultarlas primero. Al consultar " +
+      "disponibilidad, pide siempre un rango amplio (el día completo) — el sistema ya filtra automáticamente " +
+      "por el horario real de atención, tú no decidas qué parte del día consultar. IMPORTANTE: llama a " +
+      "checkAvailability CADA VEZ que el cliente pregunte por disponibilidad, incluso si ya preguntó algo " +
+      "parecido antes en la misma conversación — nunca reuses de memoria ni completes con horarios típicos " +
+      "una lista que no viene de una llamada real a la herramienta.\n" +
+      `La zona horaria del negocio es "${timezone}" y su horario de atención por día es: ` +
+      `${formatBusinessHours(tenantSettings.businessHours)}. Cuando llames a estas herramientas, da las ` +
+      'fechas/horas SIEMPRE en hora LOCAL de esa zona, formato "YYYY-MM-DDTHH:MM:SS" (sin "Z" ni offset) — ' +
+      "el sistema se encarga de convertirlas a UTC correctamente y de rechazar horarios fuera de atención. " +
+      `Fecha y hora actual en esa zona: ${getCurrentLocalDateTimeString(timezone)}.\n` +
+      "Antes de agendar (bookAppointment), es OBLIGATORIO tener: (1) la fecha y hora exacta, (2) el nombre " +
+      "completo del cliente, (3) un teléfono o contacto de vuelta, y (4) el motivo de la cita. Si falta alguno " +
+      "de estos datos, pregúntalo antes de intentar agendar. IMPORTANTE: si el cliente ya te dio su nombre, " +
+      "contacto o el motivo en algún mensaje anterior de esta misma conversación, reutiliza esos datos — no " +
+      "los vuelvas a pedir ni le hagas repetirse.";
   }
 
   if (kbMatches !== null) {

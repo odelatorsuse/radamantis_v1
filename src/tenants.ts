@@ -1,3 +1,5 @@
+import { DEFAULT_BUSINESS_HOURS, parseBusinessHours, type WeeklyBusinessHours } from "./calendar/businessHours";
+
 export interface ResolvedTenant {
   tenantId: string;
   verticalId: string;
@@ -5,11 +7,19 @@ export interface ResolvedTenant {
 
 // Etapa 8.5: config en caliente por tenant — sin fila propia en
 // tenant_settings, se asumen estos defaults (ver src/admin/repository.ts).
+// Etapa 10 (Fase B): timezone es obligatoria para que el calendario
+// convierta horas correctamente — sin esto el LLM las inventa (bug real).
+// businessHours filtra la disponibilidad real por día de la semana, para
+// que el modelo no tenga que adivinar (otro bug real: interpretó "la tarde"
+// como "desde las 13:30" e ignoró 9:00-13:30; y dejó agendar un sábado a
+// las 13:00 cuando ese día cierra a esa hora).
 export interface TenantSettings {
   tone: string;
   language: string;
   currency: string;
   promptOverride: string | null;
+  timezone: string;
+  businessHours: WeeklyBusinessHours;
 }
 
 export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
@@ -17,6 +27,8 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
   language: "es",
   currency: "MXN",
   promptOverride: null,
+  timezone: "America/Mexico_City",
+  businessHours: DEFAULT_BUSINESS_HOURS,
 };
 
 // D2/D6: el router resuelve tenant Y vertical antes de instanciar el DO,
@@ -42,10 +54,24 @@ export async function resolveTenant(
 
 export async function getTenantSettings(db: D1Database, tenantId: string): Promise<TenantSettings> {
   const row = await db
-    .prepare("SELECT tone, language, currency, prompt_override FROM tenant_settings WHERE tenant_id = ?")
+    .prepare("SELECT tone, language, currency, prompt_override, timezone, business_hours FROM tenant_settings WHERE tenant_id = ?")
     .bind(tenantId)
-    .first<{ tone: string; language: string; currency: string; prompt_override: string | null }>();
+    .first<{
+      tone: string;
+      language: string;
+      currency: string;
+      prompt_override: string | null;
+      timezone: string;
+      business_hours: string;
+    }>();
 
   if (!row) return DEFAULT_TENANT_SETTINGS;
-  return { tone: row.tone, language: row.language, currency: row.currency, promptOverride: row.prompt_override };
+  return {
+    tone: row.tone,
+    language: row.language,
+    currency: row.currency,
+    promptOverride: row.prompt_override,
+    timezone: row.timezone,
+    businessHours: parseBusinessHours(row.business_hours),
+  };
 }

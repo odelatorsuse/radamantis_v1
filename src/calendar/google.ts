@@ -35,7 +35,14 @@ export class GoogleCalendarProvider implements CalendarProvider {
     // Blindaje anti-doble-cita: revalida disponibilidad justo antes de
     // insertar, en vez de confiar en lo que el LLM haya asumido antes.
     const freeSlots = await this.checkAvailability(details.start, details.end);
-    const fits = freeSlots.some((slot) => slot.start <= details.start && slot.end >= details.end);
+    const requestedStart = new Date(details.start).getTime();
+    const requestedEnd = new Date(details.end).getTime();
+    // Comparación numérica, no de strings — dos timestamps ISO 8601 pueden
+    // representar el mismo instante en formatos que no ordenan igual como
+    // texto (ej. con/sin milisegundos, "Z" vs "+00:00").
+    const fits = freeSlots.some(
+      (slot) => new Date(slot.start).getTime() <= requestedStart && new Date(slot.end).getTime() >= requestedEnd,
+    );
     if (!fits) {
       return { ok: false, error: "El horario solicitado ya no está disponible." };
     }

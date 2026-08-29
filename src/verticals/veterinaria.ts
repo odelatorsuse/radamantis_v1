@@ -8,7 +8,7 @@ export const veterinariaTemplate: VerticalTemplate = {
   promptBase:
     "Eres el asistente virtual de una veterinaria. Responde en español, de forma breve, " +
     "clara y amable.",
-  toolsEnabled: ["searchKb", "handoffHuman"],
+  toolsEnabled: ["searchKb", "handoffHuman", "checkAvailability", "bookAppointment"],
   kbSchema: ["horario", "precios", "cancelaciones", "ubicacion", "servicios"],
   superpowersDefault: ["blindaje_anti_invento", "handoff"],
 };

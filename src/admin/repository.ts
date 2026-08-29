@@ -134,16 +134,26 @@ export async function upsertTenantSettings(
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, updated_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT (tenant_id) DO UPDATE SET
          tone = excluded.tone,
          language = excluded.language,
          currency = excluded.currency,
          prompt_override = excluded.prompt_override,
+         timezone = excluded.timezone,
+         business_hours = excluded.business_hours,
          updated_at = excluded.updated_at`,
     )
-    .bind(tenantId, settings.tone, settings.language, settings.currency, settings.promptOverride)
+    .bind(
+      tenantId,
+      settings.tone,
+      settings.language,
+      settings.currency,
+      settings.promptOverride,
+      settings.timezone,
+      JSON.stringify(settings.businessHours),
+    )
     .run();
 }
 

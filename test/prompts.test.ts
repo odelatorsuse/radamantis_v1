@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSystemPrompt, CORE_ANTI_INVENTION_RULES } from "../src/prompts";
+import { buildSystemPrompt, CORE_ANTI_INVENTION_RULES, hasRelevantMatch } from "../src/prompts";
 
 describe("buildSystemPrompt", () => {
   it("incluye siempre las reglas CORE anti-invento, con o sin matches (Etapa 6)", () => {
@@ -96,5 +96,24 @@ describe("buildSystemPrompt", () => {
 
     const withoutCalendar = buildSystemPrompt("prompt base", null, tenantSettings, false);
     expect(withoutCalendar).not.toContain("checkAvailability");
+  });
+});
+
+describe("hasRelevantMatch (superpower Mejoras)", () => {
+  it("true si al menos un match supera el umbral", () => {
+    expect(hasRelevantMatch([{ content: "x", score: 0.1 }, { content: "y", score: 0.5 }])).toBe(true);
+  });
+
+  it("false si todos los matches están por debajo del umbral", () => {
+    expect(hasRelevantMatch([{ content: "x", score: 0.1 }, { content: "y", score: 0.2 }])).toBe(false);
+  });
+
+  it("false con un arreglo vacío", () => {
+    expect(hasRelevantMatch([])).toBe(false);
+  });
+
+  it("usa el mismo umbral 0.35 que buildSystemPrompt (una sola fuente de verdad)", () => {
+    expect(hasRelevantMatch([{ content: "x", score: 0.35 }])).toBe(true);
+    expect(hasRelevantMatch([{ content: "x", score: 0.34 }])).toBe(false);
   });
 });

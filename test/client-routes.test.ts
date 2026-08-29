@@ -256,3 +256,26 @@ describe("GET/DELETE /alert-settings (superpower Vigilante)", () => {
     expect(env.__run).toHaveBeenCalled();
   });
 });
+
+describe("GET/DELETE /kb-gaps (superpower Mejoras)", () => {
+  it("GET lista los huecos del tenant autenticado, no de un parámetro de URL", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    (env.__all as ReturnType<typeof vi.fn>).mockResolvedValue({
+      results: [{ id: 1, question: "¿Atienden reptiles?", created_at: "2026-09-01T10:00:00Z" }],
+    });
+    const res = await clientApp.request("/kb-gaps", { headers: { Authorization: `Bearer ${token}` } }, env);
+    expect(res.status).toBe(200);
+    const body = await res.json<{ gaps: unknown[] }>();
+    expect(body.gaps).toEqual([{ id: 1, question: "¿Atienden reptiles?", createdAt: "2026-09-01T10:00:00Z" }]);
+    expect(env.__bind).toHaveBeenCalledWith("vet-ch", 50);
+  });
+
+  it("DELETE descarta por id, scoped al tenant del token", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request("/kb-gaps/7", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }, env);
+    expect(res.status).toBe(200);
+    expect(env.__bind).toHaveBeenCalledWith(7, "vet-ch");
+  });
+});

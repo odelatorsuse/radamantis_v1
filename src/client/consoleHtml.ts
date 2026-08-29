@@ -172,6 +172,10 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h4l2-7 4 14 2-7h4"/></svg>
       Salud
     </button>
+    <button class="nav-item" data-tab="mejoras">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+      Mejoras
+    </button>
     <div class="sidebar-footer">
       <button class="btn-secondary" id="logoutBtn" style="width:100%;">Cerrar sesión</button>
     </div>
@@ -237,6 +241,15 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
         <h3>Alertas</h3>
         <p class="page-sub" style="margin-bottom:14px;">Recibe un aviso por Telegram cuando un cliente pida hablar con alguien o suene molesto.</p>
         <div id="alertSettingsPanel"></div>
+      </div>
+    </section>
+
+    <section class="tab-view" id="tab-mejoras">
+      <h1 class="page-title">Mejoras</h1>
+      <p class="page-sub">Preguntas que tu bot no pudo responder con confianza — agrégalas a tu base de conocimiento. Nunca se agregan solas.</p>
+      <div class="panel">
+        <table id="kbGapsTable"><thead><tr><th>Pregunta</th><th>Fecha</th><th></th></tr></thead><tbody></tbody></table>
+        <p class="empty" id="kbGapsEmpty" style="display:none;">No hay preguntas sin responder registradas — buena señal.</p>
       </div>
     </section>
 
@@ -465,6 +478,28 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     });
   }
 
+  function loadKbGaps() {
+    api("/kb-gaps").then(function (data) {
+      var body = document.querySelector("#kbGapsTable tbody");
+      body.innerHTML = "";
+      data.gaps.forEach(function (g) {
+        var tr = document.createElement("tr");
+        var dismissBtn = document.createElement("button");
+        dismissBtn.className = "btn-secondary";
+        dismissBtn.textContent = "Descartar";
+        dismissBtn.addEventListener("click", function () {
+          api("/kb-gaps/" + g.id, { method: "DELETE" }).then(loadKbGaps);
+        });
+        var actionsTd = document.createElement("td");
+        actionsTd.appendChild(dismissBtn);
+        tr.innerHTML = "<td>" + esc(g.question) + "</td><td>" + esc(formatDateTime(g.createdAt)) + "</td>";
+        tr.appendChild(actionsTd);
+        body.appendChild(tr);
+      });
+      document.getElementById("kbGapsEmpty").style.display = data.gaps.length ? "none" : "block";
+    });
+  }
+
   function renderConversationList(conversations) {
     var list = document.getElementById("conversationList");
     list.innerHTML = "";
@@ -565,6 +600,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     loadClients();
     loadHealth();
     loadAlertSettings();
+    loadKbGaps();
     loadConversations();
   }
 

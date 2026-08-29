@@ -6,8 +6,9 @@ import { createHandoff, detectsHandoffRequest, detectsUrgentSentiment, HANDOFF_R
 import { OpenAIProvider } from "./llm/openai";
 import { buildMessages, type LLMMessage, type LLMUsage } from "./llm/provider";
 import { appendMessage, getHistory, type ConversationRef } from "./messages";
-import { buildSystemPrompt } from "./prompts";
+import { buildSystemPrompt, hasRelevantMatch } from "./prompts";
 import { embedText } from "./rag/embeddings";
+import { recordKbGap } from "./rag/gaps";
 import { searchKb, type KbMatch } from "./rag/search";
 import { getTenantSettings } from "./tenants";
 import { logUsage } from "./usage";
@@ -72,6 +73,13 @@ export class ConversationAgent {
     if (template.toolsEnabled.includes("searchKb")) {
       const queryEmbedding = await embedText(this.env.OPENAI_API_KEY, userText);
       kbMatches = await searchKb(this.env.VECTORIZE, queryEmbedding, tenantId);
+      // Etapa 10 (superpower "Mejoras"): ninguna respuesta con confianza en
+      // la KB — se registra para que el dueño sepa qué le falta agregar. El
+      // bot nunca "aprende solo" de esto, la decisión de qué agregar es
+      // siempre humana (mismo principio que el blindaje anti-invento).
+      if (!hasRelevantMatch(kbMatches)) {
+        await recordKbGap(this.env.DB, tenantId, userText);
+      }
     }
 
     // Etapa 10 (Fase B): calendario solo se ofrece como tool si el vertical

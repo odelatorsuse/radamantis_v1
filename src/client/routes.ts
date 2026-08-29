@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { getChannelProvider } from "../channels/registry";
 import { createHandoff, isPaused, resolveHandoffByRef } from "../handoff";
 import { appendMessage, getHistory } from "../messages";
+import { dismissKbGap, listKbGaps } from "../rag/gaps";
 import { getChannelExternalId } from "../tenants";
 import { verifyPassword } from "./passwords";
 import {
@@ -149,5 +150,19 @@ clientApp.get("/alert-settings", async (c) => {
 
 clientApp.delete("/alert-settings", async (c) => {
   await clearAlertChatId(c.env.DB, c.get("tenantId"));
+  return c.json({ ok: true });
+});
+
+// Etapa 10 (superpower "Mejoras"): preguntas que el bot no pudo responder
+// con confianza — el dueño decide qué agregar a su base de conocimiento,
+// el bot nunca la edita solo.
+clientApp.get("/kb-gaps", async (c) => {
+  const gaps = await listKbGaps(c.env.DB, c.get("tenantId"));
+  return c.json({ gaps });
+});
+
+clientApp.delete("/kb-gaps/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  await dismissKbGap(c.env.DB, c.get("tenantId"), id);
   return c.json({ ok: true });
 });

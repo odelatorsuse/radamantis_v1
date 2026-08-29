@@ -26,7 +26,14 @@ export const CORE_ANTI_INVENTION_RULES =
 // 0.486 y se filtró por error). 0.35 deja pasar esos casos; el "úsalo
 // EXCLUSIVAMENTE / si no está ahí dilo" de abajo + CORE_ANTI_INVENTION_RULES
 // son la segunda capa de defensa contra contexto poco relevante.
-const MIN_RELEVANCE_SCORE = 0.35;
+// Exportado para que agent.ts (superpower "Mejoras") pueda saber si un
+// kbMatches "no tuvo nada relevante" con el MISMO criterio que usa el
+// prompt — una sola fuente de verdad para el umbral.
+export const MIN_RELEVANCE_SCORE = 0.35;
+
+export function hasRelevantMatch(kbMatches: KbMatch[]): boolean {
+  return kbMatches.some((m) => m.score >= MIN_RELEVANCE_SCORE);
+}
 
 // Etapa 7: promptBase viene del Vertical Template del tenant (D6). Etapa 8.5:
 // tenantSettings.promptOverride, si existe, reemplaza promptBase — pero

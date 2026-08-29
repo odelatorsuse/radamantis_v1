@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { buildGoogleAuthUrl } from "../calendar/oauth";
+import { deleteCalendarConnection, getCalendarConnection } from "../calendar/repository";
 import { listVerticalTemplates } from "../verticals/registry";
 import { ingestKbDocs, type KbDocInput } from "./kb";
 import {
@@ -21,6 +23,7 @@ interface Env {
   ADMIN_API_KEY: string;
   OPENAI_API_KEY: string;
   TELEGRAM_WEBHOOK_SECRET: string;
+  GOOGLE_OAUTH_CLIENT_ID: string;
 }
 
 export const adminApp = new Hono<{ Bindings: Env }>();
@@ -128,6 +131,35 @@ adminApp.put("/tenants/:id/settings", async (c) => {
   };
   await upsertTenantSettings(c.env.DB, tenantId, settings);
   await logAdminAction(c.env.DB, { tenantId, action: "update_tenant_settings", details: settings });
+  return c.json({ ok: true });
+});
+
+// Etapa 10 (Fase A, booking real): estado/conexión/desconexión del
+// calendario de un tenant. El intercambio código→tokens vive en la ruta
+// pública /oauth/google/callback (index.ts) — Google redirige el navegador
+// ahí directo, sin nuestro Bearer token.
+adminApp.get("/tenants/:id/calendar", async (c) => {
+  const connection = await getCalendarConnection(c.env.DB, c.req.param("id"));
+  if (!connection) return c.json({ connected: false });
+  return c.json({
+    connected: true,
+    provider: connection.provider,
+    calendarId: connection.calendarId,
+    connectedAt: connection.connectedAt,
+  });
+});
+
+adminApp.get("/tenants/:id/calendar/connect-url", (c) => {
+  const origin = new URL(c.req.url).origin;
+  const redirectUri = `${origin}/oauth/google/callback`;
+  const url = buildGoogleAuthUrl(c.env.GOOGLE_OAUTH_CLIENT_ID, redirectUri, c.req.param("id"));
+  return c.json({ url });
+});
+
+adminApp.delete("/tenants/:id/calendar", async (c) => {
+  const tenantId = c.req.param("id");
+  await deleteCalendarConnection(c.env.DB, tenantId);
+  await logAdminAction(c.env.DB, { tenantId, action: "disconnect_calendar" });
   return c.json({ ok: true });
 });
 

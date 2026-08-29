@@ -229,6 +229,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         <button type="submit">Cargar KB</button>
       </form>
       <p id="kbError"></p>
+
+      <h2 class="section-title">Calendario</h2>
+      <div id="calendarStatus" style="font-size:0.9rem"></div>
+      <p id="calendarError"></p>
     </div>
 
     <div id="botsListView">
@@ -536,7 +540,42 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       document.getElementById("botsListView").style.display = "none";
       document.getElementById("tenantDetail").style.display = "block";
       window.scrollTo(0, 0);
+      loadCalendarStatus(tenantId);
     });
+  }
+
+  function loadCalendarStatus(tenantId) {
+    var statusEl = document.getElementById("calendarStatus");
+    var errEl = document.getElementById("calendarError");
+    errEl.textContent = "";
+    statusEl.textContent = "Cargando...";
+    api("/tenants/" + tenantId + "/calendar").then(function (data) {
+      if (!data.connected) {
+        statusEl.innerHTML = "";
+        var connectBtn = document.createElement("button");
+        connectBtn.textContent = "Conectar Google Calendar";
+        connectBtn.onclick = function () {
+          api("/tenants/" + tenantId + "/calendar/connect-url").then(function (urlData) {
+            window.open(urlData.url, "_blank");
+          });
+        };
+        statusEl.appendChild(connectBtn);
+        return;
+      }
+      statusEl.innerHTML =
+        "<span class='status-line'><span class='status-dot ok'></span>Conectado (" + data.provider +
+        ", calendario: " + data.calendarId + ", desde " + data.connectedAt + ")</span>";
+      var disconnectBtn = document.createElement("button");
+      disconnectBtn.className = "secondary";
+      disconnectBtn.style.marginLeft = "10px";
+      disconnectBtn.textContent = "Desconectar";
+      disconnectBtn.onclick = function () {
+        api("/tenants/" + tenantId + "/calendar", { method: "DELETE" }).then(function () {
+          loadCalendarStatus(tenantId);
+        });
+      };
+      statusEl.appendChild(disconnectBtn);
+    }).catch(function (err) { errEl.className = "error"; errEl.textContent = err.message; });
   }
 
   document.getElementById("closeDetailBtn").addEventListener("click", function () {

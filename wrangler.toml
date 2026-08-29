@@ -12,6 +12,10 @@ compatibility_date = "2026-08-01"
 #                              D10: nunca Basic Auth. Un solo operador hoy (Oscar); JWT/API-key
 #                              por tenant y Cloudflare Access para super-admin quedan pendientes
 #                              de endurecer (ver nota de seguridad en CLAUDE.md, Etapa 8).
+#   GOOGLE_OAUTH_CLIENT_ID       — Etapa 10 (booking real): app OAuth de Radamantis en Google
+#   GOOGLE_OAUTH_CLIENT_SECRET     Cloud Console (Calendar API). Una sola app compartida; cada
+#                                  tenant autoriza SU PROPIO calendario individualmente — los
+#                                  tokens resultantes viven en D1 (calendar_connections), no aquí.
 #
 # Nota Etapa 4: el token de cada bot de Telegram YA NO es un secret de Worker.
 # Vive en la tabla channel_bindings (D1) — alta de canal = INSERT, no

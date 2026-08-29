@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 10, Fase A completa — booking real: cada tenant puede conectar su propio Google Calendar desde `/admin` (OAuth), verificado con una consulta real de disponibilidad. Fase B (que el bot agende por conversación, vía tool calling del LLM) es el siguiente paso. Etapa 9 (alta de cliente self-service, sin CLI) y las etapas anteriores siguen completas — ver secciones abajo.
+Etapa 10, Fase A y B completas — booking real: cada tenant conecta su propio Google Calendar desde `/admin` (OAuth) y el bot consulta disponibilidad y agenda citas por conversación (tool calling real del LLM), verificado con citas reales creadas/rechazadas en Telegram. Etapa 9 (alta de cliente self-service, sin CLI) y las etapas anteriores siguen completas — ver secciones abajo.
 
 ## Requisitos
 - Node.js 20+
@@ -169,7 +169,7 @@ Además, `PUT /api/admin/tenants/:id/channels/:channel` permite rotar el token d
 
 Prueba de aceptación pasada: alta de un 3er cliente real (Sofía Estética, `@Asistente_sofiabot`, vertical `estetica`) — tenant + canal + KB en 36 segundos de llamadas a la API, confirmado con preguntas reales en Telegram.
 
-## Etapa 10, Fase A — booking real (Google Calendar)
+## Etapa 10, Fase A — conexión OAuth (Google Calendar)
 
 Cada tenant conecta **su propio** Google Calendar (no uno compartido) vía OAuth. Interfaz `CalendarProvider` (`src/calendar/provider.ts`) desacoplada del proveedor, D5-style — Google es el primer adaptador (`src/calendar/google.ts`), Outlook se agrega después sin tocar el core.
 
@@ -186,7 +186,18 @@ Cada tenant conecta **su propio** Google Calendar (no uno compartido) vía OAuth
 
 `bookAppointment` revalida disponibilidad justo antes de crear el evento (blindaje anti-doble-cita) — nunca confía en lo que el LLM haya asumido antes de llamar a la tool.
 
-**Fase B (pendiente):** tool calling real en la capa LLM + wiring en `agent.ts` para que el bot consulte disponibilidad y agende citas por conversación — hoy la conexión ya funciona, pero el bot todavía no la usa.
+## Etapa 10, Fase B — el bot agenda por conversación (tool calling real)
+
+`LLMProvider`/`OpenAIProvider` soportan function calling real (`src/llm/provider.ts`, `src/llm/openai.ts`): el modelo puede pedir `checkAvailability`/`bookAppointment` (`src/calendar/tools.ts`), `agent.ts` las ejecuta contra `GoogleCalendarProvider` y hace una segunda llamada al LLM con los resultados para la respuesta final — solo el mensaje final se persiste en `messages`.
+
+Dos piezas nuevas resuelven bugs reales encontrados probando en vivo con Telegram:
+
+- **`src/calendar/timezone.ts`** — toda la conversión hora local ↔ UTC vive en código determinista; el modelo nunca hace esa aritmética (antes agendaba a una hora, o incluso un día, distinto al pedido).
+- **`src/calendar/businessHours.ts`** — horario de atención modelado por día de la semana (`WeeklyBusinessHours`, migración `0010_weekly_business_hours.sql`), porque varía entre tenants/bots. `bookAppointment` valida contra la hora LOCAL derivada del valor recibido (nunca el string crudo, que a veces ya llega en UTC).
+
+Configuración de horario y zona horaria: dashboard → detalle de tenant → sección de horario semanal (`timezone` + un `DaySchedule` por día, `null` = cerrado ese día).
+
+Prueba de aceptación pasada: en el bot piloto (`vet-ch`), el bot rechazó agendar fuera de horario, rechazó un día cerrado, agendó correctamente respetando zona horaria y horario de sábado, y pidió/reutilizó los datos estándar del cliente (nombre, contacto, motivo) antes de confirmar — todo verificado contra el Google Calendar real, con log de auditoría de cada tool call visible vía `wrangler tail`.
 
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)

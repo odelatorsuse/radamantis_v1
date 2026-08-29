@@ -52,6 +52,18 @@ export async function resolveTenant(
   return { tenantId: row.tenant_id, verticalId: row.vertical_id };
 }
 
+// Inverso de resolveTenant: dado un tenant+canal, el external_id (para
+// Telegram, el bot token) — lo necesita el barrido de no-shows para poder
+// mandar un mensaje saliente, ya que ahí no llega ninguna request entrante
+// de la que extraerlo.
+export async function getChannelExternalId(db: D1Database, tenantId: string, channel: string): Promise<string | null> {
+  const row = await db
+    .prepare("SELECT external_id FROM channel_bindings WHERE tenant_id = ? AND channel = ?")
+    .bind(tenantId, channel)
+    .first<{ external_id: string }>();
+  return row?.external_id ?? null;
+}
+
 export async function getTenantSettings(db: D1Database, tenantId: string): Promise<TenantSettings> {
   const row = await db
     .prepare("SELECT tone, language, currency, prompt_override, timezone, business_hours FROM tenant_settings WHERE tenant_id = ?")

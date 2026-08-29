@@ -3,6 +3,7 @@ import { adminApp } from "./admin/routes";
 import { DASHBOARD_HTML } from "./admin/dashboardHtml";
 import { exchangeCodeForTokens } from "./calendar/oauth";
 import { saveCalendarConnection } from "./calendar/repository";
+import { runNoShowSweep } from "./noShowSweep";
 import { extractIncomingMessage, sendTelegramMessage } from "./telegram";
 import { resolveTenant } from "./tenants";
 
@@ -108,4 +109,13 @@ app.post("/webhook/telegram/:botToken", async (c) => {
 });
 
 export { ConversationAgent } from "./agent";
-export default app;
+
+export default {
+  fetch: app.fetch,
+  // Etapa 10 (superpower "Recupera no-shows"): Cron Trigger (wrangler.toml)
+  // — corre el mismo barrido que POST /api/admin/no-show-sweep, sin
+  // depender de que alguien lo dispare manualmente.
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runNoShowSweep(env.DB));
+  },
+};

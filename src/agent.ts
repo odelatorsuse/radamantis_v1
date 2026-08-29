@@ -1,3 +1,4 @@
+import { recordAppointmentFromToolCall } from "./calendar/appointments";
 import { GoogleCalendarProvider } from "./calendar/google";
 import { getValidAccessToken } from "./calendar/oauth";
 import { CALENDAR_TOOLS, executeCalendarTool } from "./calendar/tools";
@@ -122,6 +123,13 @@ export class ConversationAgent {
         );
         console.log("calendar tool result", tenantId, toolCall.name, result);
         toolResultMessages.push({ role: "tool", content: result, toolCallId: toolCall.id });
+
+        // Etapa 10 (superpower "Recupera no-shows"): guarda un rastro local
+        // de la cita agendada — Google Calendar no nos da de vuelta el
+        // chat_id/canal para poder recontactar al cliente después.
+        if (toolCall.name === "bookAppointment") {
+          await recordAppointmentFromToolCall(this.env.DB, ref, toolCall.arguments, result, tenantSettings.timezone);
+        }
       }
 
       const followUpMessages: LLMMessage[] = [

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { DEFAULT_BUSINESS_HOURS, type WeeklyBusinessHours } from "../calendar/businessHours";
 import { buildGoogleAuthUrl } from "../calendar/oauth";
 import { deleteCalendarConnection, getCalendarConnection } from "../calendar/repository";
+import { runNoShowSweep } from "../noShowSweep";
 import { listVerticalTemplates } from "../verticals/registry";
 import { ingestKbDocs, type KbDocInput } from "./kb";
 import {
@@ -231,5 +232,14 @@ adminApp.post("/tenants/:id/test-message", async (c) => {
     }),
   });
   const result = await agentRes.json<{ replyText: string | null }>();
+  return c.json(result);
+});
+
+// Etapa 10 (superpower "Recupera no-shows"): mismo barrido que corre el
+// Cron Trigger de wrangler.toml, disponible aquí para probarlo bajo demanda
+// (o para forzarlo manualmente si el cron falló) sin esperar a la siguiente
+// corrida programada.
+adminApp.post("/no-show-sweep", async (c) => {
+  const result = await runNoShowSweep(c.env.DB);
   return c.json(result);
 });

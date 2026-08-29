@@ -45,6 +45,12 @@ new_sqlite_classes = ["ConversationAgent"]
 binding = "VECTORIZE"
 index_name = "radamantis-kb"
 
+# Etapa 10 (superpower "Recupera no-shows"): barrido cada 30 min de citas
+# vencidas sin seguimiento (src/noShowSweep.ts). También se puede disparar
+# a mano vía POST /api/admin/no-show-sweep para probar sin esperar al cron.
+[triggers]
+crons = ["*/30 * * * *"]
+
 # Etapa 5 en adelante (requiere Workers Paid si se necesita almacenar archivos):
 # [[r2_buckets]]
 # binding = "MEDIA"

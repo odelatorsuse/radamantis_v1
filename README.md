@@ -303,6 +303,20 @@ Cuando el RAG no encuentra nada relevante en la base de conocimiento de un tenan
 
 Nueva pestaña "Mejoras" en `/console`: lista de preguntas sin responder con fecha, y un botón "Descartar" (`DELETE /api/client/kb-gaps/:id`, siempre scoped al tenant del token — nunca borra solo por id, ya que los ids son autoincrement global entre tenants).
 
+## Etapa 10 — no-shows + encuesta de satisfacción + reseñas, unificados
+
+Antes de construir esto, se detectó un problema real: no-shows, encuesta de satisfacción y reseñas se disparan todos en el mismo momento (una cita que ya pasó), así que como tres mensajes independientes podían pisarse sobre la misma cita — un cliente que sí asistió podía recibir "¿no llegaste?" + "¿cómo te fue?" + "danos una reseña" por separado. Decidido con Oscar: **un solo seguimiento post-cita** que se adapta según la respuesta, en la misma conversación de siempre — no tres mensajes de barridos distintos.
+
+`buildAppointmentFollowUpMessage` (`src/calendar/appointments.ts`, antes `buildNoShowMessage`) manda un único mensaje: "¿pudiste venir? Si no, te ayudamos a reagendar. Si sí, ¿qué calificación del 1 al 5 le darías?". Cuando el cliente responde, el LLM llama a la nueva tool `recordAppointmentFeedback` (`src/calendar/feedbackTool.ts`), que se asocia a la cita más reciente de ese chat con seguimiento ya enviado (`getMostRecentFollowedUpAppointment`), y el prompt le dice cómo reaccionar según el resultado:
+
+- **No asistió** → ofrece ayuda para reagendar (tools de calendario normales).
+- **Calificación 4-5** → agradece y pide una reseña, solo si hay un `reviewLink` configurado en `/console` (pestaña Salud) — sin link, solo agradece.
+- **Calificación 1-3** → se disculpa, avisa que el equipo se pondrá en contacto, **y nunca pide reseña** — en su lugar, avisa al dueño en tiempo real reutilizando Vigilante (`notifyBusinessOwner`), mismo `alert_chat_id` de siempre.
+
+Migración `0017_appointment_feedback.sql`: `appointments` gana `attended`/`rating`/`feedback_comment`; `tenant_settings` gana `review_link` (`GET`/`PUT /api/client/review-link`).
+
+**Bug real encontrado en la misma ronda de pruebas:** para el caso "no asistió", el modelo respondía correctamente en texto (ofrecía reagendar) pero **no llamaba a la tool** — el dato quedaba sin registrar, silenciosamente. Mismo patrón que el bug de "voy a agendar" de Fase B (Etapa 10, booking real): reforzado el prompt para dejar explícito que la tool se llama SIEMPRE que el cliente responda al seguimiento, no solo cuando hay una calificación numérica que registrar. Verificado corregido reproduciendo el mismo caso después del fix.
+
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)
 - `docs/06-roadmap-agencia.md` — ampliación de roadmap hacia modelo de agencia (Etapa 8.5)

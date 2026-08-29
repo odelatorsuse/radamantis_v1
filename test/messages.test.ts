@@ -30,7 +30,7 @@ describe("getHistory", () => {
 });
 
 describe("appendMessage", () => {
-  it("inserta el mensaje con tenant_id, canal y chat_id", async () => {
+  it("inserta el mensaje con tenant_id, canal y chat_id, sent_by null por default", async () => {
     const run = vi.fn().mockResolvedValue({ success: true });
     const bind = vi.fn().mockReturnValue({ run });
     const prepare = vi.fn().mockReturnValue({ bind });
@@ -39,7 +39,18 @@ describe("appendMessage", () => {
     await appendMessage(db, ref, { role: "user", content: "hola" });
 
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO messages"));
-    expect(bind).toHaveBeenCalledWith("sandbox", "telegram", "42", "user", "hola");
+    expect(bind).toHaveBeenCalledWith("sandbox", "telegram", "42", "user", "hola", null);
     expect(run).toHaveBeenCalled();
+  });
+
+  it("guarda sentBy cuando el mensaje lo trae (respuesta manual desde la consola)", async () => {
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const bind = vi.fn().mockReturnValue({ run });
+    const prepare = vi.fn().mockReturnValue({ bind });
+    const db = { prepare } as unknown as D1Database;
+
+    await appendMessage(db, ref, { role: "assistant", content: "hola desde el negocio", sentBy: "human" });
+
+    expect(bind).toHaveBeenCalledWith("sandbox", "telegram", "42", "assistant", "hola desde el negocio", "human");
   });
 });

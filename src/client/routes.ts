@@ -1,6 +1,8 @@
 import { Hono } from "hono";
-import { createHandoff, resolveHandoffByRef } from "../handoff";
-import { getHistory } from "../messages";
+import { createHandoff, isPaused, resolveHandoffByRef } from "../handoff";
+import { appendMessage, getHistory } from "../messages";
+import { sendTelegramMessage } from "../telegram";
+import { getChannelExternalId } from "../tenants";
 import { verifyPassword } from "./passwords";
 import {
   getHealthStatus,
@@ -93,5 +95,43 @@ clientApp.post("/conversations/:channel/:chatId/pause", async (c) => {
 clientApp.post("/conversations/:channel/:chatId/resume", async (c) => {
   const ref = { tenantId: c.get("tenantId"), channel: c.req.param("channel"), chatId: c.req.param("chatId") };
   await resolveHandoffByRef(c.env.DB, ref);
+  return c.json({ ok: true });
+});
+
+// Etapa 10 (consola del cliente — manejo de chats): el negocio responde a
+// mano, real, por el mismo canal — no es el LLM. Se pausa el bot de forma
+// automática si no lo estaba ya, para que no le conteste al cliente encima
+// de lo que el humano acaba de escribir.
+clientApp.post("/conversations/:channel/:chatId/send", async (c) => {
+  const tenantId = c.get("tenantId");
+  const channel = c.req.param("channel");
+  const chatId = c.req.param("chatId");
+  const ref = { tenantId, channel, chatId };
+
+  const body = await c.req.json<{ text?: string }>();
+  if (!body.text || !body.text.trim()) {
+    return c.json({ error: "text es requerido" }, 400);
+  }
+
+  if (channel !== "telegram") {
+    return c.json({ error: `Canal "${channel}" no soportado para responder desde la consola todavía` }, 400);
+  }
+
+  const botToken = await getChannelExternalId(c.env.DB, tenantId, "telegram");
+  if (!botToken) {
+    return c.json({ error: "No hay un canal de Telegram vinculado a este tenant" }, 404);
+  }
+
+  try {
+    await sendTelegramMessage(botToken, Number(chatId), body.text);
+  } catch (err) {
+    return c.json({ error: `No se pudo enviar el mensaje: ${(err as Error).message}` }, 502);
+  }
+
+  await appendMessage(c.env.DB, ref, { role: "assistant", content: body.text, sentBy: "human" });
+  if (!(await isPaused(c.env.DB, ref))) {
+    await createHandoff(c.env.DB, ref, "Pausado automáticamente al responder manualmente desde la consola del cliente");
+  }
+
   return c.json({ ok: true });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { clientApp } from "../src/client/routes";
 import { hashPassword } from "../src/client/passwords";
 import { createSessionToken } from "../src/client/session";
@@ -12,7 +12,34 @@ function mockEnv(overrides?: Record<string, unknown>) {
   const bind = vi.fn().mockReturnValue({ first, all, run });
   const prepare = vi.fn().mockReturnValue({ bind });
   const db = { prepare } as unknown as D1Database;
-  return { DB: db, CLIENT_SESSION_SECRET: SECRET, __first: first, __all: all, __bind: bind, ...overrides };
+  return { DB: db, CLIENT_SESSION_SECRET: SECRET, __first: first, __all: all, __bind: bind, __run: run, ...overrides };
+}
+
+// Para /send se necesitan respuestas distintas según la query (token del
+// canal vs. estado de pausa) — se despacha por contenido del SQL, igual que
+// test/noShowSweep.test.ts.
+function mockEnvForSend(opts: { channelToken?: string | null; alreadyPaused?: boolean } = {}) {
+  const channelToken = opts.channelToken === undefined ? "bot-token-vet-ch" : opts.channelToken;
+  const alreadyPaused = opts.alreadyPaused ?? false;
+  const run = vi.fn().mockResolvedValue({ success: true });
+
+  const prepare = vi.fn((sql: string) => ({
+    bind: vi.fn(() => ({
+      first: vi.fn().mockResolvedValue(
+        sql.includes("FROM channel_bindings")
+          ? channelToken !== null
+            ? { external_id: channelToken }
+            : null
+          : sql.includes("FROM handoffs")
+            ? (alreadyPaused ? { id: 1 } : null)
+            : null,
+      ),
+      run,
+    })),
+  }));
+
+  const db = { prepare } as unknown as D1Database;
+  return { DB: db, CLIENT_SESSION_SECRET: SECRET, __run: run };
 }
 
 describe("POST /login", () => {
@@ -108,5 +135,87 @@ describe("aislamiento entre tenants", () => {
     );
     expect(res.status).toBe(200);
     expect(env.__bind).toHaveBeenCalledWith("vet-ch", "telegram", "555", expect.stringContaining("consola del cliente"));
+  });
+});
+
+describe("POST /conversations/:channel/:chatId/send (manejo de chats)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("400 si falta el texto", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/conversations/telegram/555/send",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({}) },
+      mockEnvForSend(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("400 si el canal no es telegram todavía", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/conversations/whatsapp/555/send",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "hola" }) },
+      mockEnvForSend(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("404 si el tenant no tiene channel_binding de telegram", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/conversations/telegram/555/send",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "hola" }) },
+      mockEnvForSend({ channelToken: null }),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("502 si Telegram rechaza el envío, y no guarda el mensaje ni pausa", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 400, text: async () => "bad request" }));
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnvForSend();
+    const res = await clientApp.request(
+      "/conversations/telegram/555/send",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "hola" }) },
+      env,
+    );
+    expect(res.status).toBe(502);
+    expect(env.__run).not.toHaveBeenCalled();
+  });
+
+  it("200: manda el mensaje real por Telegram, lo guarda con sentBy=human, y pausa el bot si no lo estaba", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => "" });
+    vi.stubGlobal("fetch", fetchMock);
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnvForSend({ alreadyPaused: false });
+    const res = await clientApp.request(
+      "/conversations/telegram/555/send",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "Ya vamos para allá" }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("https://api.telegram.org/botbot-token-vet-ch/sendMessage"),
+      expect.objectContaining({ method: "POST" }),
+    );
+    // Dos escrituras: INSERT INTO messages (appendMessage) e INSERT INTO handoffs (auto-pausa).
+    expect(env.__run).toHaveBeenCalledTimes(2);
+  });
+
+  it("200: no crea un segundo handoff si la conversación ya estaba pausada", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "" }));
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnvForSend({ alreadyPaused: true });
+    const res = await clientApp.request(
+      "/conversations/telegram/555/send",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "Ya vamos para allá" }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    // Solo una escritura: INSERT INTO messages — no un segundo handoff.
+    expect(env.__run).toHaveBeenCalledTimes(1);
   });
 });

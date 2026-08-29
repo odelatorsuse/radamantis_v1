@@ -1,6 +1,11 @@
 export interface StoredMessage {
   role: "user" | "assistant";
   content: string;
+  // Etapa 10 (consola del cliente — manejo de chats): "human" cuando el
+  // negocio respondió a mano desde /console en vez de ser el LLM. Se guarda
+  // igual con role="assistant" (así lo ve el cliente y el LLM si se
+  // reactiva la conversación) — sentBy es solo para distinguirlo en la UI.
+  sentBy?: "human" | null;
 }
 
 export interface ConversationRef {
@@ -17,7 +22,7 @@ export async function getHistory(
 ): Promise<StoredMessage[]> {
   const { results } = await db
     .prepare(
-      "SELECT role, content FROM messages WHERE tenant_id = ? AND channel = ? AND chat_id = ? ORDER BY id DESC LIMIT ?",
+      "SELECT role, content, sent_by AS sentBy FROM messages WHERE tenant_id = ? AND channel = ? AND chat_id = ? ORDER BY id DESC LIMIT ?",
     )
     .bind(ref.tenantId, ref.channel, ref.chatId, limit)
     .all<StoredMessage>();
@@ -30,7 +35,7 @@ export async function appendMessage(
   message: StoredMessage,
 ): Promise<void> {
   await db
-    .prepare("INSERT INTO messages (tenant_id, channel, chat_id, role, content) VALUES (?, ?, ?, ?, ?)")
-    .bind(ref.tenantId, ref.channel, ref.chatId, message.role, message.content)
+    .prepare("INSERT INTO messages (tenant_id, channel, chat_id, role, content, sent_by) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(ref.tenantId, ref.channel, ref.chatId, message.role, message.content, message.sentBy ?? null)
     .run();
 }

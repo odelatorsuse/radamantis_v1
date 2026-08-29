@@ -114,6 +114,8 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
   .conv-list-item .top { display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; }
   .conv-list-item .preview { font-size: 0.8rem; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .conv-detail { min-height: 300px; }
+  .composer { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .composer textarea { resize: vertical; }
   .conv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .msg-list { max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 6px; }
   .msg { max-width: 75%; padding: 9px 13px; border-radius: 12px; font-size: 0.88rem; }
@@ -466,9 +468,39 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
         var bubble = document.createElement("div");
         bubble.className = "msg " + m.role;
         bubble.textContent = m.content;
+        if (m.role === "assistant") {
+          var meta = document.createElement("div");
+          meta.className = "meta";
+          meta.textContent = m.sentBy === "human" ? "Tú" : "Bot";
+          bubble.appendChild(meta);
+        }
         msgList.appendChild(bubble);
       });
       detail.appendChild(msgList);
+
+      var composer = document.createElement("form");
+      composer.className = "composer";
+      composer.innerHTML =
+        "<textarea rows='2' placeholder='Responde como el negocio — se manda por " + esc(c.channel) + " directo…' required></textarea>" +
+        "<div style='display:flex;justify-content:space-between;align-items:center;margin-top:8px;'>" +
+        "<span class='page-sub' style='margin:0;font-size:0.78rem;'>Al enviar, el bot se pausa automáticamente si no lo estaba.</span>" +
+        "<button class='btn-primary' type='submit'>Enviar</button></div>" +
+        "<div class='error' id='composerError'></div>";
+      composer.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var textarea = composer.querySelector("textarea");
+        var text = textarea.value.trim();
+        if (!text) return;
+        var errEl = composer.querySelector("#composerError");
+        errEl.textContent = "";
+        api("/conversations/" + c.channel + "/" + c.chatId + "/send", { method: "POST", body: JSON.stringify({ text: text }) })
+          .then(function () {
+            c.paused = true;
+            openConversation(c);
+          })
+          .catch(function (err) { errEl.textContent = err.message; });
+      });
+      detail.appendChild(composer);
     });
   }
 

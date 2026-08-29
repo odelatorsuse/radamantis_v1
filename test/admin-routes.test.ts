@@ -162,6 +162,15 @@ describe("adminApp channels (Etapa 9 — auto-registro de webhook)", () => {
   });
 });
 
+describe("adminApp channels/supported (Etapa 10 — multi-canal)", () => {
+  it("GET /channels/supported devuelve el catálogo de canales con adaptador real", async () => {
+    const res = await adminApp.request("/channels/supported", { headers: { Authorization: "Bearer test-admin-key" } }, mockEnv());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ channels: [{ channel: "telegram", displayName: "Telegram" }] });
+  });
+});
+
 describe("adminApp KB ingestion (Etapa 9)", () => {
   it("POST /tenants/:id/kb hace upsert de los docs recibidos", async () => {
     const upsert = vi.fn().mockResolvedValue({});

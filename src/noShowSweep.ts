@@ -1,6 +1,6 @@
 import { buildNoShowMessage, getDueNoShowFollowups, markNoShowFollowupSent } from "./calendar/appointments";
+import { getChannelProvider } from "./channels/registry";
 import { appendMessage } from "./messages";
-import { sendTelegramMessage } from "./telegram";
 import { getChannelExternalId, getTenantSettings } from "./tenants";
 
 // Etapa 10 (superpower "Recupera no-shows"): toda cita cuya hora ya pasó
@@ -40,13 +40,11 @@ export async function runNoShowSweep(db: D1Database, now: Date = new Date()): Pr
       ]);
       const message = buildNoShowMessage(tenantName, appt, tenantSettings.timezone);
 
-      if (appt.channel === "telegram") {
-        const botToken = await getChannelExternalId(db, appt.tenantId, "telegram");
-        if (!botToken) throw new Error("No hay channel_binding de telegram para este tenant");
-        await sendTelegramMessage(botToken, Number(appt.chatId), message);
-      } else {
-        throw new Error(`Canal "${appt.channel}" no soportado para seguimiento de no-shows todavía`);
-      }
+      const provider = getChannelProvider(appt.channel);
+      if (!provider) throw new Error(`Canal "${appt.channel}" no soportado para seguimiento de no-shows todavía`);
+      const externalId = await getChannelExternalId(db, appt.tenantId, appt.channel);
+      if (!externalId) throw new Error(`No hay channel_binding de ${appt.channel} para este tenant`);
+      await provider.sendMessage(externalId, appt.chatId, message);
 
       await appendMessage(db, { tenantId: appt.tenantId, channel: appt.channel, chatId: appt.chatId }, { role: "assistant", content: message });
       await markNoShowFollowupSent(db, appt.id);

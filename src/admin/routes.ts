@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { DEFAULT_BUSINESS_HOURS, type WeeklyBusinessHours } from "../calendar/businessHours";
 import { buildGoogleAuthUrl } from "../calendar/oauth";
 import { deleteCalendarConnection, getCalendarConnection } from "../calendar/repository";
+import { getChannelProvider, listSupportedChannels } from "../channels/registry";
 import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
 import { hashPassword } from "../client/passwords";
 import { runNoShowSweep } from "../noShowSweep";
@@ -19,7 +20,6 @@ import {
   updateChannelBinding,
   upsertTenantSettings,
 } from "./repository";
-import { registerTelegramWebhook } from "./telegramSetup";
 
 interface Env {
   DB: D1Database;
@@ -59,6 +59,17 @@ adminApp.post("/tenants", async (c) => {
   return c.json({ ok: true }, 201);
 });
 
+// Etapa 9 (D8): alta/edición de canal = INSERT + registrar el webhook en el
+// mismo paso, sin curl manual. Etapa 10: pasa por ChannelProvider en vez de
+// comparar channel === "telegram" — un canal sin adaptador (o cuyo
+// adaptador no registra webhook) simplemente no intenta nada, no es un error.
+async function registerChannelWebhook(origin: string, channel: string, externalId: string, telegramWebhookSecret: string) {
+  const provider = getChannelProvider(channel);
+  if (!provider?.registerWebhook) return { webhookRegistered: false, webhookError: undefined as string | undefined };
+  const result = await provider.registerWebhook(origin, externalId, telegramWebhookSecret);
+  return { webhookRegistered: result.ok, webhookError: result.error };
+}
+
 adminApp.post("/tenants/:id/channels", async (c) => {
   const tenantId = c.req.param("id");
   const body = await c.req.json<{ channel?: string; externalId?: string }>();
@@ -72,17 +83,9 @@ adminApp.post("/tenants/:id/channels", async (c) => {
     details: { channel: body.channel },
   });
 
-  // Etapa 9 (D8): alta de canal = INSERT + registrar el webhook en el mismo
-  // paso, sin curl manual. Solo aplica a Telegram por ahora (D2).
-  if (body.channel === "telegram") {
-    const origin = new URL(c.req.url).origin;
-    const webhook = await registerTelegramWebhook(origin, body.externalId, c.env.TELEGRAM_WEBHOOK_SECRET);
-    if (!webhook.ok) {
-      return c.json({ ok: true, webhookRegistered: false, webhookError: webhook.error }, 201);
-    }
-  }
-
-  return c.json({ ok: true, webhookRegistered: body.channel === "telegram" }, 201);
+  const origin = new URL(c.req.url).origin;
+  const { webhookRegistered, webhookError } = await registerChannelWebhook(origin, body.channel, body.externalId, c.env.TELEGRAM_WEBHOOK_SECRET);
+  return c.json({ ok: true, webhookRegistered, ...(webhookError ? { webhookError } : {}) }, 201);
 });
 
 // Etapa 9: rotar el token de un canal ya vinculado (ej. un token revocado
@@ -97,15 +100,9 @@ adminApp.put("/tenants/:id/channels/:channel", async (c) => {
   await updateChannelBinding(c.env.DB, tenantId, channel, body.externalId);
   await logAdminAction(c.env.DB, { tenantId, action: "update_channel_binding", details: { channel } });
 
-  if (channel === "telegram") {
-    const origin = new URL(c.req.url).origin;
-    const webhook = await registerTelegramWebhook(origin, body.externalId, c.env.TELEGRAM_WEBHOOK_SECRET);
-    if (!webhook.ok) {
-      return c.json({ ok: true, webhookRegistered: false, webhookError: webhook.error });
-    }
-  }
-
-  return c.json({ ok: true, webhookRegistered: channel === "telegram" });
+  const origin = new URL(c.req.url).origin;
+  const { webhookRegistered, webhookError } = await registerChannelWebhook(origin, channel, body.externalId, c.env.TELEGRAM_WEBHOOK_SECRET);
+  return c.json({ ok: true, webhookRegistered, ...(webhookError ? { webhookError } : {}) });
 });
 
 adminApp.post("/tenants/:id/kb", async (c) => {
@@ -184,6 +181,14 @@ adminApp.get("/verticals", (c) => {
     toolsEnabled: v.toolsEnabled,
   }));
   return c.json({ verticals });
+});
+
+// Etapa 10: data-driven en vez de hardcodear opciones en el HTML del
+// dashboard — agregar un canal nuevo (src/channels/) lo hace aparecer aquí
+// solo, sin tocar dashboardHtml.ts.
+adminApp.get("/channels/supported", (c) => {
+  const channels = listSupportedChannels().map((p) => ({ channel: p.channel, displayName: p.displayName }));
+  return c.json({ channels });
 });
 
 adminApp.get("/handoffs", async (c) => {

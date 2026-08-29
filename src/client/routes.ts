@@ -1,7 +1,7 @@
 import { Hono } from "hono";
+import { getChannelProvider } from "../channels/registry";
 import { createHandoff, isPaused, resolveHandoffByRef } from "../handoff";
 import { appendMessage, getHistory } from "../messages";
-import { sendTelegramMessage } from "../telegram";
 import { getChannelExternalId } from "../tenants";
 import { verifyPassword } from "./passwords";
 import {
@@ -113,17 +113,18 @@ clientApp.post("/conversations/:channel/:chatId/send", async (c) => {
     return c.json({ error: "text es requerido" }, 400);
   }
 
-  if (channel !== "telegram") {
+  const provider = getChannelProvider(channel);
+  if (!provider) {
     return c.json({ error: `Canal "${channel}" no soportado para responder desde la consola todavía` }, 400);
   }
 
-  const botToken = await getChannelExternalId(c.env.DB, tenantId, "telegram");
-  if (!botToken) {
-    return c.json({ error: "No hay un canal de Telegram vinculado a este tenant" }, 404);
+  const externalId = await getChannelExternalId(c.env.DB, tenantId, channel);
+  if (!externalId) {
+    return c.json({ error: `No hay un canal de ${provider.displayName} vinculado a este tenant` }, 404);
   }
 
   try {
-    await sendTelegramMessage(botToken, Number(chatId), body.text);
+    await provider.sendMessage(externalId, chatId, body.text);
   } catch (err) {
     return c.json({ error: `No se pudo enviar el mensaje: ${(err as Error).message}` }, 502);
   }

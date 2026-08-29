@@ -1,6 +1,11 @@
+import { sendTelegramMessage } from "../telegram";
+import type { ChannelProvider, WebhookRegistrationResult } from "./provider";
+
 // Etapa 9 (D8): registrar el webhook de Telegram es parte de la transacción
 // de alta/edición de canal — sin esto, "alta en <5 min sin tocar código"
-// seguía requiriendo un curl manual a la API de Telegram.
+// seguía requiriendo un curl manual a la API de Telegram. Movido aquí desde
+// admin/telegramSetup.ts en Etapa 10 al generalizar a ChannelProvider — es
+// lógica de la plataforma Telegram, no del panel de admin.
 interface TelegramSetWebhookResponse {
   ok?: boolean;
   description?: string;
@@ -14,7 +19,7 @@ export async function registerTelegramWebhook(
   botToken: string,
   webhookSecret: string,
   attempt = 1,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<WebhookRegistrationResult> {
   const url = `${workerOrigin}/webhook/telegram/${botToken}`;
   const res = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
     method: "POST",
@@ -36,3 +41,12 @@ export async function registerTelegramWebhook(
   }
   return data.ok ? { ok: true } : { ok: false, error: data.description ?? "setWebhook falló" };
 }
+
+export const telegramChannelProvider: ChannelProvider = {
+  channel: "telegram",
+  displayName: "Telegram",
+  async sendMessage(externalId, chatId, text) {
+    await sendTelegramMessage(externalId, Number(chatId), text);
+  },
+  registerWebhook: registerTelegramWebhook,
+};

@@ -78,6 +78,18 @@ describe("runNoShowSweep", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("registra el error si el canal de la cita no tiene un ChannelProvider registrado (ej. whatsapp todavía)", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { db } = mockDb({ dueRows: [{ ...DUE_APPOINTMENT_ROW, channel: "whatsapp" }] });
+
+    const result = await runNoShowSweep(db, new Date("2026-09-01T18:00:00Z"));
+
+    expect(result.sent).toBe(0);
+    expect(result.errors[0].error).toContain("whatsapp");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("registra el error y sigue si el tenant no tiene channel_binding de telegram, sin tumbar el barrido", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

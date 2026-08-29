@@ -381,19 +381,30 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     });
   }
 
+  // Nombres solo para mostrar — hoy únicamente Telegram tiene un canal real
+  // conectable; el resto se añaden aquí según se vayan construyendo
+  // (src/channels/), sin que esta consola necesite ningún otro cambio.
+  var CHANNEL_DISPLAY_NAMES = { telegram: "Telegram", whatsapp: "WhatsApp", messenger: "Facebook Messenger", instagram: "Instagram" };
+
   function loadHealth() {
     api("/health").then(function (data) {
       var h = data.health;
       var panel = document.getElementById("healthPanel");
       panel.innerHTML = "";
 
-      var telegramRow = document.createElement("div");
-      telegramRow.className = "health-row";
-      var telegramOk = h.channels.indexOf("telegram") !== -1;
-      telegramRow.innerHTML =
-        "<span class='health-label " + (telegramOk ? "status-ok" : "status-warn") + "'><span class='status-dot'></span>Telegram</span>" +
-        "<span class='health-value'>" + (telegramOk ? "Conectado" : "No conectado") + "</span>";
-      panel.appendChild(telegramRow);
+      if (h.channels.length === 0) {
+        var noneRow = document.createElement("div");
+        noneRow.className = "health-row";
+        noneRow.innerHTML = "<span class='health-label status-warn'><span class='status-dot'></span>Canal de mensajería</span><span class='health-value'>Ninguno conectado</span>";
+        panel.appendChild(noneRow);
+      }
+      h.channels.forEach(function (channel) {
+        var row = document.createElement("div");
+        row.className = "health-row";
+        var label = CHANNEL_DISPLAY_NAMES[channel] || channel;
+        row.innerHTML = "<span class='health-label status-ok'><span class='status-dot'></span>" + esc(label) + "</span><span class='health-value'>Conectado</span>";
+        panel.appendChild(row);
+      });
 
       var calRow = document.createElement("div");
       calRow.className = "health-row";

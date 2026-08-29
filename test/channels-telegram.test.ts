@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { registerTelegramWebhook } from "../src/admin/telegramSetup";
+import { registerTelegramWebhook, telegramChannelProvider } from "../src/channels/telegram";
 
 describe("registerTelegramWebhook", () => {
   afterEach(() => {
@@ -80,5 +80,28 @@ describe("registerTelegramWebhook", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain("429");
     vi.useRealTimers();
+  });
+});
+
+describe("telegramChannelProvider", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("implementa ChannelProvider: sendMessage manda por la API real de Telegram", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => "" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await telegramChannelProvider.sendMessage("bot-token-123", "555", "hola");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.telegram.org/botbot-token-123/sendMessage",
+      expect.objectContaining({ body: JSON.stringify({ chat_id: 555, text: "hola" }) }),
+    );
+  });
+
+  it("expone channel y displayName", () => {
+    expect(telegramChannelProvider.channel).toBe("telegram");
+    expect(telegramChannelProvider.displayName).toBe("Telegram");
   });
 });

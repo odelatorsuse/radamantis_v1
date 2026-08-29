@@ -73,8 +73,8 @@ Oscar pidió una consola separada por tenant (para el dueño del negocio, no par
 | 0-7 | (sin cambios, ver `CLAUDE.md`) | Completas |
 | 8 | Dashboard admin mínimo | Completa |
 | **8.5** | **Panel de bot: detalle, métricas y config en caliente** | Completa — confirmada por Oscar en producción (métricas reales, cambio de tono/idioma/moneda, editor de prompt, rediseño sidebar+cards con paleta Slate/Indigo) |
-| 9 | Pipeline de alta de cliente | Pendiente |
-| 10 | Superpowers restantes + Claude Skill | Pendiente |
+| 9 | Pipeline de alta de cliente | Completa |
+| 10 | Superpowers restantes + Claude Skill | Completa (2026-08-29) |
 | Agencia (sin número fijo, post-10) | Equipo/roles, White-label | Backlog aceptado, sin diseño detallado todavía |
 | — | Marketplace | Backlog, DESCONOCIDO |
 

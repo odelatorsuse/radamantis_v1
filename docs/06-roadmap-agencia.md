@@ -54,13 +54,13 @@ Oscar pidió una consola separada por tenant (para el dueño del negocio, no par
 | # (§7) | Estado a 2026-08-29 |
 |---|---|
 | 1, 2, 3, 6, 7, 8, 10 | **Ya cubiertos** (anti-invento, alertas proactivas al dueño ["Vigilante", parcial — detección determinista, no scoring de sentimiento con IA], handoff, tono configurable, reporte diario automático, idioma configurable, no-shows). |
+| Mejoras (detecta huecos de conocimiento) | **Ya cubierto** (2026-08-29) — registra preguntas sin match relevante en el RAG; el dueño decide qué agregar, el bot nunca edita su propia KB. |
 | 4 (reenganche de leads fríos) | No construido. |
 | 5 (voz/imágenes) | No construido — requiere capacidad multimodal nueva. |
 | 9 (encuestas de satisfacción) | No construido. |
 | 11 (pedir reseñas) | No construido. |
 | 12 (cobros por WhatsApp) | No construido — además bloqueado hasta que exista el canal WhatsApp. |
 | Campañas (difusión segmentada) | No construido — bloqueado hasta que exista WhatsApp. |
-| Mejoras (detecta huecos de conocimiento) | No construido — nuevo, requiere trackear preguntas sin match relevante en el RAG. |
 
 **Consola del cliente — aceptada, construida esta misma ronda (Etapa 10):** portal en `/console`, login propio por tenant (usuario/contraseña — decisión de Oscar, más familiar para un dueño de negocio no técnico que una API key), identidad visual propia (verde esmeralda + ámbar, ni la paleta admin ni la del bot). Contenido: stats de hoy, gráfica de 7 días, citas, clientes únicos, salud simple de conexión, conversaciones con pausar/reactivar (el cliente sí puede, no solo Oscar). Ver `CLAUDE.md` para el detalle técnico.
 

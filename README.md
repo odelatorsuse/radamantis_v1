@@ -295,6 +295,14 @@ Cada mañana, si el dueño ya activó alertas (sección anterior), también reci
 
 Contenido: mensajes recibidos/respondidos ayer, clientes distintos, citas agendadas, y conversaciones esperando atención ahora mismo. `tenant_settings.last_daily_report_date` (migración `0015_daily_report.sql`) evita mandarlo dos veces el mismo día — vive fuera de `TenantSettings`/`upsertTenantSettings` a propósito: es estado interno del barrido, nunca algo que `/admin` o `/console` deban poder pisar.
 
+## Etapa 10 — superpower "Mejoras" (detecta huecos de conocimiento)
+
+Cuando el RAG no encuentra nada relevante en la base de conocimiento de un tenant (todos los matches por debajo de `MIN_RELEVANCE_SCORE`), se registra la pregunta en `kb_gaps` (migración `0016_kb_gaps.sql`, `src/rag/gaps.ts`) para que el dueño del negocio sepa qué le falta agregar. **El bot nunca edita su propia base de conocimiento** — la decisión de qué agregar es siempre humana, mismo principio que el blindaje anti-invento de Etapa 6.
+
+`prompts.ts` exporta `MIN_RELEVANCE_SCORE` y `hasRelevantMatch(kbMatches)` como fuente única de verdad del umbral — lo mismo que decide qué contexto mostrarle al modelo decide qué preguntas registrar como hueco, sin duplicar el número mágico en dos lugares.
+
+Nueva pestaña "Mejoras" en `/console`: lista de preguntas sin responder con fecha, y un botón "Descartar" (`DELETE /api/client/kb-gaps/:id`, siempre scoped al tenant del token — nunca borra solo por id, ya que los ids son autoincrement global entre tenants).
+
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)
 - `docs/06-roadmap-agencia.md` — ampliación de roadmap hacia modelo de agencia (Etapa 8.5)

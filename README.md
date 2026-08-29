@@ -317,6 +317,18 @@ Migración `0017_appointment_feedback.sql`: `appointments` gana `attended`/`rati
 
 **Bug real encontrado en la misma ronda de pruebas:** para el caso "no asistió", el modelo respondía correctamente en texto (ofrecía reagendar) pero **no llamaba a la tool** — el dato quedaba sin registrar, silenciosamente. Mismo patrón que el bug de "voy a agendar" de Fase B (Etapa 10, booking real): reforzado el prompt para dejar explícito que la tool se llama SIEMPRE que el cliente responda al seguimiento, no solo cuando hay una calificación numérica que registrar. Verificado corregido reproduciendo el mismo caso después del fix.
 
+## Etapa 10 — superpower "Reenganche de leads fríos"
+
+A diferencia de "Recupera no-shows" y "Reporte diario" (activados por default), este superpower es **opt-in desde `/console`** (pestaña Salud) — alcanza a muchas más conversaciones (cualquier pregunta que no terminó en una cita, no solo citas ya agendadas) y el riesgo de sentirse invasivo es mayor, así que el dueño decide si quererlo activo.
+
+`src/coldLeads.ts` (`runColdLeadSweep`) corre en el mismo Cron Trigger que los otros barridos, más `POST /api/admin/cold-lead-sweep` para probar bajo demanda. Criterios confirmados con Oscar:
+
+- **"Frío"** = el último mensaje de la conversación fue del bot hace ~5 horas (punto medio del rango 4-6h discutido) sin que el cliente haya vuelto a escribir, Y esa conversación nunca generó ninguna cita (`appointments` = 0 para ese chat) — no se le vuelve a escribir a quien ya convirtió.
+- **Reintentos:** hasta 2 por conversación (tabla `lead_reengagement`, migración `0018_lead_reengagement.sql`) — el 2do intento espera el mismo umbral de horas desde el 1ro, para no reintentar en cada corrida del cron indefinidamente.
+- **Mensaje:** plantilla fija (no generada por el LLM, mismo estilo que no-shows/reporte diario/Vigilante), pero personalizada reusando la última pregunta real del cliente — sin costo extra de tokens.
+
+Verificado en producción sin arriesgar ninguna conversación real: se insertó un mensaje "frío" en el canal `telegram` real pero con un `chat_id` inventado — el barrido lo detectó correctamente y llamó a la API real de Telegram (confirmado por el error real "chat not found", no uno simulado), sin marcar el intento al fallar (queda reintentable). También se confirmó que una conversación con una cita ya agendada queda excluida correctamente.
+
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)
 - `docs/06-roadmap-agencia.md` — ampliación de roadmap hacia modelo de agencia (Etapa 8.5)

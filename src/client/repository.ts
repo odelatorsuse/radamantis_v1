@@ -253,3 +253,10 @@ export async function clearAlertChatId(db: D1Database, tenantId: string): Promis
   const current = await getTenantSettings(db, tenantId);
   await upsertTenantSettings(db, tenantId, { ...current, alertChatId: null });
 }
+
+// Etapa 10 (unifica no-shows + encuesta + reseñas): el dueño pega el link
+// de reseñas (ej. Google Business) — sin esto, el bot no pide reseña.
+export async function setReviewLink(db: D1Database, tenantId: string, reviewLink: string | null): Promise<void> {
+  const current = await getTenantSettings(db, tenantId);
+  await upsertTenantSettings(db, tenantId, { ...current, reviewLink });
+}

@@ -3,7 +3,7 @@ import { getChannelProvider } from "../channels/registry";
 import { createHandoff, isPaused, resolveHandoffByRef } from "../handoff";
 import { appendMessage, getHistory } from "../messages";
 import { dismissKbGap, listKbGaps } from "../rag/gaps";
-import { getChannelExternalId } from "../tenants";
+import { getChannelExternalId, getTenantSettings } from "../tenants";
 import { verifyPassword } from "./passwords";
 import {
   clearAlertChatId,
@@ -16,6 +16,7 @@ import {
   getUpcomingAppointments,
   getWeeklyActivity,
   listConversations,
+  setReviewLink,
 } from "./repository";
 import { createSessionToken, verifySessionToken } from "./session";
 
@@ -164,5 +165,19 @@ clientApp.get("/kb-gaps", async (c) => {
 clientApp.delete("/kb-gaps/:id", async (c) => {
   const id = Number(c.req.param("id"));
   await dismissKbGap(c.env.DB, c.get("tenantId"), id);
+  return c.json({ ok: true });
+});
+
+// Etapa 10 (unifica no-shows + encuesta + reseñas): link de reseñas (ej.
+// Google Business) — sin esto, el bot no pide reseña, solo agradece.
+clientApp.get("/review-link", async (c) => {
+  const settings = await getTenantSettings(c.env.DB, c.get("tenantId"));
+  return c.json({ reviewLink: settings.reviewLink });
+});
+
+clientApp.put("/review-link", async (c) => {
+  const body = await c.req.json<{ reviewLink?: string | null }>();
+  const reviewLink = body.reviewLink?.trim() ? body.reviewLink.trim() : null;
+  await setReviewLink(c.env.DB, c.get("tenantId"), reviewLink);
   return c.json({ ok: true });
 });

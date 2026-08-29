@@ -51,6 +51,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
   .btn-secondary:hover { border-color: var(--primary); }
   .btn-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid #FCA5A5; border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; }
   .error { color: var(--danger); font-size: 0.85rem; margin-top: 10px; min-height: 1.2em; }
+  .success-msg { color: var(--ok); font-size: 0.85rem; margin-top: 10px; min-height: 1.2em; }
 
   .shell { display: none; grid-template-columns: 220px 1fr; min-height: 100vh; }
   .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 20px 14px; display: flex; flex-direction: column; }
@@ -241,6 +242,16 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
         <h3>Alertas</h3>
         <p class="page-sub" style="margin-bottom:14px;">Recibe un aviso por Telegram cuando un cliente pida hablar con alguien o suene molesto.</p>
         <div id="alertSettingsPanel"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Reseñas</h3>
+        <p class="page-sub" style="margin-bottom:14px;">Cuando un cliente califica su cita con 4 o 5, el bot le comparte este link para pedirle una reseña. Sin un link aquí, solo agradece.</p>
+        <form id="reviewLinkForm">
+          <input type="text" id="reviewLinkInput" placeholder="https://g.page/r/tu-negocio/review" style="width:100%;" />
+          <div style="margin-top:10px;"><button class="btn-primary" type="submit">Guardar</button></div>
+          <div class="error" id="reviewLinkMsg"></div>
+        </form>
       </div>
     </section>
 
@@ -500,6 +511,21 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     });
   }
 
+  function loadReviewLink() {
+    api("/review-link").then(function (data) {
+      document.getElementById("reviewLinkInput").value = data.reviewLink || "";
+    });
+  }
+
+  document.getElementById("reviewLinkForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msgEl = document.getElementById("reviewLinkMsg");
+    var value = document.getElementById("reviewLinkInput").value;
+    api("/review-link", { method: "PUT", body: JSON.stringify({ reviewLink: value }) })
+      .then(function () { msgEl.className = "success-msg"; msgEl.textContent = "Guardado."; })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
   function renderConversationList(conversations) {
     var list = document.getElementById("conversationList");
     list.innerHTML = "";
@@ -600,6 +626,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     loadClients();
     loadHealth();
     loadAlertSettings();
+    loadReviewLink();
     loadKbGaps();
     loadConversations();
   }

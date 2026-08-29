@@ -279,3 +279,38 @@ describe("GET/DELETE /kb-gaps (superpower Mejoras)", () => {
     expect(env.__bind).toHaveBeenCalledWith(7, "vet-ch");
   });
 });
+
+describe("GET/PUT /review-link (unifica no-shows + encuesta + reseñas)", () => {
+  it("GET devuelve null si no hay link configurado", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/review-link", { headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(200);
+    const body = await res.json<{ reviewLink: string | null }>();
+    expect(body.reviewLink).toBeNull();
+  });
+
+  it("PUT guarda el link, recortando espacios", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/review-link",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ reviewLink: "  https://g.page/r/x/review  " }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const lastBind = (env.__bind as ReturnType<typeof vi.fn>).mock.calls[(env.__bind as ReturnType<typeof vi.fn>).mock.calls.length - 1];
+    expect(lastBind).toContain("https://g.page/r/x/review");
+  });
+
+  it("PUT con string vacío guarda null (permite borrar el link)", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    await clientApp.request(
+      "/review-link",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ reviewLink: "   " }) },
+      env,
+    );
+    const lastBind = (env.__bind as ReturnType<typeof vi.fn>).mock.calls[(env.__bind as ReturnType<typeof vi.fn>).mock.calls.length - 1];
+    expect(lastBind).toContain(null);
+  });
+});

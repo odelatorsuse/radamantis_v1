@@ -146,6 +146,7 @@ adminApp.put("/tenants/:id/settings", async (c) => {
     businessHours: body.businessHours || DEFAULT_BUSINESS_HOURS,
     alertChatId: current.alertChatId,
     alertActivationCode: current.alertActivationCode,
+    reviewLink: current.reviewLink,
   };
   await upsertTenantSettings(c.env.DB, tenantId, settings);
   await logAdminAction(c.env.DB, { tenantId, action: "update_tenant_settings", details: settings });

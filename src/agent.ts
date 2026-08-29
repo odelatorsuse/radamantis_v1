@@ -1,4 +1,5 @@
 import { recordAppointmentFromToolCall } from "./calendar/appointments";
+import { executeFeedbackTool, RECORD_FEEDBACK_TOOL } from "./calendar/feedbackTool";
 import { GoogleCalendarProvider } from "./calendar/google";
 import { getValidAccessToken } from "./calendar/oauth";
 import { CALENDAR_TOOLS, executeCalendarTool } from "./calendar/tools";
@@ -112,7 +113,7 @@ export class ConversationAgent {
 
     const llm = new OpenAIProvider(this.env.OPENAI_API_KEY);
     const messages = buildMessages(systemPrompt, historyMessages, userText);
-    const tools = calendarProvider ? CALENDAR_TOOLS : undefined;
+    const tools = calendarProvider ? [...CALENDAR_TOOLS, RECORD_FEEDBACK_TOOL] : undefined;
 
     let completion = await llm.complete(messages, tools);
     let usage = completion.usage;
@@ -127,13 +128,16 @@ export class ConversationAgent {
         // Log de auditoría — sin esto, depurar "por qué dijo tal horario"
         // significa adivinar (ya nos pasó). Visible con `wrangler tail`.
         console.log("calendar tool call", tenantId, toolCall.name, toolCall.arguments);
-        const result = await executeCalendarTool(
-          toolCall.name,
-          toolCall.arguments,
-          calendarProvider,
-          tenantSettings.timezone,
-          tenantSettings.businessHours,
-        );
+        const result =
+          toolCall.name === "recordAppointmentFeedback"
+            ? await executeFeedbackTool(this.env.DB, ref, toolCall.arguments)
+            : await executeCalendarTool(
+                toolCall.name,
+                toolCall.arguments,
+                calendarProvider,
+                tenantSettings.timezone,
+                tenantSettings.businessHours,
+              );
         console.log("calendar tool result", tenantId, toolCall.name, result);
         toolResultMessages.push({ role: "tool", content: result, toolCallId: toolCall.id });
 

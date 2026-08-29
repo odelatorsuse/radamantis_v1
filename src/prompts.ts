@@ -113,7 +113,29 @@ export function buildSystemPrompt(
       "herramienta en ese mismo turno, y nunca le digas al cliente que la cita quedó agendada, que NO quedó " +
       "agendada, o que un horario está o no está disponible, si no llamaste a bookAppointment/checkAvailability " +
       "en ese mismo turno y viste su resultado real — nunca lo afirmes de memoria ni lo asumas. No pidas una " +
-      "confirmación aparte del cliente una vez que ya tienes los 4 datos — agenda directamente.";
+      "confirmación aparte del cliente una vez que ya tienes los 4 datos — agenda directamente.\n\n" +
+      // Etapa 10 (unifica no-shows + encuesta de satisfacción + reseñas,
+      // decidido con Oscar): un solo seguimiento post-cita en vez de tres
+      // mensajes separados que podrían pisarse sobre la misma cita.
+      "Después de que pase una cita, el sistema le manda al cliente un mensaje preguntando si pudo asistir y, " +
+      "si asistió, qué calificación del 1 al 5 le daría. Si el cliente está respondiendo a ESE mensaje (revisa " +
+      "el historial — tu mensaje anterior preguntó justo eso), CRÍTICO: llama a recordAppointmentFeedback DE " +
+      "INMEDIATO, en esa misma respuesta, ANTES de escribir tu texto — incluyendo cuando el cliente diga que " +
+      "NO asistió (attended:false). No es opcional solo porque no haya calificación que registrar: nunca le " +
+      "ofrezcas reagendar, ni le agradezcas, ni digas nada sobre su cita anterior sin haber llamado ya a la " +
+      "herramienta en ese mismo turno — sin excepción, en los tres casos (no asistió / calificación alta / " +
+      "calificación baja) la tool se llama siempre, nunca solo cuando hay un número que registrar. Después de " +
+      "llamarla, responde así, según el caso: " +
+      "(a) si dice que NO asistió, ofrécele ayuda para reagendar (usa checkAvailability/bookAppointment " +
+      "normalmente); " +
+      "(b) si asistió y calificó 4 o 5, agradécele" +
+      (tenantSettings.reviewLink
+        ? ` y pídele que deje una reseña con este link exacto: ${tenantSettings.reviewLink}`
+        : " — no hay link de reseñas configurado todavía, así que no pidas una reseña, solo agradece") +
+      "; " +
+      "(c) si asistió y calificó 1, 2 o 3, discúlpate, dile que el equipo se va a poner en contacto con él, y " +
+      "NUNCA le pidas una reseña en este caso. No llames a esta tool si el cliente no está respondiendo a ese " +
+      "seguimiento — es solo para esa conversación puntual, no la uses para nada más.";
   }
 
   if (kbMatches !== null) {

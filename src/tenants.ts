@@ -27,6 +27,10 @@ export interface TenantSettings {
   // sin tener que buscarlo — Telegram no expone el chat_id en su UI.
   alertChatId: string | null;
   alertActivationCode: string | null;
+  // Etapa 10 (unifica no-shows + encuesta + reseñas): link de reseñas (ej.
+  // Google Business) que el dueño configura en /console — sin esto, el bot
+  // no pide reseña, solo agradece.
+  reviewLink: string | null;
 }
 
 export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
@@ -38,6 +42,7 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
   businessHours: DEFAULT_BUSINESS_HOURS,
   alertChatId: null,
   alertActivationCode: null,
+  reviewLink: null,
 };
 
 // D2/D6: el router resuelve tenant Y vertical antes de instanciar el DO,
@@ -76,7 +81,7 @@ export async function getChannelExternalId(db: D1Database, tenantId: string, cha
 export async function getTenantSettings(db: D1Database, tenantId: string): Promise<TenantSettings> {
   const row = await db
     .prepare(
-      "SELECT tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code FROM tenant_settings WHERE tenant_id = ?",
+      "SELECT tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link FROM tenant_settings WHERE tenant_id = ?",
     )
     .bind(tenantId)
     .first<{
@@ -88,6 +93,7 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
       business_hours: string;
       alert_chat_id: string | null;
       alert_activation_code: string | null;
+      review_link: string | null;
     }>();
 
   if (!row) return DEFAULT_TENANT_SETTINGS;
@@ -100,6 +106,7 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
     businessHours: parseBusinessHours(row.business_hours),
     alertChatId: row.alert_chat_id,
     alertActivationCode: row.alert_activation_code,
+    reviewLink: row.review_link,
   };
 }
 
@@ -111,8 +118,8 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
 export async function upsertTenantSettings(db: D1Database, tenantId: string, settings: TenantSettings): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT (tenant_id) DO UPDATE SET
          tone = excluded.tone,
          language = excluded.language,
@@ -122,6 +129,7 @@ export async function upsertTenantSettings(db: D1Database, tenantId: string, set
          business_hours = excluded.business_hours,
          alert_chat_id = excluded.alert_chat_id,
          alert_activation_code = excluded.alert_activation_code,
+         review_link = excluded.review_link,
          updated_at = excluded.updated_at`,
     )
     .bind(
@@ -134,6 +142,7 @@ export async function upsertTenantSettings(db: D1Database, tenantId: string, set
       JSON.stringify(settings.businessHours),
       settings.alertChatId,
       settings.alertActivationCode,
+      settings.reviewLink,
     )
     .run();
 }

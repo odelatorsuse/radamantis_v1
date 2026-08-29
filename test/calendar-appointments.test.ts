@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  buildNoShowMessage,
+  buildAppointmentFollowUpMessage,
   getDueNoShowFollowups,
+  getMostRecentFollowedUpAppointment,
   markNoShowFollowupSent,
+  recordAppointmentFeedback,
   recordAppointmentFromToolCall,
   type DueAppointment,
 } from "../src/calendar/appointments";
@@ -126,7 +128,7 @@ describe("markNoShowFollowupSent", () => {
   });
 });
 
-describe("buildNoShowMessage", () => {
+describe("buildAppointmentFollowUpMessage", () => {
   it("arma el mensaje con la hora local correcta, no la UTC", () => {
     const appt: DueAppointment = {
       id: 1,
@@ -139,11 +141,43 @@ describe("buildNoShowMessage", () => {
       attendeeName: "Oscar",
       attendeeContact: "555-0000",
     };
-    const message = buildNoShowMessage("Dr. Vet CH", appt, "America/Mexico_City");
+    const message = buildAppointmentFollowUpMessage("Dr. Vet CH", appt, "America/Mexico_City");
     expect(message).toContain("Oscar");
     expect(message).toContain("Dr. Vet CH");
     expect(message).toContain("2026-09-01");
     expect(message).toContain("10:00"); // 16:00 UTC = 10:00 en Ciudad de México
     expect(message).toContain("Consulta general - Firulais");
+  });
+});
+
+describe("getMostRecentFollowedUpAppointment", () => {
+  it("busca la cita más reciente con seguimiento ya enviado, para ese chat", async () => {
+    const { db, prepare, bind, first } = mockDb();
+    first.mockResolvedValue({ id: 7 });
+    const id = await getMostRecentFollowedUpAppointment(db, ref);
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("no_show_followup_sent_at IS NOT NULL"));
+    expect(bind).toHaveBeenCalledWith("vet-ch", "telegram", "555");
+    expect(id).toBe(7);
+  });
+
+  it("devuelve null si no hay ninguna", async () => {
+    const { db, first } = mockDb();
+    first.mockResolvedValue(null);
+    expect(await getMostRecentFollowedUpAppointment(db, ref)).toBeNull();
+  });
+});
+
+describe("recordAppointmentFeedback", () => {
+  it("guarda attended/rating/comment por id de cita", async () => {
+    const { db, prepare, bind } = mockDb();
+    await recordAppointmentFeedback(db, 7, { attended: true, rating: 5, comment: "Excelente atención" });
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE appointments SET attended"));
+    expect(bind).toHaveBeenCalledWith(1, 5, "Excelente atención", 7);
+  });
+
+  it("guarda attended:false sin rating/comment como null", async () => {
+    const { db, bind } = mockDb();
+    await recordAppointmentFeedback(db, 7, { attended: false });
+    expect(bind).toHaveBeenCalledWith(0, null, null, 7);
   });
 });

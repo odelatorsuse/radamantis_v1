@@ -118,15 +118,48 @@ export async function markNoShowFollowupSent(db: D1Database, appointmentId: numb
     .run();
 }
 
-// Plantilla fija, no generada por el LLM — el mensaje de recuperación debe
+// Plantilla fija, no generada por el LLM — el mensaje de seguimiento debe
 // ser 100% predecible (no queremos que el modelo invente detalles de una
-// cita que ya pasó).
-export function buildNoShowMessage(tenantName: string, appt: DueAppointment, timeZone: string): string {
+// cita que ya pasó). Etapa 10 (unificación no-shows + encuesta + reseñas,
+// decidido con Oscar): un solo mensaje post-cita en vez de tres mensajes
+// separados que podrían pisarse sobre la misma cita. La CONVERSACIÓN que
+// sigue (si el cliente contesta) la maneja el LLM normal con la tool
+// recordAppointmentFeedback — este mensaje solo abre la puerta.
+export function buildAppointmentFollowUpMessage(tenantName: string, appt: DueAppointment, timeZone: string): string {
   const local = utcToLocalDateTimeString(appt.startUtc, timeZone);
   const [date, time] = [local.slice(0, 10), local.slice(11, 16)];
   return (
     `Hola ${appt.attendeeName}, en ${tenantName} teníamos agendada tu cita del ${date} a las ${time} ` +
-    `("${appt.summary}") y no pudimos confirmar tu asistencia. Si quieres reagendar, escríbenos por aquí ` +
-    "mismo y con gusto te ayudamos a encontrar un nuevo horario."
+    `("${appt.summary}"). ¿Pudiste venir? Si no, cuéntanos y con gusto te ayudamos a reagendar. Si sí ` +
+    "viniste, ¿qué calificación del 1 al 5 le darías a tu experiencia?"
   );
+}
+
+export interface AppointmentFeedback {
+  attended: boolean;
+  rating?: number;
+  comment?: string;
+}
+
+// El feedback se asocia a la cita más reciente de ese chat que YA recibió
+// el mensaje de seguimiento (no_show_followup_sent_at IS NOT NULL) — es a
+// la que el cliente está respondiendo, no a una cita futura sin terminar
+// todavía ni a una muy vieja de hace meses.
+export async function getMostRecentFollowedUpAppointment(db: D1Database, ref: AppointmentRef): Promise<number | null> {
+  const row = await db
+    .prepare(
+      `SELECT id FROM appointments
+       WHERE tenant_id = ? AND channel = ? AND chat_id = ? AND no_show_followup_sent_at IS NOT NULL
+       ORDER BY id DESC LIMIT 1`,
+    )
+    .bind(ref.tenantId, ref.channel, ref.chatId)
+    .first<{ id: number }>();
+  return row?.id ?? null;
+}
+
+export async function recordAppointmentFeedback(db: D1Database, appointmentId: number, feedback: AppointmentFeedback): Promise<void> {
+  await db
+    .prepare("UPDATE appointments SET attended = ?, rating = ?, feedback_comment = ? WHERE id = ?")
+    .bind(feedback.attended ? 1 : 0, feedback.rating ?? null, feedback.comment ?? null, appointmentId)
+    .run();
 }

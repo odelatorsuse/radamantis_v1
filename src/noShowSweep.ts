@@ -1,4 +1,4 @@
-import { buildNoShowMessage, getDueNoShowFollowups, markNoShowFollowupSent } from "./calendar/appointments";
+import { buildAppointmentFollowUpMessage, getDueNoShowFollowups, markNoShowFollowupSent } from "./calendar/appointments";
 import { getChannelProvider } from "./channels/registry";
 import { appendMessage } from "./messages";
 import { getChannelExternalId, getTenantSettings } from "./tenants";
@@ -38,7 +38,7 @@ export async function runNoShowSweep(db: D1Database, now: Date = new Date()): Pr
         getTenantSettings(db, appt.tenantId),
         getTenantName(db, appt.tenantId),
       ]);
-      const message = buildNoShowMessage(tenantName, appt, tenantSettings.timezone);
+      const message = buildAppointmentFollowUpMessage(tenantName, appt, tenantSettings.timezone);
 
       const provider = getChannelProvider(appt.channel);
       if (!provider) throw new Error(`Canal "${appt.channel}" no soportado para seguimiento de no-shows todavía`);

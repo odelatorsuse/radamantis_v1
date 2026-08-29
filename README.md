@@ -243,6 +243,18 @@ Qué ve el cliente en `/console`:
 
 Identidad visual propia (`src/client/consoleHtml.ts`): verde esmeralda + ámbar, tipografía Poppins/Open Sans — deliberadamente distinta tanto de la paleta Slate/Indigo del panel admin como de la terracota del bot (decisión explícita de Oscar, para que la consola se sienta "del cliente", no la del operador).
 
+### Manejo de chats: responder desde la consola
+
+Además de pausar/reactivar, el negocio puede **responder de verdad** a un cliente directo desde `/console`, sin salir a la app de Telegram:
+
+```
+POST /api/client/conversations/:channel/:chatId/send   { text }
+```
+
+El mensaje se manda por la API real de Telegram, se guarda en `messages` con `role="assistant"` (para que el cliente lo vea igual que una respuesta del bot, y para que el LLM lo tenga en contexto si la conversación se reactiva) pero con la nueva columna `sent_by='human'` (migración `0013_messages_sent_by.sql`) para que la consola lo distinga visualmente ("Tú" en vez de "Bot"). **El bot se pausa automáticamente** al mandar una respuesta manual si no lo estaba ya — evita que el LLM le conteste encima al cliente sobre algo que el humano ya resolvió; no crea un segundo handoff si la conversación ya estaba pausada.
+
+Solo soporta Telegram por ahora — otros canales devuelven un error explícito hasta que existan.
+
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)
 - `docs/06-roadmap-agencia.md` — ampliación de roadmap hacia modelo de agencia (Etapa 8.5)

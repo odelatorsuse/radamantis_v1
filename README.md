@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 9 completa — alta de cliente self-service (D8) desde `/admin`, sin CLI: crear tenant, vincular canal (registra el webhook de Telegram solo, con reintento si Telegram rate-limita con 429), y cargar la base de conocimiento (embeddings + upsert a Vectorize desde el propio endpoint). Probado con un 3er cliente real en menos de 1 minuto. El dashboard también permite rotar el token de un canal ya vinculado. Superpowers restantes + Claude Skill llegan en Etapa 10.
+Etapa 10, Fase A completa — booking real: cada tenant puede conectar su propio Google Calendar desde `/admin` (OAuth), verificado con una consulta real de disponibilidad. Fase B (que el bot agende por conversación, vía tool calling del LLM) es el siguiente paso. Etapa 9 (alta de cliente self-service, sin CLI) y las etapas anteriores siguen completas — ver secciones abajo.
 
 ## Requisitos
 - Node.js 20+
@@ -168,6 +168,25 @@ Además, `PUT /api/admin/tenants/:id/channels/:channel` permite rotar el token d
 **Nota de calibración importante:** el umbral de relevancia del RAG (`MIN_RELEVANCE_SCORE` en `src/prompts.ts`) se bajó de 0.5 a 0.35 en esta etapa — con `text-embedding-3-small`, preguntas cortas reales en español pueden dar scores de 0.4-0.6 contra el documento correcto de la KB, y 0.5 estaba descartando respuestas legítimas.
 
 Prueba de aceptación pasada: alta de un 3er cliente real (Sofía Estética, `@Asistente_sofiabot`, vertical `estetica`) — tenant + canal + KB en 36 segundos de llamadas a la API, confirmado con preguntas reales en Telegram.
+
+## Etapa 10, Fase A — booking real (Google Calendar)
+
+Cada tenant conecta **su propio** Google Calendar (no uno compartido) vía OAuth. Interfaz `CalendarProvider` (`src/calendar/provider.ts`) desacoplada del proveedor, D5-style — Google es el primer adaptador (`src/calendar/google.ts`), Outlook se agrega después sin tocar el core.
+
+1. Crea un proyecto en [Google Cloud Console](https://console.cloud.google.com), habilita **Google Calendar API**, configura la pantalla de consentimiento OAuth (tipo External, agrega el scope `.../auth/calendar`, y mientras esté en modo prueba agrega como **test user** cada correo de Google que vaya a conectar un calendario), y crea credenciales **OAuth client ID** (tipo Web application) con este redirect URI exacto:
+   ```
+   https://<tu-worker>.workers.dev/oauth/google/callback
+   ```
+2. Sube los secrets: `npx wrangler secret put GOOGLE_OAUTH_CLIENT_ID` y `GOOGLE_OAUTH_CLIENT_SECRET`.
+3. Aplica la migración: `npx wrangler d1 execute radamantis --remote --file=migrations/0007_calendar_connections.sql`.
+4. `npx wrangler deploy`, abre `/admin` → detalle de un tenant → sección "Calendario" → "Conectar Google Calendar".
+5. Prueba de aceptación: confirmar que `calendar_connections` tiene la fila del tenant, y que una consulta real de `checkAvailability`/`freeBusy.query` con el token guardado devuelve datos reales del calendario (no simulados).
+
+**Error común:** `Error 403: access_denied — no completó el proceso de verificación de Google`. Significa que el correo con el que intentaste conectar no está en la lista de **test users** de la pantalla de consentimiento (mientras la app no esté publicada/verificada por Google, solo esos correos pueden autorizarla).
+
+`bookAppointment` revalida disponibilidad justo antes de crear el evento (blindaje anti-doble-cita) — nunca confía en lo que el LLM haya asumido antes de llamar a la tool.
+
+**Fase B (pendiente):** tool calling real en la capa LLM + wiring en `agent.ts` para que el bot consulte disponibilidad y agende citas por conversación — hoy la conexión ya funciona, pero el bot todavía no la usa.
 
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)

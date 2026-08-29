@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 10, Fase A y B completas — booking real: cada tenant conecta su propio Google Calendar desde `/admin` (OAuth) y el bot consulta disponibilidad y agenda citas por conversación (tool calling real del LLM), verificado con citas reales creadas/rechazadas en Telegram. Superpower "Recupera no-shows" también completo: cada cita agendada se le da seguimiento automático si su hora ya pasó sin confirmación. Etapa 9 (alta de cliente self-service, sin CLI) y las etapas anteriores siguen completas — ver secciones abajo.
+Etapa 10, Fase A y B completas — booking real: cada tenant conecta su propio Google Calendar desde `/admin` (OAuth) y el bot consulta disponibilidad y agenda citas por conversación (tool calling real del LLM), verificado con citas reales creadas/rechazadas en Telegram. Superpower "Recupera no-shows" también completo: cada cita agendada se le da seguimiento automático si su hora ya pasó sin confirmación. Consola del cliente en `/console`: cada tenant tiene su propio login (usuario/contraseña) y ve solo sus datos — stats, citas, clientes, salud, conversaciones con pausar/reactivar. Etapa 9 (alta de cliente self-service, sin CLI) y las etapas anteriores siguen completas — ver secciones abajo.
 
 ## Requisitos
 - Node.js 20+
@@ -221,6 +221,27 @@ Dos formas de dispararlo:
 - **`POST /api/admin/no-show-sweep`** — bajo demanda, para probar sin esperar al cron o para forzar una corrida si el cron falló. Responde `{processed, sent, errors}`.
 
 Una cita ya atendida no se vuelve a contactar (`no_show_followup_sent_at` se marca solo tras un envío exitoso); si el envío falla (canal no soportado, token inválido), el error queda en la respuesta y la cita se reintenta en la siguiente corrida.
+
+## Etapa 10 — consola del cliente
+
+Superficie separada del panel de super-admin (`/admin`) — cada tenant tiene su propio login en `/console`, con acceso solo a sus propios datos.
+
+**Auth (D10):** usuario/contraseña por tenant, tabla `tenant_users` (migración `0012_tenant_users.sql`). Contraseñas con PBKDF2 vía Web Crypto (`src/client/passwords.ts`, sin dependencia externa tipo bcrypt). Sesión: un token firmado HMAC-SHA256 (`src/client/session.ts`, 7 días de vigencia), no un JWT completo — evita la superficie de ataque de negociar el algoritmo de firma. **Toda ruta de `/api/client/*` obtiene el `tenant_id` del token verificado, nunca de un parámetro de la URL** — es la garantía de que un cliente jamás ve datos de otro tenant.
+
+Crear el login de un cliente (lo hace Oscar, al dar de alta el tenant o después):
+```
+POST /api/admin/tenants/:id/users   { email, password }   (mín. 8 caracteres)
+PUT  /api/admin/tenants/:id/users/password   { email, newPassword }
+```
+
+Qué ve el cliente en `/console`:
+- **Resumen:** mensajes recibidos/respondidos hoy, clientes distintos hoy, gráfica de actividad de los últimos 7 días.
+- **Citas:** próximas y recientes, desde la misma tabla `appointments` de "Recupera no-shows".
+- **Clientes:** un renglón por hilo de conversación (`channel`+`chat_id`); el nombre/contacto solo aparece si ese hilo ya generó una cita — sin booking no hay identidad real que mostrar.
+- **Salud:** estado de conexión simple (Telegram conectado, Google Calendar conectado, última actividad del asistente) — decisión explícita de Oscar: datos ya en D1, sin llamadas de red en vivo en cada carga de la consola.
+- **Conversaciones:** lista con vista de mensajes, y **el cliente puede pausar/reactivar su propia conversación** (reutiliza `handoffs` de Etapa 6 vía la nueva `resolveHandoffByRef()` en `src/handoff.ts`, que resuelve por `channel`+`chat_id` en vez de por id de handoff).
+
+Identidad visual propia (`src/client/consoleHtml.ts`): verde esmeralda + ámbar, tipografía Poppins/Open Sans — deliberadamente distinta tanto de la paleta Slate/Indigo del panel admin como de la terracota del bot (decisión explícita de Oscar, para que la consola se sienta "del cliente", no la del operador).
 
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)

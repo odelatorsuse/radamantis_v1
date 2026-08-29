@@ -47,6 +47,25 @@ Esto obliga a dos aclaraciones antes de seguir construyendo:
 | Paneles de analítica avanzados (Analista IA/Insights, sentiment) | **Ya cubierto (planeado)** | D7: "Vigilante con IA" — CORE (salud) + TOGGLE (sentimiento, plan Pro). No es parte de Etapa 8.5. |
 | Prompt engineering avanzado (A/B testing, versionado, auditoría) | **Backlog, sin fecha** | El editor de prompt de Etapa 8.5 es la versión mínima. Versionado/A-B testing quedan como mejora futura opcional. |
 
+## Segunda ronda: consola del cliente + clasificación de los 12 superpowers de Forja+ (2026-08-29)
+
+Oscar pidió una consola separada por tenant (para el dueño del negocio, no para él como operador) y pegó el copy de marketing completo de Forja+ ("Los 12 superpowers de Forja+" + panel de análisis). Mismo principio de IP que arriba: se clasifica qué ya está cubierto, qué es nuevo, y nada se construye con los nombres/taglines de Forja — ver `docs/05-arquitectura-radamantis.md` §7 para la tabla original de los 12 superpowers (numerados 1-12 ahí, con nombres propios de Radamantis, no los de Forja).
+
+| # (§7) | Estado a 2026-08-29 |
+|---|---|
+| 1, 3, 6, 8, 10 | **Ya cubiertos** (anti-invento, handoff, tono configurable, idioma configurable, no-shows — este último recién completado hoy). |
+| 2 (alertas proactivas al operador) | No construido. |
+| 4 (reenganche de leads fríos) | No construido. |
+| 5 (voz/imágenes) | No construido — requiere capacidad multimodal nueva. |
+| 7 (reporte diario automático) | No construido. |
+| 9 (encuestas de satisfacción) | No construido. |
+| 11 (pedir reseñas) | No construido. |
+| 12 (cobros por WhatsApp) | No construido — además bloqueado hasta que exista el canal WhatsApp. |
+| Campañas (difusión segmentada) | No construido — bloqueado hasta que exista WhatsApp. |
+| Mejoras (detecta huecos de conocimiento) | No construido — nuevo, requiere trackear preguntas sin match relevante en el RAG. |
+
+**Consola del cliente — aceptada, construida esta misma ronda (Etapa 10):** portal en `/console`, login propio por tenant (usuario/contraseña — decisión de Oscar, más familiar para un dueño de negocio no técnico que una API key), identidad visual propia (verde esmeralda + ámbar, ni la paleta admin ni la del bot). Contenido: stats de hoy, gráfica de 7 días, citas, clientes únicos, salud simple de conexión, conversaciones con pausar/reactivar (el cliente sí puede, no solo Oscar). Ver `CLAUDE.md` para el detalle técnico.
+
 ## Roadmap de etapas actualizado
 
 | Etapa | Objetivo | Estado |

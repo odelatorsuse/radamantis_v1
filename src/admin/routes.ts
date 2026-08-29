@@ -6,6 +6,7 @@ import { getChannelProvider, listSupportedChannels } from "../channels/registry"
 import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
 import { hashPassword } from "../client/passwords";
 import { runNoShowSweep } from "../noShowSweep";
+import { getTenantSettings, upsertTenantSettings } from "../tenants";
 import { listVerticalTemplates } from "../verticals/registry";
 import { ingestKbDocs, type KbDocInput } from "./kb";
 import {
@@ -18,7 +19,6 @@ import {
   logAdminAction,
   resolveHandoff,
   updateChannelBinding,
-  upsertTenantSettings,
 } from "./repository";
 
 interface Env {
@@ -132,6 +132,10 @@ adminApp.put("/tenants/:id/settings", async (c) => {
     timezone?: string;
     businessHours?: WeeklyBusinessHours;
   }>();
+  // alertChatId/alertActivationCode se preservan tal cual — se manejan
+  // exclusivamente desde /console (Etapa 10, superpower "Vigilante"), nunca
+  // desde este formulario, para que guardar tono/idioma/etc. no los borre.
+  const current = await getTenantSettings(c.env.DB, tenantId);
   const settings = {
     tone: body.tone || "calido",
     language: body.language || "es",
@@ -139,6 +143,8 @@ adminApp.put("/tenants/:id/settings", async (c) => {
     promptOverride: body.promptOverride?.trim() ? body.promptOverride : null,
     timezone: body.timezone || "America/Mexico_City",
     businessHours: body.businessHours || DEFAULT_BUSINESS_HOURS,
+    alertChatId: current.alertChatId,
+    alertActivationCode: current.alertActivationCode,
   };
   await upsertTenantSettings(c.env.DB, tenantId, settings);
   await logAdminAction(c.env.DB, { tenantId, action: "update_tenant_settings", details: settings });

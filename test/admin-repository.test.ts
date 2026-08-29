@@ -6,7 +6,6 @@ import {
   logAdminAction,
   resolveHandoff,
   updateChannelBinding,
-  upsertTenantSettings,
 } from "../src/admin/repository";
 
 function mockDb() {
@@ -68,30 +67,6 @@ describe("resolveHandoff", () => {
   });
 });
 
-describe("upsertTenantSettings", () => {
-  it("hace upsert con ON CONFLICT sobre tenant_id", async () => {
-    const { db, prepare, bind } = mockDb();
-    const businessHours = { mon: { start: "09:00", end: "18:00" }, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null };
-    await upsertTenantSettings(db, "vet-ch", {
-      tone: "formal",
-      language: "en",
-      currency: "USD",
-      promptOverride: null,
-      timezone: "America/Mexico_City",
-      businessHours,
-    });
-    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("ON CONFLICT (tenant_id) DO UPDATE"));
-    expect(bind).toHaveBeenCalledWith(
-      "vet-ch",
-      "formal",
-      "en",
-      "USD",
-      null,
-      "America/Mexico_City",
-      JSON.stringify(businessHours),
-    );
-  });
-});
 
 describe("getTenantDetail", () => {
   it("devuelve null si el tenant no existe", async () => {

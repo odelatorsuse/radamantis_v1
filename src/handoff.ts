@@ -22,6 +22,33 @@ export function detectsHandoffRequest(text: string): boolean {
   return HANDOFF_KEYWORDS.some((keyword) => normalized.includes(keyword));
 }
 
+// Etapa 10 (superpower "Vigilante"): mismo principio que arriba — detección
+// determinista y curada de un cliente molesto/frustrado, no un modelo de
+// sentimiento con IA (eso queda como TOGGLE futuro más preciso, ver
+// docs/05-arquitectura-radamantis.md §7). También dispara un handoff — un
+// cliente molesto necesita un humano igual que uno que lo pide explícito.
+const URGENT_SENTIMENT_KEYWORDS = [
+  "pésimo servicio",
+  "pésima atención",
+  "muy mal servicio",
+  "qué mal servicio",
+  "esto es una estafa",
+  "quiero mi dinero de vuelta",
+  "voy a poner una queja",
+  "voy a demandar",
+  "nunca voy a volver",
+  "esto es el colmo",
+  "estoy muy molesto",
+  "estoy muy enojado",
+  "es una vergüenza",
+  "quiero cancelar todo",
+];
+
+export function detectsUrgentSentiment(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return URGENT_SENTIMENT_KEYWORDS.some((keyword) => normalized.includes(keyword));
+}
+
 export const HANDOFF_REPLY_MESSAGE =
   "Voy a conectarte con un miembro del equipo — en breve te contactarán directamente. " +
   "Mientras tanto, cualquier mensaje que envíes aquí quedará registrado para que lo vean.";

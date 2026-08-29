@@ -232,6 +232,12 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       <h1 class="page-title">Salud</h1>
       <p class="page-sub">Estado de conexión de tu bot — no es un monitoreo en vivo, es lo último que sabemos.</p>
       <div class="panel" id="healthPanel"></div>
+
+      <div class="panel">
+        <h3>Alertas</h3>
+        <p class="page-sub" style="margin-bottom:14px;">Recibe un aviso por Telegram cuando un cliente pida hablar con alguien o suene molesto.</p>
+        <div id="alertSettingsPanel"></div>
+      </div>
     </section>
 
   </main>
@@ -422,6 +428,43 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     });
   }
 
+  function loadAlertSettings() {
+    api("/alert-settings").then(function (data) {
+      var panel = document.getElementById("alertSettingsPanel");
+      panel.innerHTML = "";
+
+      var statusRow = document.createElement("div");
+      statusRow.className = "health-row";
+      statusRow.innerHTML =
+        "<span class='health-label " + (data.configured ? "status-ok" : "status-warn") + "'><span class='status-dot'></span>Alertas</span>" +
+        "<span class='health-value'>" + (data.configured ? "Activadas" : "No activadas") + "</span>";
+      panel.appendChild(statusRow);
+
+      var instructions = document.createElement("div");
+      instructions.style.marginTop = "14px";
+      instructions.innerHTML =
+        "<p style='font-size:0.88rem;margin-bottom:8px;'>" +
+        (data.configured
+          ? "Para mandar las alertas a otro chat, envía este mismo código de nuevo desde el chat que quieras usar:"
+          : "Para activarlas, abre el chat de tu bot en Telegram y manda este código (tal cual, sin nada más):") +
+        "</p>" +
+        "<code style='display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:1.1rem;letter-spacing:0.05em;font-family:\"Fira Code\",monospace;'>" +
+        esc(data.activationCode) + "</code>";
+      panel.appendChild(instructions);
+
+      if (data.configured) {
+        var disableBtn = document.createElement("button");
+        disableBtn.className = "btn-secondary";
+        disableBtn.style.marginTop = "14px";
+        disableBtn.textContent = "Desactivar alertas";
+        disableBtn.addEventListener("click", function () {
+          api("/alert-settings", { method: "DELETE" }).then(loadAlertSettings);
+        });
+        panel.appendChild(disableBtn);
+      }
+    });
+  }
+
   function renderConversationList(conversations) {
     var list = document.getElementById("conversationList");
     list.innerHTML = "";
@@ -521,6 +564,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     loadAppointments();
     loadClients();
     loadHealth();
+    loadAlertSettings();
     loadConversations();
   }
 

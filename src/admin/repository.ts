@@ -125,37 +125,6 @@ export async function getUsageSummary(db: D1Database): Promise<UsageSummary[]> {
   return results;
 }
 
-// Etapa 8.5: config en caliente — getTenantSettings vive en ../tenants (la
-// reusa también el router para cargar el prompt en runtime).
-export async function upsertTenantSettings(
-  db: D1Database,
-  tenantId: string,
-  settings: TenantSettings,
-): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-       ON CONFLICT (tenant_id) DO UPDATE SET
-         tone = excluded.tone,
-         language = excluded.language,
-         currency = excluded.currency,
-         prompt_override = excluded.prompt_override,
-         timezone = excluded.timezone,
-         business_hours = excluded.business_hours,
-         updated_at = excluded.updated_at`,
-    )
-    .bind(
-      tenantId,
-      settings.tone,
-      settings.language,
-      settings.currency,
-      settings.promptOverride,
-      settings.timezone,
-      JSON.stringify(settings.businessHours),
-    )
-    .run();
-}
 
 export async function getTenantDetail(db: D1Database, tenantId: string): Promise<TenantDetail | null> {
   const tenant = await db

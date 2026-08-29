@@ -5,7 +5,9 @@ import { appendMessage, getHistory } from "../messages";
 import { getChannelExternalId } from "../tenants";
 import { verifyPassword } from "./passwords";
 import {
+  clearAlertChatId,
   getHealthStatus,
+  getOrCreateAlertSettings,
   getPastAppointments,
   getTenantUserByEmail,
   getTodayStats,
@@ -134,5 +136,18 @@ clientApp.post("/conversations/:channel/:chatId/send", async (c) => {
     await createHandoff(c.env.DB, ref, "Pausado automáticamente al responder manualmente desde la consola del cliente");
   }
 
+  return c.json({ ok: true });
+});
+
+// Etapa 10 (superpower "Vigilante"): el dueño ve/genera su código de
+// activación aquí — mandárselo a su propio bot por Telegram vincula su
+// chat_id (lo hace el webhook en src/index.ts, no esta ruta).
+clientApp.get("/alert-settings", async (c) => {
+  const settings = await getOrCreateAlertSettings(c.env.DB, c.get("tenantId"));
+  return c.json(settings);
+});
+
+clientApp.delete("/alert-settings", async (c) => {
+  await clearAlertChatId(c.env.DB, c.get("tenantId"));
   return c.json({ ok: true });
 });

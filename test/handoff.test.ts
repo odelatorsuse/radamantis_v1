@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createHandoff, detectsHandoffRequest, isPaused, resolveHandoffByRef } from "../src/handoff";
+import { createHandoff, detectsHandoffRequest, detectsUrgentSentiment, isPaused, resolveHandoffByRef } from "../src/handoff";
 
 const ref = { tenantId: "vet-ch", channel: "telegram", chatId: "42" };
 
@@ -13,6 +13,19 @@ describe("detectsHandoffRequest", () => {
   it("no dispara con preguntas normales del consultorio", () => {
     expect(detectsHandoffRequest("¿Cuál es el horario de atención?")).toBe(false);
     expect(detectsHandoffRequest("¿Cuánto cuesta la consulta?")).toBe(false);
+  });
+});
+
+describe("detectsUrgentSentiment", () => {
+  it("detecta frases de un cliente molesto/frustrado (superpower Vigilante)", () => {
+    expect(detectsUrgentSentiment("esto es una estafa, quiero mi dinero de vuelta")).toBe(true);
+    expect(detectsUrgentSentiment("Pésimo servicio, nunca voy a volver")).toBe(true);
+    expect(detectsUrgentSentiment("voy a poner una queja por esto")).toBe(true);
+  });
+
+  it("no dispara con preguntas o comentarios normales", () => {
+    expect(detectsUrgentSentiment("¿Cuál es el horario de atención?")).toBe(false);
+    expect(detectsUrgentSentiment("gracias, todo bien con mi cita")).toBe(false);
   });
 });
 

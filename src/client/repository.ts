@@ -1,3 +1,5 @@
+import { getTenantSettings, upsertTenantSettings } from "../tenants";
+
 // Etapa 10 (consola del cliente): toda query aquí recibe tenantId desde el
 // token de sesión ya verificado (nunca desde un parámetro de URL que el
 // cliente pudiera manipular) — es la garantía de aislamiento entre tenants
@@ -211,4 +213,43 @@ export async function listConversations(db: D1Database, tenantId: string): Promi
     messageCount: r.message_count,
     paused: r.open_handoff_id !== null,
   }));
+}
+
+// Etapa 10 (superpower "Vigilante"): el dueño del negocio manda este código
+// a su propio bot por Telegram una vez, y el webhook (src/index.ts) lo
+// detecta y guarda su chat_id como destino de alertas — evita que tenga que
+// buscar/copiar su chat_id a mano (Telegram no lo expone en ningún lado).
+function generateActivationCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase();
+}
+
+export interface AlertSettings {
+  activationCode: string;
+  configured: boolean;
+}
+
+// Genera el código la primera vez que se pide (lazy) y lo deja fijo después
+// — reenviar el mismo código sirve para (re)activar alertas en otro chat.
+export async function getOrCreateAlertSettings(db: D1Database, tenantId: string): Promise<AlertSettings> {
+  const current = await getTenantSettings(db, tenantId);
+  if (current.alertActivationCode) {
+    return { activationCode: current.alertActivationCode, configured: current.alertChatId !== null };
+  }
+  const code = generateActivationCode();
+  await upsertTenantSettings(db, tenantId, { ...current, alertActivationCode: code });
+  return { activationCode: code, configured: false };
+}
+
+export async function setAlertChatId(db: D1Database, tenantId: string, chatId: string): Promise<void> {
+  const current = await getTenantSettings(db, tenantId);
+  await upsertTenantSettings(db, tenantId, { ...current, alertChatId: chatId });
+}
+
+export async function clearAlertChatId(db: D1Database, tenantId: string): Promise<void> {
+  const current = await getTenantSettings(db, tenantId);
+  await upsertTenantSettings(db, tenantId, { ...current, alertChatId: null });
 }

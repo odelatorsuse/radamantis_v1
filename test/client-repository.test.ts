@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  clearAlertChatId,
   createTenantUser,
   getHealthStatus,
+  getOrCreateAlertSettings,
   getPastAppointments,
   getTenantUserByEmail,
   getTodayStats,
@@ -9,6 +11,7 @@ import {
   getUpcomingAppointments,
   getWeeklyActivity,
   listConversations,
+  setAlertChatId,
   setTenantUserPassword,
 } from "../src/client/repository";
 
@@ -140,5 +143,61 @@ describe("listConversations", () => {
     const result = await listConversations(db, "vet-ch");
     expect(result[0].paused).toBe(true);
     expect(result[1].paused).toBe(false);
+  });
+});
+
+const TENANT_SETTINGS_ROW = {
+  tone: "calido",
+  language: "es",
+  currency: "MXN",
+  prompt_override: null,
+  timezone: "America/Mexico_City",
+  business_hours: "{}",
+  alert_chat_id: null,
+  alert_activation_code: null,
+};
+
+describe("getOrCreateAlertSettings", () => {
+  it("devuelve el código existente sin regenerarlo si el tenant ya tiene uno", async () => {
+    const { db, run } = mockDb({ ...TENANT_SETTINGS_ROW, alert_activation_code: "ABCD1234", alert_chat_id: "999" });
+
+    const result = await getOrCreateAlertSettings(db, "vet-ch");
+
+    expect(result).toEqual({ activationCode: "ABCD1234", configured: true });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("genera y guarda un código nuevo si el tenant no tiene uno (primera vez)", async () => {
+    const { db, run } = mockDb(null); // getTenantSettings -> DEFAULT_TENANT_SETTINGS (sin fila)
+
+    const result = await getOrCreateAlertSettings(db, "vet-ch");
+
+    expect(result.configured).toBe(false);
+    expect(result.activationCode).toMatch(/^[0-9A-F]{8}$/);
+    expect(run).toHaveBeenCalledTimes(1); // upsertTenantSettings guardó el código nuevo
+  });
+});
+
+describe("setAlertChatId / clearAlertChatId", () => {
+  it("setAlertChatId guarda el chat_id preservando el resto de la config", async () => {
+    const { db, bind } = mockDb({ ...TENANT_SETTINGS_ROW, alert_activation_code: "ABCD1234" });
+
+    await setAlertChatId(db, "vet-ch", "999");
+
+    // El último bind es el del INSERT/upsert — su penúltimo/antepenúltimo
+    // argumento corresponde a alert_chat_id/alert_activation_code.
+    const lastCall = bind.mock.calls[bind.mock.calls.length - 1];
+    expect(lastCall).toContain("999");
+    expect(lastCall).toContain("ABCD1234");
+  });
+
+  it("clearAlertChatId pone alert_chat_id en null sin tocar el código", async () => {
+    const { db, bind } = mockDb({ ...TENANT_SETTINGS_ROW, alert_chat_id: "999", alert_activation_code: "ABCD1234" });
+
+    await clearAlertChatId(db, "vet-ch");
+
+    const lastCall = bind.mock.calls[bind.mock.calls.length - 1];
+    expect(lastCall).toContain(null);
+    expect(lastCall).toContain("ABCD1234");
   });
 });

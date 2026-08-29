@@ -219,3 +219,40 @@ describe("POST /conversations/:channel/:chatId/send (manejo de chats)", () => {
     expect(env.__run).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("GET/DELETE /alert-settings (superpower Vigilante)", () => {
+  it("GET genera un código de activación nuevo si el tenant no tiene uno", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/alert-settings", { headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(200);
+    const body = await res.json<{ activationCode: string; configured: boolean }>();
+    expect(body.activationCode).toMatch(/^[0-9A-F]{8}$/);
+    expect(body.configured).toBe(false);
+  });
+
+  it("GET devuelve configured:true si ya hay un alert_chat_id guardado", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    (env.__first as ReturnType<typeof vi.fn>).mockResolvedValue({
+      tone: "calido",
+      language: "es",
+      currency: "MXN",
+      prompt_override: null,
+      timezone: "America/Mexico_City",
+      business_hours: "{}",
+      alert_chat_id: "999",
+      alert_activation_code: "ABCD1234",
+    });
+    const res = await clientApp.request("/alert-settings", { headers: { Authorization: `Bearer ${token}` } }, env);
+    const body = await res.json<{ activationCode: string; configured: boolean }>();
+    expect(body).toEqual({ activationCode: "ABCD1234", configured: true });
+  });
+
+  it("DELETE limpia el chat_id de alertas", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request("/alert-settings", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }, env);
+    expect(res.status).toBe(200);
+    expect(env.__run).toHaveBeenCalled();
+  });
+});

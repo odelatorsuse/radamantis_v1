@@ -20,6 +20,13 @@ export interface TenantSettings {
   promptOverride: string | null;
   timezone: string;
   businessHours: WeeklyBusinessHours;
+  // Etapa 10 (superpower "Vigilante"): a dónde avisarle al dueño del negocio
+  // cuando un cliente pide un humano o suena molesto. alertChatId es opt-in
+  // (null = sin alertas configuradas). alertActivationCode es el código que
+  // el dueño manda a su propio bot desde /console para vincular su chat_id
+  // sin tener que buscarlo — Telegram no expone el chat_id en su UI.
+  alertChatId: string | null;
+  alertActivationCode: string | null;
 }
 
 export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
@@ -29,6 +36,8 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
   promptOverride: null,
   timezone: "America/Mexico_City",
   businessHours: DEFAULT_BUSINESS_HOURS,
+  alertChatId: null,
+  alertActivationCode: null,
 };
 
 // D2/D6: el router resuelve tenant Y vertical antes de instanciar el DO,
@@ -66,7 +75,9 @@ export async function getChannelExternalId(db: D1Database, tenantId: string, cha
 
 export async function getTenantSettings(db: D1Database, tenantId: string): Promise<TenantSettings> {
   const row = await db
-    .prepare("SELECT tone, language, currency, prompt_override, timezone, business_hours FROM tenant_settings WHERE tenant_id = ?")
+    .prepare(
+      "SELECT tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code FROM tenant_settings WHERE tenant_id = ?",
+    )
     .bind(tenantId)
     .first<{
       tone: string;
@@ -75,6 +86,8 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
       prompt_override: string | null;
       timezone: string;
       business_hours: string;
+      alert_chat_id: string | null;
+      alert_activation_code: string | null;
     }>();
 
   if (!row) return DEFAULT_TENANT_SETTINGS;
@@ -85,5 +98,42 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
     promptOverride: row.prompt_override,
     timezone: row.timezone,
     businessHours: parseBusinessHours(row.business_hours),
+    alertChatId: row.alert_chat_id,
+    alertActivationCode: row.alert_activation_code,
   };
+}
+
+// Etapa 8.5: config en caliente — antes vivía en admin/repository.ts; movida
+// aquí en Etapa 10 (junto con getTenantSettings/TenantSettings, su lugar
+// natural) porque tanto el panel admin como la consola del cliente
+// necesitan escribir aquí (tono/idioma/etc. desde /admin, alertas desde
+// /console) — ninguno de los dos debe depender del otro.
+export async function upsertTenantSettings(db: D1Database, tenantId: string, settings: TenantSettings): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT (tenant_id) DO UPDATE SET
+         tone = excluded.tone,
+         language = excluded.language,
+         currency = excluded.currency,
+         prompt_override = excluded.prompt_override,
+         timezone = excluded.timezone,
+         business_hours = excluded.business_hours,
+         alert_chat_id = excluded.alert_chat_id,
+         alert_activation_code = excluded.alert_activation_code,
+         updated_at = excluded.updated_at`,
+    )
+    .bind(
+      tenantId,
+      settings.tone,
+      settings.language,
+      settings.currency,
+      settings.promptOverride,
+      settings.timezone,
+      JSON.stringify(settings.businessHours),
+      settings.alertChatId,
+      settings.alertActivationCode,
+    )
+    .run();
 }

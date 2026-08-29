@@ -3,11 +3,12 @@ import { adminApp } from "./admin/routes";
 import { DASHBOARD_HTML } from "./admin/dashboardHtml";
 import { exchangeCodeForTokens } from "./calendar/oauth";
 import { saveCalendarConnection } from "./calendar/repository";
-import { clientApp } from "./client/routes";
 import { CONSOLE_HTML } from "./client/consoleHtml";
+import { setAlertChatId } from "./client/repository";
+import { clientApp } from "./client/routes";
 import { runNoShowSweep } from "./noShowSweep";
 import { extractIncomingMessage, sendTelegramMessage } from "./telegram";
-import { resolveTenant } from "./tenants";
+import { getTenantSettings, resolveTenant } from "./tenants";
 
 interface Env {
   DB: D1Database;
@@ -94,6 +95,18 @@ app.post("/webhook/telegram/:botToken", async (c) => {
   const incoming = extractIncomingMessage(update);
   if (!incoming) {
     // Telegram reintenta si no responde 200, aunque el update no traiga texto.
+    return c.text("ok");
+  }
+
+  // Etapa 10 (superpower "Vigilante"): el código de activación de alertas
+  // se detecta ANTES de entrar al agente normal — es un mensaje de
+  // configuración, no una conversación con el bot. Solo funciona si
+  // coincide EXACTO con el código de ESE tenant (generado desde /console),
+  // así que un cliente cualquiera escribiendo texto al azar nunca lo activa.
+  const settings = await getTenantSettings(c.env.DB, tenantId);
+  if (settings.alertActivationCode && incoming.text.trim() === settings.alertActivationCode) {
+    await setAlertChatId(c.env.DB, tenantId, String(incoming.chatId));
+    await sendTelegramMessage(botToken, incoming.chatId, "Listo — a partir de ahora te voy a avisar por aquí cuando un cliente necesite atención.");
     return c.text("ok");
   }
 

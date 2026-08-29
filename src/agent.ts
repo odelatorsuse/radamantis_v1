@@ -2,7 +2,7 @@ import { recordAppointmentFromToolCall } from "./calendar/appointments";
 import { GoogleCalendarProvider } from "./calendar/google";
 import { getValidAccessToken } from "./calendar/oauth";
 import { CALENDAR_TOOLS, executeCalendarTool } from "./calendar/tools";
-import { createHandoff, detectsHandoffRequest, HANDOFF_REPLY_MESSAGE, isPaused } from "./handoff";
+import { createHandoff, detectsHandoffRequest, detectsUrgentSentiment, HANDOFF_REPLY_MESSAGE, isPaused } from "./handoff";
 import { OpenAIProvider } from "./llm/openai";
 import { buildMessages, type LLMMessage, type LLMUsage } from "./llm/provider";
 import { appendMessage, getHistory, type ConversationRef } from "./messages";
@@ -12,6 +12,7 @@ import { searchKb, type KbMatch } from "./rag/search";
 import { getTenantSettings } from "./tenants";
 import { logUsage } from "./usage";
 import { getVerticalTemplate } from "./verticals/registry";
+import { notifyBusinessOwner } from "./vigilante";
 
 interface Env {
   DB: D1Database;
@@ -50,10 +51,14 @@ export class ConversationAgent {
       return Response.json({ replyText: null });
     }
 
-    if (template.toolsEnabled.includes("handoffHuman") && detectsHandoffRequest(userText)) {
+    if (template.toolsEnabled.includes("handoffHuman") && (detectsHandoffRequest(userText) || detectsUrgentSentiment(userText))) {
       await appendMessage(this.env.DB, ref, { role: "user", content: userText });
       await createHandoff(this.env.DB, ref, userText);
       await appendMessage(this.env.DB, ref, { role: "assistant", content: HANDOFF_REPLY_MESSAGE });
+      // Etapa 10 (superpower "Vigilante"): avisa al dueño en tiempo real —
+      // antes de esto, un handoff pasaba en silencio hasta que alguien
+      // revisara /admin o /console.
+      await notifyBusinessOwner(this.env.DB, ref, userText);
       return Response.json({ replyText: HANDOFF_REPLY_MESSAGE });
     }
 

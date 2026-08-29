@@ -255,6 +255,21 @@ El mensaje se manda por la API real de Telegram, se guarda en `messages` con `ro
 
 Solo soporta Telegram por ahora — otros canales devuelven un error explícito hasta que existan.
 
+### Preparado para multi-canal (D5-style)
+
+El envío de mensajes (respuesta manual, recupera no-shows, y el registro de webhook al vincular un canal) pasa por una interfaz `ChannelProvider` (`src/channels/provider.ts`), mismo patrón ya usado para `LLMProvider` y `CalendarProvider`:
+
+```ts
+interface ChannelProvider {
+  channel: string;
+  displayName: string;
+  sendMessage(externalId: string, chatId: string, text: string): Promise<void>;
+  registerWebhook?(origin: string, externalId: string, webhookSecret: string): Promise<{ ok: boolean; error?: string }>;
+}
+```
+
+Hoy solo existe `src/channels/telegram.ts`, registrado en `src/channels/registry.ts` (`getChannelProvider(channel)`). Agregar WhatsApp/Messenger/Instagram cuando haya credenciales reales de Meta es: un archivo nuevo en `src/channels/` implementando la interfaz + una línea en el registro — sin tocar `noShowSweep.ts`, `client/routes.ts` ni `admin/routes.ts`, que ya solo hablan con `ChannelProvider`, nunca comparan contra `"telegram"` directamente. `GET /api/admin/channels/supported` expone el catálogo real (hoy solo Telegram).
+
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)
 - `docs/06-roadmap-agencia.md` — ampliación de roadmap hacia modelo de agencia (Etapa 8.5)

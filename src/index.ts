@@ -8,8 +8,9 @@ import { setAlertChatId } from "./client/repository";
 import { clientApp } from "./client/routes";
 import { runColdLeadSweep } from "./coldLeads";
 import { runDailyReportSweep } from "./dailyReport";
+import { describeImage, transcribeVoice } from "./media";
 import { runNoShowSweep } from "./noShowSweep";
-import { extractIncomingMessage, sendTelegramMessage } from "./telegram";
+import { downloadTelegramFile, extractIncomingMessage, sendTelegramMessage } from "./telegram";
 import { getTenantSettings, resolveTenant } from "./tenants";
 
 interface Env {
@@ -100,13 +101,44 @@ app.post("/webhook/telegram/:botToken", async (c) => {
     return c.text("ok");
   }
 
+  // Etapa 10 (superpower "Oído y vista"): voz e imágenes se convierten a
+  // texto ANTES de todo lo demás (incluida la detección del código de
+  // activación) — así el resto del flujo nunca necesita saber que el
+  // mensaje original no era texto plano.
+  let userText: string;
+  if (incoming.text) {
+    userText = incoming.text;
+  } else if (incoming.voice) {
+    try {
+      const audio = await downloadTelegramFile(botToken, incoming.voice.fileId);
+      userText = await transcribeVoice(c.env.OPENAI_API_KEY, audio, incoming.voice.mimeType);
+    } catch {
+      await sendTelegramMessage(botToken, incoming.chatId, "No pude escuchar tu nota de voz, ¿me la puedes escribir?");
+      return c.text("ok");
+    }
+  } else if (incoming.photo) {
+    try {
+      const image = await downloadTelegramFile(botToken, incoming.photo.fileId);
+      const description = await describeImage(c.env.OPENAI_API_KEY, image, "image/jpeg");
+      // Sin este encabezado, el modelo ve la descripción como si el cliente
+      // la hubiera escrito literalmente — en el siguiente turno se confunde
+      // y cree que le están "describiendo una imagen" en vez de que envió una foto.
+      userText = `[El cliente envió una imagen] ${description}`;
+    } catch {
+      await sendTelegramMessage(botToken, incoming.chatId, "No pude ver tu imagen, ¿me puedes contar qué es?");
+      return c.text("ok");
+    }
+  } else {
+    return c.text("ok");
+  }
+
   // Etapa 10 (superpower "Vigilante"): el código de activación de alertas
   // se detecta ANTES de entrar al agente normal — es un mensaje de
   // configuración, no una conversación con el bot. Solo funciona si
   // coincide EXACTO con el código de ESE tenant (generado desde /console),
   // así que un cliente cualquiera escribiendo texto al azar nunca lo activa.
   const settings = await getTenantSettings(c.env.DB, tenantId);
-  if (settings.alertActivationCode && incoming.text.trim() === settings.alertActivationCode) {
+  if (settings.alertActivationCode && userText.trim() === settings.alertActivationCode) {
     await setAlertChatId(c.env.DB, tenantId, String(incoming.chatId));
     await sendTelegramMessage(botToken, incoming.chatId, "Listo — a partir de ahora te voy a avisar por aquí cuando un cliente necesite atención.");
     return c.text("ok");
@@ -119,7 +151,7 @@ app.post("/webhook/telegram/:botToken", async (c) => {
   const agentRes = await stub.fetch("https://agent/reply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tenantId, channel: "telegram", chatId, userText: incoming.text, verticalId }),
+    body: JSON.stringify({ tenantId, channel: "telegram", chatId, userText, verticalId }),
   });
   const { replyText } = await agentRes.json<{ replyText: string | null }>();
 

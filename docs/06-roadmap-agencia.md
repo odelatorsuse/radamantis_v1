@@ -55,7 +55,7 @@ Oscar pidió una consola separada por tenant (para el dueño del negocio, no par
 |---|---|
 | 1, 2, 3, 4, 6, 7, 8, 9, 10, 11 | **Ya cubiertos** (anti-invento, alertas proactivas al dueño ["Vigilante", parcial — detección determinista, no scoring de sentimiento con IA], handoff, reenganche de leads fríos, tono configurable, reporte diario automático, idioma configurable, no-shows, encuesta de satisfacción, pide reseñas — estos tres últimos unificados en un solo seguimiento post-cita, ver `CLAUDE.md`). |
 | Mejoras (detecta huecos de conocimiento) | **Ya cubierto** (2026-08-29) — registra preguntas sin match relevante en el RAG; el dueño decide qué agregar, el bot nunca edita su propia KB. |
-| 5 (voz/imágenes) | No construido — requiere capacidad multimodal nueva. |
+| 5 (voz/imágenes) | **Ya cubierto** (2026-08-29) — "Oído y vista": voz e imágenes se transcriben/describen a texto antes de entrar al agente, reutilizando todo el pipeline existente. Ver `CLAUDE.md`. |
 | 12 (cobros por WhatsApp) | No construido — además bloqueado hasta que exista el canal WhatsApp. |
 | Campañas (difusión segmentada) | No construido — bloqueado hasta que exista WhatsApp. |
 

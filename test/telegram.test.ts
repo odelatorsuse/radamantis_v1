@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { extractIncomingMessage } from "../src/telegram";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { downloadTelegramFile, extractIncomingMessage } from "../src/telegram";
 
 describe("extractIncomingMessage", () => {
   it("extrae chatId y texto de un update válido", () => {
@@ -14,11 +14,70 @@ describe("extractIncomingMessage", () => {
     expect(extractIncomingMessage({ update_id: 1 })).toBeNull();
   });
 
-  it("devuelve null si el mensaje no tiene texto (ej. foto, sticker)", () => {
+  it("devuelve null si el mensaje no tiene texto, voz ni foto (ej. sticker)", () => {
     const update = {
       update_id: 1,
       message: { message_id: 1, chat: { id: 42 } },
     };
     expect(extractIncomingMessage(update)).toBeNull();
+  });
+
+  it("extrae voice con fileId y mimeType", () => {
+    const update = {
+      update_id: 1,
+      message: { message_id: 1, chat: { id: 42 }, voice: { file_id: "abc", mime_type: "audio/ogg" } },
+    };
+    expect(extractIncomingMessage(update)).toEqual({ chatId: 42, voice: { fileId: "abc", mimeType: "audio/ogg" } });
+  });
+
+  it("usa audio/ogg como mimeType por default si Telegram no lo manda", () => {
+    const update = {
+      update_id: 1,
+      message: { message_id: 1, chat: { id: 42 }, voice: { file_id: "abc" } },
+    };
+    expect(extractIncomingMessage(update)).toEqual({ chatId: 42, voice: { fileId: "abc", mimeType: "audio/ogg" } });
+  });
+
+  it("extrae la foto de mayor resolución (última del arreglo)", () => {
+    const update = {
+      update_id: 1,
+      message: {
+        message_id: 1,
+        chat: { id: 42 },
+        photo: [
+          { file_id: "small", file_size: 100 },
+          { file_id: "large", file_size: 5000 },
+        ],
+      },
+    };
+    expect(extractIncomingMessage(update)).toEqual({ chatId: 42, photo: { fileId: "large" } });
+  });
+});
+
+describe("downloadTelegramFile", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("resuelve getFile y descarga los bytes del archivo", async () => {
+    const bytes = new Uint8Array([1, 2, 3]).buffer;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, result: { file_path: "voice/file.ogg" } }) })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => bytes });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await downloadTelegramFile("bot-token", "file-id");
+
+    expect(result).toBe(bytes);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "https://api.telegram.org/botbot-token/getFile?file_id=file-id");
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "https://api.telegram.org/file/botbot-token/voice/file.ogg");
+  });
+
+  it("lanza un error claro si getFile falla", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({ ok: false, description: "bad" }) }),
+    );
+
+    await expect(downloadTelegramFile("bot-token", "file-id")).rejects.toThrow(/getFile falló/);
   });
 });

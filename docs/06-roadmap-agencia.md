@@ -37,7 +37,7 @@ Esto obliga a dos aclaraciones antes de seguir construyendo:
 | Config en caliente (tono/idioma/moneda) | **Aceptado, corto plazo** | Etapa 8.5. |
 | Editor de prompt por tenant | **Aceptado, corto plazo** | Etapa 8.5 (versión mínima: un solo override de texto, sin A/B testing ni versionado todavía). |
 | Más canales (UI de conexión) | **Aceptado, corto plazo (parcial)** | Etapa 8.5 deja la UI preparada (selector con "próximamente"); la integración real de WhatsApp/Instagram es trabajo aparte que requiere que Oscar consiga credenciales de Meta/Twilio primero. |
-| Equipo / roles | **Aceptado, roadmap futuro (Agencia)** | Requiere autenticación real por usuario (no solo el `ADMIN_API_KEY` compartido de hoy) — diseño propio, no el flujo de invitación por link de Forja. |
+| Equipo / roles | **Completa (2026-08-29)** | Login propio por persona (admin_users, roles admin/operador), `ADMIN_API_KEY` sigue como llave maestra. Ver `CLAUDE.md`. |
 | White-label | **Aceptado, roadmap futuro (Agencia)** | Ya anticipado como capa "AGENCY" en el diagrama de `05-arquitectura-radamantis.md` §3. Branding por agencia revendedora, no por Forja. |
 | Marketplace | **DESCONOCIDO** | Solo idea, sin caso de uso ni diseño. No se planifica en detalle todavía. |
 | CLI tipo `forjabot` por cliente | **Rechazado** | Contradice D1 (Radamantis es 1 Worker multi-tenant, nunca 1 deploy por cliente). El equivalente de Radamantis ya está en el roadmap: la API admin (D9) + el futuro Claude Skill (Etapa 10) que la consume. |

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clientApp } from "../src/client/routes";
-import { hashPassword } from "../src/client/passwords";
+import { hashPassword } from "../src/passwords";
 import { createSessionToken } from "../src/client/session";
 
 const SECRET = "test-client-session-secret";

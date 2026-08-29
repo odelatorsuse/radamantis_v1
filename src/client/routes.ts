@@ -4,7 +4,7 @@ import { createHandoff, isPaused, resolveHandoffByRef } from "../handoff";
 import { appendMessage, getHistory } from "../messages";
 import { dismissKbGap, listKbGaps } from "../rag/gaps";
 import { getChannelExternalId, getTenantSettings } from "../tenants";
-import { verifyPassword } from "./passwords";
+import { verifyPassword } from "../passwords";
 import {
   clearAlertChatId,
   getHealthStatus,

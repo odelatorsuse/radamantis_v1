@@ -125,9 +125,9 @@ describe("getTenantDetail", () => {
 });
 
 describe("logAdminAction", () => {
-  it("serializa details a JSON y usa 'super-admin' como actor", async () => {
+  it("serializa details a JSON y registra el actor real recibido", async () => {
     const { db, bind } = mockDb();
-    await logAdminAction(db, { tenantId: "vet-ch", action: "create_tenant", details: { name: "x" } });
-    expect(bind).toHaveBeenCalledWith("vet-ch", "super-admin", "create_tenant", JSON.stringify({ name: "x" }));
+    await logAdminAction(db, { tenantId: "vet-ch", actor: "oscar@radamantis.dev", action: "create_tenant", details: { name: "x" } });
+    expect(bind).toHaveBeenCalledWith("vet-ch", "oscar@radamantis.dev", "create_tenant", JSON.stringify({ name: "x" }));
   });
 });

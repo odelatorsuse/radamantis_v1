@@ -18,11 +18,12 @@ Necesitas dos datos que el usuario debe darte (nunca los adivines ni
 los fabriques):
 - `RADAMANTIS_BASE_URL` — la URL del Worker desplegado (ej.
   `https://radamantis.latinosworkflowmxag.workers.dev`).
-- `RADAMANTIS_ADMIN_API_KEY` — el secreto de super-admin. **No es
-  recuperable** (Cloudflare Workers Secrets es de solo escritura): si
-  el usuario no la tiene a la mano, dile que puede rotarla con
-  `wrangler secret put ADMIN_API_KEY` y volver a intentarlo, en vez de
-  intentar leerla de algún lado.
+- `RADAMANTIS_ADMIN_API_KEY` — el secreto de super-admin (llave
+  maestra, acceso total siempre). **No es recuperable** (Cloudflare
+  Workers Secrets es de solo escritura): si el usuario no la tiene a
+  la mano, dile que puede rotarla con `wrangler secret put
+  ADMIN_API_KEY` y volver a intentarlo, en vez de intentar leerla de
+  algún lado.
 
 Toda llamada lleva:
 ```
@@ -32,6 +33,13 @@ Content-Type: application/json
 
 **Nunca imprimas el valor de `RADAMANTIS_ADMIN_API_KEY` en tu respuesta al
 usuario** — pásalo directo del entorno al header.
+
+**Alternativa (Etapa Agencia — Equipo/roles):** en vez de la llave
+maestra, una persona puede tener su propio login (`POST
+/api/admin/login` con `email`/`password`, devuelve un `token` que se
+usa igual como `Authorization: Bearer $token`). Ese token trae un rol
+(`admin` u `operador`) — un `operador` recibe 403 en las acciones
+marcadas como "solo admin" abajo. Ver la sección "Equipo" al final.
 
 Antes de una acción que crea o cambia algo en producción (alta de
 tenant, cambio de configuración, rotación de canal, borrar conexión de
@@ -60,7 +68,7 @@ curl -s "$RADAMANTIS_BASE_URL/api/admin/verticals" -H "Authorization: Bearer $RA
 ```
 Devuelve `{verticals: [{verticalId, displayName, toolsEnabled}]}` — `verticalId` es lo que necesitas para el alta.
 
-**Alta de tenant nuevo:**
+**Alta de tenant nuevo (solo rol admin):**
 ```bash
 curl -s -X POST "$RADAMANTIS_BASE_URL/api/admin/tenants" \
   -H "Authorization: Bearer $RADAMANTIS_ADMIN_API_KEY" -H "Content-Type: application/json" \
@@ -94,8 +102,8 @@ es `false`, revisa `webhookError` antes de dar el alta por concluida
 (el registro de webhook reintenta ante 429 de Telegram, pero puede
 fallar por otras razones, ej. token inválido).
 
-**Rotar el token de un canal ya vinculado** (ej. el usuario revocó el
-token por accidente en BotFather):
+**Rotar el token de un canal ya vinculado (solo rol admin)** — ej. el
+usuario revocó el token por accidente en BotFather:
 ```bash
 curl -s -X PUT "$RADAMANTIS_BASE_URL/api/admin/tenants/<id>/channels/telegram" \
   -H "Authorization: Bearer $RADAMANTIS_ADMIN_API_KEY" -H "Content-Type: application/json" \
@@ -187,12 +195,37 @@ curl -s "$RADAMANTIS_BASE_URL/api/admin/handoffs?open=false" -H "Authorization: 
 curl -s -X POST "$RADAMANTIS_BASE_URL/api/admin/handoffs/<id>/resolve" -H "Authorization: Bearer $RADAMANTIS_ADMIN_API_KEY"
 ```
 
-## Uso (costos de OpenAI)
+## Uso (costos de OpenAI) — solo rol admin
 
 ```bash
 curl -s "$RADAMANTIS_BASE_URL/api/admin/usage" -H "Authorization: Bearer $RADAMANTIS_ADMIN_API_KEY"
 ```
 Devuelve `{usage: [{tenant_id, requests, prompt_tokens, completion_tokens}]}` — útil para proyectar costos antes de escalar a más clientes (ver regla permanente en `CLAUDE.md`).
+
+## Equipo (Etapa Agencia — Equipo/roles, solo rol admin)
+
+Gestión de PERSONAS que usan el panel admin (distinto de
+`/tenants/:id/users`, que son logins de `/console` para el DUEÑO DEL
+NEGOCIO). Roles: `admin` (acceso total) u `operador` (todo excepto
+crear tenants, rotar token de canal, y ver `/usage`).
+
+```bash
+# Crear un miembro del equipo
+curl -s -X POST "$RADAMANTIS_BASE_URL/api/admin/admin-users" \
+  -H "Authorization: Bearer $RADAMANTIS_ADMIN_API_KEY" -H "Content-Type: application/json" \
+  -d '{"email":"socio@radamantis.dev","password":"al-menos-8-caracteres","role":"operador"}'
+
+# Listar el equipo
+curl -s "$RADAMANTIS_BASE_URL/api/admin/admin-users" -H "Authorization: Bearer $RADAMANTIS_ADMIN_API_KEY"
+
+# Resetear la contraseña de un miembro (por id, de la lista de arriba)
+curl -s -X PUT "$RADAMANTIS_BASE_URL/api/admin/admin-users/<id>/password" \
+  -H "Authorization: Bearer $RADAMANTIS_ADMIN_API_KEY" -H "Content-Type: application/json" \
+  -d '{"newPassword":"nueva-clave-de-al-menos-8"}'
+
+# Quitar el acceso de un miembro
+curl -s -X DELETE "$RADAMANTIS_BASE_URL/api/admin/admin-users/<id>" -H "Authorization: Bearer $RADAMANTIS_ADMIN_API_KEY"
+```
 
 ## Barridos bajo demanda (no esperar al cron de 30 min)
 

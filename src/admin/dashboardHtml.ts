@@ -147,11 +147,22 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
 <div id="authGate" style="display:none">
   <h1 class="page-title">Radamantis · Admin</h1>
-  <p class="empty">Ingresa la API key de super-admin.</p>
+
+  <p class="empty">Inicia sesión con tu usuario y contraseña.</p>
+  <div class="panel">
+    <form id="loginForm" style="margin:0">
+      <input id="loginEmail" type="email" placeholder="Email" style="flex:1" required />
+      <input id="loginPassword" type="password" placeholder="Contraseña" style="flex:1" required />
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+  <p class="error" id="loginError"></p>
+
+  <p class="empty" style="margin-top:20px">— o, si eres Oscar y tienes la llave maestra —</p>
   <div class="panel">
     <form id="authForm" style="margin:0">
       <input id="adminKeyInput" type="password" placeholder="Admin API key" style="flex:1" />
-      <button type="submit">Entrar</button>
+      <button type="submit">Entrar con API key</button>
     </form>
   </div>
   <p class="error" id="authError"></p>
@@ -171,12 +182,16 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       Handoffs
     </button>
-    <button class="nav-item" data-tab="usage">
+    <button class="nav-item" data-tab="usage" id="navUsage">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/></svg>
       Uso
     </button>
+    <button class="nav-item" data-tab="team" id="navTeam">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Equipo
+    </button>
   </nav>
-  <button class="secondary" id="logoutBtn" style="margin-top:auto">Cambiar key</button>
+  <button class="secondary" id="logoutBtn" style="margin-top:auto">Cerrar sesión</button>
 </aside>
 
 <main class="main" id="app" style="display:none">
@@ -246,18 +261,20 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       <div class="bot-grid" id="botGrid"></div>
       <p class="empty" id="tenantsEmpty" style="display:none">Sin tenants todavía.</p>
 
-      <h2 class="section-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-        Alta de tenant
-      </h2>
-      <div class="panel">
-        <form id="tenantForm">
-          <input id="tenantId" placeholder="id (ej. vet-norte)" required />
-          <input id="tenantName" placeholder="Nombre" required />
-          <select id="tenantVertical"></select>
-          <button type="submit">Crear tenant</button>
-        </form>
-        <p class="error" id="tenantError"></p>
+      <div id="tenantCreateSection">
+        <h2 class="section-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          Alta de tenant
+        </h2>
+        <div class="panel">
+          <form id="tenantForm">
+            <input id="tenantId" placeholder="id (ej. vet-norte)" required />
+            <input id="tenantName" placeholder="Nombre" required />
+            <select id="tenantVertical"></select>
+            <button type="submit">Crear tenant</button>
+          </form>
+          <p class="error" id="tenantError"></p>
+        </div>
       </div>
 
       <h2 class="section-title">
@@ -315,15 +332,53 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     </div>
   </section>
 
+  <!-- Tab: Equipo (solo rol admin) -->
+  <section class="tab-view" id="tab-team">
+    <div class="topbar">
+      <div>
+        <div class="breadcrumb">Panel / Equipo</div>
+        <h1 class="page-title">Equipo</h1>
+      </div>
+    </div>
+    <p style="font-size:0.85rem;color:var(--text-muted)">Admin = acceso total. Operador = ve todo pero no puede crear tenants, rotar tokens de canal ni ver Uso.</p>
+    <div class="panel">
+      <table id="teamTable">
+        <thead><tr><th>Email</th><th>Rol</th><th>Desde</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="teamEmpty" style="display:none">Sin miembros del equipo todavía (aparte de la API key).</p>
+    </div>
+
+    <h2 class="section-title">Agregar miembro</h2>
+    <div class="panel">
+      <form id="teamForm">
+        <input id="teamEmail" type="email" placeholder="Email" required style="flex:1" />
+        <input id="teamPassword" type="password" placeholder="Contraseña (mín. 8 caracteres)" required style="flex:1" />
+        <select id="teamRole">
+          <option value="operador">Operador</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button type="submit">Crear</button>
+      </form>
+      <p class="error" id="teamError"></p>
+    </div>
+  </section>
+
 </main>
 
 <script>
 (function () {
   var STORAGE_KEY = "radamantisAdminKey";
+  var STORAGE_ROLE_KEY = "radamantisAdminRole";
   var BOT_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.1" fill="currentColor" stroke="none"/><circle cx="9" cy="13.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="13.5" r="1.2" fill="currentColor" stroke="none"/><path d="M4 13H2M22 13h-2"/></svg>';
   var ARROW_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>';
 
   function adminKey() { return localStorage.getItem(STORAGE_KEY) || ""; }
+  // Rol "admin" implícito para quien entra con la API key maestra (acceso
+  // total, siempre) — el rol real (admin/operador) solo distingue entre
+  // personas que entraron con usuario/contraseña.
+  function currentRole() { return localStorage.getItem(STORAGE_ROLE_KEY) || "admin"; }
+  function isAdmin() { return currentRole() === "admin"; }
 
   function api(path, options) {
     options = options || {};
@@ -351,7 +406,19 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     document.getElementById("authGate").style.display = "none";
     document.getElementById("sidebar").style.display = "flex";
     document.getElementById("app").style.display = "block";
+    applyRoleUI();
     loadAll();
+  }
+
+  // Etapa Agencia (Equipo/roles): esto es SOLO cosmético — la restricción
+  // real está en el servidor (requireAdmin en admin/routes.ts). Ocultar
+  // aquí evita que un operador vea controles que de todos modos rebotarían
+  // con 403, no reemplaza la validación server-side.
+  function applyRoleUI() {
+    var admin = isAdmin();
+    document.getElementById("navUsage").style.display = admin ? "" : "none";
+    document.getElementById("navTeam").style.display = admin ? "" : "none";
+    document.getElementById("tenantCreateSection").style.display = admin ? "" : "none";
   }
 
   function fillSelect(select, options, valueKey, labelKey) {
@@ -453,7 +520,41 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   function loadAll() {
     loadVerticals().then(loadTenants).catch(function () {});
     loadHandoffs().catch(function () {});
-    loadUsage().catch(function () {});
+    if (isAdmin()) {
+      loadUsage().catch(function () {});
+      loadTeam().catch(function () {});
+    }
+  }
+
+  function loadTeam() {
+    return api("/admin-users").then(function (data) {
+      var tbody = document.querySelector("#teamTable tbody");
+      tbody.innerHTML = "";
+      document.getElementById("teamEmpty").style.display = data.users.length ? "none" : "block";
+      data.users.forEach(function (u) {
+        var tr = document.createElement("tr");
+        var tdEmail = document.createElement("td");
+        tdEmail.textContent = u.email;
+        var tdRole = document.createElement("td");
+        tdRole.textContent = u.role;
+        var tdCreated = document.createElement("td");
+        tdCreated.textContent = u.createdAt;
+        var tdDelete = document.createElement("td");
+        var delBtn = document.createElement("button");
+        delBtn.className = "secondary";
+        delBtn.textContent = "Quitar acceso";
+        delBtn.onclick = function () {
+          if (!confirm("¿Quitar el acceso de " + u.email + "?")) return;
+          api("/admin-users/" + u.id, { method: "DELETE" }).then(loadTeam);
+        };
+        tdDelete.appendChild(delBtn);
+        tr.appendChild(tdEmail);
+        tr.appendChild(tdRole);
+        tr.appendChild(tdCreated);
+        tr.appendChild(tdDelete);
+        tbody.appendChild(tr);
+      });
+    });
   }
 
   var currentDetailTenantId = null;
@@ -559,12 +660,17 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         tokenInput.type = "text";
         tokenInput.value = ch.external_id;
         tokenInput.style.flex = "1";
+        // Rotar el token es solo-admin en el servidor (requireAdmin) — para
+        // un operador el input queda de solo lectura, sin botón, en vez de
+        // dejarlo enviar y recibir un 403.
+        tokenInput.disabled = !isAdmin();
+        row.appendChild(label);
+        row.appendChild(tokenInput);
+        if (!isAdmin()) { channelsList.appendChild(row); return; }
         var updateBtn = document.createElement("button");
         updateBtn.type = "submit";
         updateBtn.className = "secondary";
         updateBtn.textContent = "Actualizar token";
-        row.appendChild(label);
-        row.appendChild(tokenInput);
         row.appendChild(updateBtn);
         row.addEventListener("submit", function (e) {
           e.preventDefault();
@@ -689,12 +795,54 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   document.getElementById("authForm").addEventListener("submit", function (e) {
     e.preventDefault();
     localStorage.setItem(STORAGE_KEY, document.getElementById("adminKeyInput").value);
+    localStorage.setItem(STORAGE_ROLE_KEY, "admin");
     api("/tenants").then(showApp).catch(function () { showAuthGate("Key inválida."); });
+  });
+
+  document.getElementById("loginForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var errEl = document.getElementById("loginError");
+    errEl.textContent = "";
+    fetch("/api/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: document.getElementById("loginEmail").value,
+        password: document.getElementById("loginPassword").value,
+      }),
+    })
+      .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+      .then(function (result) {
+        if (!result.ok) { errEl.textContent = result.data.error || "Credenciales inválidas."; return; }
+        localStorage.setItem(STORAGE_KEY, result.data.token);
+        localStorage.setItem(STORAGE_ROLE_KEY, result.data.role);
+        showApp();
+      })
+      .catch(function () { errEl.textContent = "No se pudo conectar."; });
   });
 
   document.getElementById("logoutBtn").addEventListener("click", function () {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_ROLE_KEY);
     showAuthGate();
+  });
+
+  document.getElementById("teamForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msgEl = document.getElementById("teamError");
+    var body = {
+      email: document.getElementById("teamEmail").value,
+      password: document.getElementById("teamPassword").value,
+      role: document.getElementById("teamRole").value,
+    };
+    api("/admin-users", { method: "POST", body: JSON.stringify(body) })
+      .then(function () {
+        msgEl.className = "success-msg";
+        msgEl.textContent = "Miembro agregado.";
+        document.getElementById("teamForm").reset();
+        loadTeam();
+      })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
   });
 
   document.getElementById("tenantForm").addEventListener("submit", function (e) {

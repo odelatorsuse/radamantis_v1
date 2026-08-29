@@ -171,10 +171,10 @@ export async function getTenantDetail(db: D1Database, tenantId: string): Promise
 
 export async function logAdminAction(
   db: D1Database,
-  params: { tenantId: string | null; action: string; details?: unknown },
+  params: { tenantId: string | null; actor: string; action: string; details?: unknown },
 ): Promise<void> {
   await db
     .prepare("INSERT INTO admin_actions (tenant_id, actor, action, details) VALUES (?, ?, ?, ?)")
-    .bind(params.tenantId, "super-admin", params.action, params.details ? JSON.stringify(params.details) : null)
+    .bind(params.tenantId, params.actor, params.action, params.details ? JSON.stringify(params.details) : null)
     .run();
 }

@@ -1,10 +1,13 @@
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
+import type { AdminRole } from "./session";
+import { createAdminSessionToken, verifyAdminSessionToken } from "./session";
+import { createAdminUser, deleteAdminUser, getAdminUserByEmail, listAdminUsers, setAdminUserPassword } from "./team";
 import { DEFAULT_BUSINESS_HOURS, type WeeklyBusinessHours } from "../calendar/businessHours";
 import { buildGoogleAuthUrl } from "../calendar/oauth";
 import { deleteCalendarConnection, getCalendarConnection } from "../calendar/repository";
 import { getChannelProvider, listSupportedChannels } from "../channels/registry";
 import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
-import { hashPassword } from "../client/passwords";
+import { hashPassword, verifyPassword } from "../passwords";
 import { runColdLeadSweep } from "../coldLeads";
 import { runDailyReportSweep } from "../dailyReport";
 import { runNoShowSweep } from "../noShowSweep";
@@ -28,36 +31,73 @@ interface Env {
   VECTORIZE: VectorizeIndex;
   AGENT: DurableObjectNamespace;
   ADMIN_API_KEY: string;
+  ADMIN_SESSION_SECRET: string;
   OPENAI_API_KEY: string;
   TELEGRAM_WEBHOOK_SECRET: string;
   GOOGLE_OAUTH_CLIENT_ID: string;
 }
 
-export const adminApp = new Hono<{ Bindings: Env }>();
+type Variables = { role: AdminRole; actor: string };
 
-// D10: API-key de super-admin — nunca Basic Auth. Es un único operador hoy
-// (Oscar); JWT/API-key por tenant llega cuando exista gestión self-service.
+export const adminApp = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+// Etapa Agencia (Equipo/roles): login propio por persona, alternativa al
+// ADMIN_API_KEY compartido. Público — antes del middleware de auth de abajo,
+// mismo patrón que /api/client/login.
+adminApp.post("/login", async (c) => {
+  const body = await c.req.json<{ email?: string; password?: string }>();
+  if (!body.email || !body.password) {
+    return c.json({ error: "email y password son requeridos" }, 400);
+  }
+  const user = await getAdminUserByEmail(c.env.DB, body.email);
+  if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
+    return c.json({ error: "Credenciales inválidas" }, 401);
+  }
+  const token = await createAdminSessionToken(c.env.ADMIN_SESSION_SECRET, user.id, user.email, user.role);
+  return c.json({ token, email: user.email, role: user.role });
+});
+
+// D10: dos formas válidas de entrar — la llave maestra compartida
+// (ADMIN_API_KEY, para automatización/el Skill de Claude, acceso total
+// siempre) o una sesión de persona con rol (admin/operador, ver ./team.ts).
+// Nunca Basic Auth.
 adminApp.use("*", async (c, next) => {
   const auth = c.req.header("Authorization");
-  const expected = `Bearer ${c.env.ADMIN_API_KEY}`;
-  if (!c.env.ADMIN_API_KEY || auth !== expected) {
-    return c.json({ error: "Unauthorized" }, 401);
+  const token = auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length) : null;
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
+
+  if (c.env.ADMIN_API_KEY && token === c.env.ADMIN_API_KEY) {
+    c.set("role", "admin");
+    c.set("actor", "api-key");
+    return next();
   }
+
+  const session = await verifyAdminSessionToken(c.env.ADMIN_SESSION_SECRET, token);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  c.set("role", session.role);
+  c.set("actor", session.email);
   await next();
 });
+
+// Acciones sensibles (crear tenants, rotar tokens de canal, ver costos de
+// uso, gestionar el equipo) — solo rol admin, nunca operador.
+const requireAdmin: MiddlewareHandler<{ Bindings: Env; Variables: Variables }> = async (c, next) => {
+  if (c.get("role") !== "admin") return c.json({ error: "Esta acción requiere rol admin" }, 403);
+  await next();
+};
 
 adminApp.get("/tenants", async (c) => {
   const tenants = await listTenants(c.env.DB);
   return c.json({ tenants });
 });
 
-adminApp.post("/tenants", async (c) => {
+adminApp.post("/tenants", requireAdmin, async (c) => {
   const body = await c.req.json<{ id?: string; name?: string; verticalId?: string }>();
   if (!body.id || !body.name || !body.verticalId) {
     return c.json({ error: "id, name y verticalId son requeridos" }, 400);
   }
   await createTenant(c.env.DB, body.id, body.name, body.verticalId);
-  await logAdminAction(c.env.DB, { tenantId: body.id, action: "create_tenant", details: body });
+  await logAdminAction(c.env.DB, { tenantId: body.id, actor: c.get("actor"), action: "create_tenant", details: body });
   return c.json({ ok: true }, 201);
 });
 
@@ -81,6 +121,7 @@ adminApp.post("/tenants/:id/channels", async (c) => {
   await addChannelBinding(c.env.DB, tenantId, body.channel, body.externalId);
   await logAdminAction(c.env.DB, {
     tenantId,
+    actor: c.get("actor"),
     action: "add_channel_binding",
     details: { channel: body.channel },
   });
@@ -92,7 +133,7 @@ adminApp.post("/tenants/:id/channels", async (c) => {
 
 // Etapa 9: rotar el token de un canal ya vinculado (ej. un token revocado
 // por accidente en BotFather) sin borrar y recrear el tenant.
-adminApp.put("/tenants/:id/channels/:channel", async (c) => {
+adminApp.put("/tenants/:id/channels/:channel", requireAdmin, async (c) => {
   const tenantId = c.req.param("id");
   const channel = c.req.param("channel");
   const body = await c.req.json<{ externalId?: string }>();
@@ -100,7 +141,7 @@ adminApp.put("/tenants/:id/channels/:channel", async (c) => {
     return c.json({ error: "externalId es requerido" }, 400);
   }
   await updateChannelBinding(c.env.DB, tenantId, channel, body.externalId);
-  await logAdminAction(c.env.DB, { tenantId, action: "update_channel_binding", details: { channel } });
+  await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "update_channel_binding", details: { channel } });
 
   const origin = new URL(c.req.url).origin;
   const { webhookRegistered, webhookError } = await registerChannelWebhook(origin, channel, body.externalId, c.env.TELEGRAM_WEBHOOK_SECRET);
@@ -114,7 +155,7 @@ adminApp.post("/tenants/:id/kb", async (c) => {
     return c.json({ error: "docs (array de {id, content}) es requerido" }, 400);
   }
   const count = await ingestKbDocs(c.env.VECTORIZE, c.env.OPENAI_API_KEY, tenantId, body.docs);
-  await logAdminAction(c.env.DB, { tenantId, action: "ingest_kb", details: { count } });
+  await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "ingest_kb", details: { count } });
   return c.json({ ok: true, count });
 });
 
@@ -151,7 +192,7 @@ adminApp.put("/tenants/:id/settings", async (c) => {
     leadReengagementEnabled: current.leadReengagementEnabled,
   };
   await upsertTenantSettings(c.env.DB, tenantId, settings);
-  await logAdminAction(c.env.DB, { tenantId, action: "update_tenant_settings", details: settings });
+  await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "update_tenant_settings", details: settings });
   return c.json({ ok: true });
 });
 
@@ -180,7 +221,7 @@ adminApp.get("/tenants/:id/calendar/connect-url", (c) => {
 adminApp.delete("/tenants/:id/calendar", async (c) => {
   const tenantId = c.req.param("id");
   await deleteCalendarConnection(c.env.DB, tenantId);
-  await logAdminAction(c.env.DB, { tenantId, action: "disconnect_calendar" });
+  await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "disconnect_calendar" });
   return c.json({ ok: true });
 });
 
@@ -210,11 +251,11 @@ adminApp.get("/handoffs", async (c) => {
 adminApp.post("/handoffs/:id/resolve", async (c) => {
   const id = Number(c.req.param("id"));
   await resolveHandoff(c.env.DB, id);
-  await logAdminAction(c.env.DB, { tenantId: null, action: "resolve_handoff", details: { id } });
+  await logAdminAction(c.env.DB, { tenantId: null, actor: c.get("actor"), action: "resolve_handoff", details: { id } });
   return c.json({ ok: true });
 });
 
-adminApp.get("/usage", async (c) => {
+adminApp.get("/usage", requireAdmin, async (c) => {
   const usage = await getUsageSummary(c.env.DB);
   return c.json({ usage });
 });
@@ -297,7 +338,7 @@ adminApp.post("/tenants/:id/users", async (c) => {
   } catch (err) {
     return c.json({ error: `No se pudo crear el usuario (¿email ya usado?): ${(err as Error).message}` }, 409);
   }
-  await logAdminAction(c.env.DB, { tenantId, action: "create_client_user", details: { email: body.email } });
+  await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "create_client_user", details: { email: body.email } });
   return c.json({ ok: true }, 201);
 });
 
@@ -315,6 +356,55 @@ adminApp.put("/tenants/:id/users/password", async (c) => {
     return c.json({ error: "Usuario no encontrado para este tenant" }, 404);
   }
   await setTenantUserPassword(c.env.DB, user.id, await hashPassword(body.newPassword));
-  await logAdminAction(c.env.DB, { tenantId, action: "reset_client_user_password", details: { email: body.email } });
+  await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "reset_client_user_password", details: { email: body.email } });
+  return c.json({ ok: true });
+});
+
+// Etapa Agencia (Equipo/roles): gestión del equipo interno que usa el
+// panel admin (distinto de /tenants/:id/users, que son logins de /console
+// para el DUEÑO DEL NEGOCIO, no para el equipo de Radamantis). Solo rol
+// admin puede crear/editar/borrar miembros — un operador jamás debe poder
+// otorgarse a sí mismo (u a otros) más acceso del que tiene.
+adminApp.post("/admin-users", requireAdmin, async (c) => {
+  const body = await c.req.json<{ email?: string; password?: string; role?: string }>();
+  if (!body.email || !body.password || !body.role) {
+    return c.json({ error: "email, password y role son requeridos" }, 400);
+  }
+  if (body.role !== "admin" && body.role !== "operador") {
+    return c.json({ error: "role debe ser 'admin' u 'operador'" }, 400);
+  }
+  if (body.password.length < 8) {
+    return c.json({ error: "La contraseña debe tener al menos 8 caracteres" }, 400);
+  }
+  const passwordHash = await hashPassword(body.password);
+  try {
+    await createAdminUser(c.env.DB, body.email, passwordHash, body.role);
+  } catch (err) {
+    return c.json({ error: `No se pudo crear el usuario (¿email ya usado?): ${(err as Error).message}` }, 409);
+  }
+  await logAdminAction(c.env.DB, { tenantId: null, actor: c.get("actor"), action: "create_admin_user", details: { email: body.email, role: body.role } });
+  return c.json({ ok: true }, 201);
+});
+
+adminApp.get("/admin-users", requireAdmin, async (c) => {
+  const users = await listAdminUsers(c.env.DB);
+  return c.json({ users });
+});
+
+adminApp.put("/admin-users/:id/password", requireAdmin, async (c) => {
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json<{ newPassword?: string }>();
+  if (!body.newPassword || body.newPassword.length < 8) {
+    return c.json({ error: "newPassword es requerido (mínimo 8 caracteres)" }, 400);
+  }
+  await setAdminUserPassword(c.env.DB, id, await hashPassword(body.newPassword));
+  await logAdminAction(c.env.DB, { tenantId: null, actor: c.get("actor"), action: "reset_admin_user_password", details: { id } });
+  return c.json({ ok: true });
+});
+
+adminApp.delete("/admin-users/:id", requireAdmin, async (c) => {
+  const id = Number(c.req.param("id"));
+  await deleteAdminUser(c.env.DB, id);
+  await logAdminAction(c.env.DB, { tenantId: null, actor: c.get("actor"), action: "delete_admin_user", details: { id } });
   return c.json({ ok: true });
 });

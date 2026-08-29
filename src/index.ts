@@ -3,6 +3,8 @@ import { adminApp } from "./admin/routes";
 import { DASHBOARD_HTML } from "./admin/dashboardHtml";
 import { exchangeCodeForTokens } from "./calendar/oauth";
 import { saveCalendarConnection } from "./calendar/repository";
+import { clientApp } from "./client/routes";
+import { CONSOLE_HTML } from "./client/consoleHtml";
 import { runNoShowSweep } from "./noShowSweep";
 import { extractIncomingMessage, sendTelegramMessage } from "./telegram";
 import { resolveTenant } from "./tenants";
@@ -16,6 +18,7 @@ interface Env {
   ADMIN_API_KEY: string;
   GOOGLE_OAUTH_CLIENT_ID: string;
   GOOGLE_OAUTH_CLIENT_SECRET: string;
+  CLIENT_SESSION_SECRET: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -27,6 +30,12 @@ app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-10" }));
 // lógica duplicada.
 app.route("/api/admin", adminApp);
 app.get("/admin", (c) => c.html(DASHBOARD_HTML));
+
+// Etapa 10 (consola del cliente, D10): superficie separada del panel de
+// super-admin — auth propia por tenant (usuario/contraseña), nunca el
+// ADMIN_API_KEY compartido.
+app.route("/api/client", clientApp);
+app.get("/console", (c) => c.html(CONSOLE_HTML));
 
 // Etapa 10 (Fase A): callback público de OAuth de Google — Google redirige
 // el navegador aquí directo (sin nuestro Bearer token), con ?state=tenantId.

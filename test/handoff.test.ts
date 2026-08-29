@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createHandoff, detectsHandoffRequest, isPaused } from "../src/handoff";
+import { createHandoff, detectsHandoffRequest, isPaused, resolveHandoffByRef } from "../src/handoff";
 
 const ref = { tenantId: "vet-ch", channel: "telegram", chatId: "42" };
 
@@ -48,5 +48,19 @@ describe("createHandoff", () => {
 
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO handoffs"));
     expect(bind).toHaveBeenCalledWith("vet-ch", "telegram", "42", "quiero hablar con una persona");
+  });
+});
+
+describe("resolveHandoffByRef", () => {
+  it("resuelve el handoff abierto por tenant/canal/chat, no por id", async () => {
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const bind = vi.fn().mockReturnValue({ run });
+    const prepare = vi.fn().mockReturnValue({ bind });
+    const db = { prepare } as unknown as D1Database;
+
+    await resolveHandoffByRef(db, ref);
+
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE handoffs SET resolved_at"));
+    expect(bind).toHaveBeenCalledWith("vet-ch", "telegram", "42");
   });
 });

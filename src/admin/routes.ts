@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { DEFAULT_BUSINESS_HOURS, type WeeklyBusinessHours } from "../calendar/businessHours";
 import { buildGoogleAuthUrl } from "../calendar/oauth";
 import { deleteCalendarConnection, getCalendarConnection } from "../calendar/repository";
+import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
+import { hashPassword } from "../client/passwords";
 import { runNoShowSweep } from "../noShowSweep";
 import { listVerticalTemplates } from "../verticals/registry";
 import { ingestKbDocs, type KbDocInput } from "./kb";
@@ -242,4 +244,48 @@ adminApp.post("/tenants/:id/test-message", async (c) => {
 adminApp.post("/no-show-sweep", async (c) => {
   const result = await runNoShowSweep(c.env.DB);
   return c.json(result);
+});
+
+// Etapa 10 (consola del cliente, D10): Oscar crea el login del cliente al
+// dar de alta el tenant (o después). Usuario/contraseña, no API key —
+// decisión explícita de Oscar (más familiar para un dueño de negocio no
+// técnico que un token).
+adminApp.post("/tenants/:id/users", async (c) => {
+  const tenantId = c.req.param("id");
+  const body = await c.req.json<{ email?: string; password?: string }>();
+  if (!body.email || !body.password) {
+    return c.json({ error: "email y password son requeridos" }, 400);
+  }
+  if (body.password.length < 8) {
+    return c.json({ error: "La contraseña debe tener al menos 8 caracteres" }, 400);
+  }
+  const tenant = await getTenantDetail(c.env.DB, tenantId);
+  if (!tenant) return c.json({ error: "Tenant no encontrado" }, 404);
+
+  const passwordHash = await hashPassword(body.password);
+  try {
+    await createTenantUser(c.env.DB, tenantId, body.email, passwordHash);
+  } catch (err) {
+    return c.json({ error: `No se pudo crear el usuario (¿email ya usado?): ${(err as Error).message}` }, 409);
+  }
+  await logAdminAction(c.env.DB, { tenantId, action: "create_client_user", details: { email: body.email } });
+  return c.json({ ok: true }, 201);
+});
+
+adminApp.put("/tenants/:id/users/password", async (c) => {
+  const tenantId = c.req.param("id");
+  const body = await c.req.json<{ email?: string; newPassword?: string }>();
+  if (!body.email || !body.newPassword) {
+    return c.json({ error: "email y newPassword son requeridos" }, 400);
+  }
+  if (body.newPassword.length < 8) {
+    return c.json({ error: "La contraseña debe tener al menos 8 caracteres" }, 400);
+  }
+  const user = await getTenantUserByEmail(c.env.DB, body.email);
+  if (!user || user.tenantId !== tenantId) {
+    return c.json({ error: "Usuario no encontrado para este tenant" }, 404);
+  }
+  await setTenantUserPassword(c.env.DB, user.id, await hashPassword(body.newPassword));
+  await logAdminAction(c.env.DB, { tenantId, action: "reset_client_user_password", details: { email: body.email } });
+  return c.json({ ok: true });
 });

@@ -16,6 +16,10 @@ compatibility_date = "2026-08-01"
 #   GOOGLE_OAUTH_CLIENT_SECRET     Cloud Console (Calendar API). Una sola app compartida; cada
 #                                  tenant autoriza SU PROPIO calendario individualmente — los
 #                                  tokens resultantes viven en D1 (calendar_connections), no aquí.
+#   CLIENT_SESSION_SECRET        — Etapa 10 (consola del cliente, D10): firma los tokens de
+#                                  sesión de /api/client/* (src/client/session.ts). Un solo
+#                                  secret compartido para firmar/verificar — las contraseñas
+#                                  de cada tenant_user viven en D1, hasheadas (src/client/passwords.ts).
 #
 # Nota Etapa 4: el token de cada bot de Telegram YA NO es un secret de Worker.
 # Vive en la tabla channel_bindings (D1) — alta de canal = INSERT, no

@@ -42,3 +42,15 @@ export async function createHandoff(db: D1Database, ref: ConversationRef, reason
     .bind(ref.tenantId, ref.channel, ref.chatId, reason)
     .run();
 }
+
+// Etapa 10 (consola del cliente): a diferencia de resolveHandoff (admin,
+// por id de handoff), la consola del cliente solo conoce channel+chatId de
+// la conversación que quiere reactivar, no el id interno del handoff.
+export async function resolveHandoffByRef(db: D1Database, ref: ConversationRef): Promise<void> {
+  await db
+    .prepare(
+      "UPDATE handoffs SET resolved_at = datetime('now') WHERE tenant_id = ? AND channel = ? AND chat_id = ? AND resolved_at IS NULL",
+    )
+    .bind(ref.tenantId, ref.channel, ref.chatId)
+    .run();
+}

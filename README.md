@@ -199,6 +199,17 @@ Configuración de horario y zona horaria: dashboard → detalle de tenant → se
 
 Prueba de aceptación pasada: en el bot piloto (`vet-ch`), el bot rechazó agendar fuera de horario, rechazó un día cerrado, agendó correctamente respetando zona horaria y horario de sábado, y pidió/reutilizó los datos estándar del cliente (nombre, contacto, motivo) antes de confirmar — todo verificado contra el Google Calendar real, con log de auditoría de cada tool call visible vía `wrangler tail`.
 
+### Herramienta de debug: reproducir conversaciones sin Telegram
+
+`POST /api/admin/tenants/:id/test-message` (body `{chatId, text}`) habla directo con el `ConversationAgent` real de un tenant — mismo LLM, mismo `GoogleCalendarProvider`, mismas reglas de horario — sin pasar por Telegram, y devuelve `{replyText}` de inmediato. Usa `channel: "debug"` fijo, así que nunca se mezcla con historial real; reutiliza el mismo `chatId` para mantener memoria de conversación entre llamadas de una misma prueba. Estas conversaciones sí escriben en `messages`/`usage_log` reales (consumen tokens de OpenAI y llamadas reales a Google) — límpialas después con `DELETE FROM messages/usage_log WHERE tenant_id=? AND channel='debug'` para no inflar las métricas del dashboard del tenant.
+
+Con esta herramienta se encontraron y corrigieron 4 bugs reales de booking (2026-08-29):
+
+1. El modelo a veces decía "voy a agendar la cita" sin llamar a `bookAppointment` en ese mismo turno — la cita se creaba (o no) un turno después. Prompt reforzado: llamar la tool de inmediato en cuanto estén los 4 datos.
+2. `checkAvailability` con un rango degenerado (`rangeStart == rangeEnd`) hacía que Google rechazara con 400 y esa excepción tumbaba toda la petición — en Telegram real, el bot se quedaba mudo. `src/calendar/tools.ts` ahora valida el rango y envuelve las llamadas al proveedor en try/catch.
+3. Sin saber qué día de la semana es "hoy", el modelo calculaba mal fechas relativas. `weekdayNameEs()`/`upcomingWeekdaysEs()` (`src/calendar/timezone.ts`) le dan una tabla de los próximos 21 días ya resuelta.
+4. Incluso con esa tabla, el modelo llegó a alucinar que una fecha real "no existe". `src/calendar/dateParser.ts` resuelve en código (no LLM) las fechas que el cliente menciona ("hoy", "mañana", "el próximo lunes", "31 de agosto") y se las entrega ya calculadas.
+
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)
 - `docs/06-roadmap-agencia.md` — ampliación de roadmap hacia modelo de agencia (Etapa 8.5)

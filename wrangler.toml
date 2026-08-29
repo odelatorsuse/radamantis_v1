@@ -8,6 +8,10 @@ compatibility_date = "2026-08-01"
 #                              X-Telegram-Bot-Api-Secret-Token en cada request (compartido
 #                              entre todos los bots/tenants, no es sensible por tenant)
 #   OPENAI_API_KEY           — API key de OpenAI con billing activo (no la sub. ChatGPT Plus/Pro)
+#   ADMIN_API_KEY            — key de super-admin para /api/admin/* y el dashboard (/admin).
+#                              D10: nunca Basic Auth. Un solo operador hoy (Oscar); JWT/API-key
+#                              por tenant y Cloudflare Access para super-admin quedan pendientes
+#                              de endurecer (ver nota de seguridad en CLAUDE.md, Etapa 8).
 #
 # Nota Etapa 4: el token de cada bot de Telegram YA NO es un secret de Worker.
 # Vive en la tabla channel_bindings (D1) — alta de canal = INSERT, no

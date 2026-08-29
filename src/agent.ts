@@ -5,6 +5,7 @@ import { appendMessage, getHistory, type ConversationRef } from "./messages";
 import { buildSystemPrompt } from "./prompts";
 import { embedText } from "./rag/embeddings";
 import { searchKb, type KbMatch } from "./rag/search";
+import { getTenantSettings } from "./tenants";
 import { logUsage } from "./usage";
 import { getVerticalTemplate } from "./verticals/registry";
 
@@ -57,7 +58,10 @@ export class ConversationAgent {
       const queryEmbedding = await embedText(this.env.OPENAI_API_KEY, userText);
       kbMatches = await searchKb(this.env.VECTORIZE, queryEmbedding, tenantId);
     }
-    const systemPrompt = buildSystemPrompt(template.promptBase, kbMatches);
+    // Etapa 8.5: config en caliente (tono/idioma/moneda/override de prompt),
+    // sin redeploy — se lee en cada request, no hay caché.
+    const tenantSettings = await getTenantSettings(this.env.DB, tenantId);
+    const systemPrompt = buildSystemPrompt(template.promptBase, kbMatches, tenantSettings);
 
     const llm = new OpenAIProvider(this.env.OPENAI_API_KEY);
     const messages = buildMessages(systemPrompt, historyMessages, userText);

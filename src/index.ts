@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { adminApp } from "./admin/routes";
+import { DASHBOARD_HTML } from "./admin/dashboardHtml";
 import { extractIncomingMessage, sendTelegramMessage } from "./telegram";
 import { resolveTenant } from "./tenants";
 
@@ -7,11 +9,18 @@ interface Env {
   AGENT: DurableObjectNamespace;
   TELEGRAM_WEBHOOK_SECRET: string;
   OPENAI_API_KEY: string;
+  ADMIN_API_KEY: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-7" }));
+app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-8" }));
+
+// Etapa 8 (D9): toda gestión de tenants/verticales vive primero como API;
+// el dashboard (y el futuro Skill) son clientes de esta misma API, nunca
+// lógica duplicada.
+app.route("/api/admin", adminApp);
+app.get("/admin", (c) => c.html(DASHBOARD_HTML));
 
 // D2: el bot_token en la URL identifica el canal (patrón recomendado por
 // Telegram) y a la vez resuelve tenant + vertical vía channel_bindings/tenants,

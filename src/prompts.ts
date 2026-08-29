@@ -1,9 +1,11 @@
 import type { KbMatch } from "./rag/search";
+import type { TenantSettings } from "./tenants";
 
 // Etapa 6 (superpower CORE, D7): blindaje anti-invento — aplica siempre,
 // para cualquier vertical, no solo cuando hay contexto de KB. Cubre los
 // casos donde el modelo tiende a alucinar aunque no haya nada que buscar
 // (disponibilidad de citas, diagnósticos, datos de una mascota específica).
+// No es overridable por el tenant (ver Etapa 8.5 más abajo).
 export const CORE_ANTI_INVENTION_RULES =
   "Reglas obligatorias, sin excepción:\n" +
   "1. Nunca inventes disponibilidad de citas, horarios de un doctor específico, " +
@@ -18,12 +20,22 @@ export const CORE_ANTI_INVENTION_RULES =
 // Vectorize se cuele y el modelo lo use como si fuera información confiable.
 const MIN_RELEVANCE_SCORE = 0.5;
 
-// Etapa 7: promptBase viene del Vertical Template del tenant (D6), ya no
-// hardcodeado aquí. kbMatches === null significa que ese vertical no tiene
-// la tool "searchKb" habilitada (no se buscó nada, a diferencia de buscar
-// y no encontrar resultados relevantes).
-export function buildSystemPrompt(promptBase: string, kbMatches: KbMatch[] | null): string {
-  let prompt = `${promptBase}\n\n${CORE_ANTI_INVENTION_RULES}`;
+// Etapa 7: promptBase viene del Vertical Template del tenant (D6). Etapa 8.5:
+// tenantSettings.promptOverride, si existe, reemplaza promptBase — pero
+// CORE_ANTI_INVENTION_RULES siempre se aplica, el tenant no puede quitarlo.
+// kbMatches === null significa que ese vertical no tiene la tool "searchKb"
+// habilitada (no se buscó nada, a diferencia de buscar y no encontrar nada).
+export function buildSystemPrompt(
+  promptBase: string,
+  kbMatches: KbMatch[] | null,
+  tenantSettings?: TenantSettings,
+): string {
+  const effectiveBase = tenantSettings?.promptOverride || promptBase;
+  let prompt = `${effectiveBase}\n\n${CORE_ANTI_INVENTION_RULES}`;
+
+  if (tenantSettings) {
+    prompt += `\n\nTono: ${tenantSettings.tone}. Responde en el idioma "${tenantSettings.language}". Usa "${tenantSettings.currency}" como moneda para precios.`;
+  }
 
   if (kbMatches !== null) {
     const relevant = kbMatches.filter((m) => m.score >= MIN_RELEVANCE_SCORE);

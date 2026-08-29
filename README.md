@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 7 completa — Vertical Template declarativo (D6): el prompt base, las tools habilitadas (`searchKb`, `handoffHuman`) y los superpowers default ahora vienen del template del `vertical_id` del tenant, cargado en runtime — agregar un giro nuevo es un archivo en `src/verticals/` + una entrada en el registry, sin tocar `agent.ts`/`index.ts`/`prompts.ts`. Dashboard admin mínimo llega en Etapa 8.
+Etapa 8.5 completa — dashboard admin en `/admin` (auth por `ADMIN_API_KEY`, `Authorization: Bearer`, nunca Basic Auth): vista de bots (sidebar + tarjetas, paleta Slate/Indigo), alta manual de tenants/canales, detalle por bot con métricas reales, config en caliente (tono/idioma/moneda) y override de prompt sin redeploy. Ver `docs/06-roadmap-agencia.md` para el roadmap ampliado (Equipo/roles y White-label en backlog, CLI tipo Forja explícitamente rechazado). Pipeline de alta de cliente self-service llega en Etapa 9.
 
 ## Requisitos
 - Node.js 20+
@@ -143,6 +143,19 @@ Un `VerticalTemplate` (`src/verticals/types.ts`) define:
 
 Prueba de aceptación: `npm test` (incluye `test/verticals.test.ts`), más una confirmación en vivo de que el bot piloto (`veterinaria`) sigue funcionando igual después del refactor (sin regresión).
 
+## Etapa 8 / 8.5 — dashboard admin (D9)
+
+Toda gestión de tenants vive primero como API (`/api/admin/*`, Hono sub-app en `src/admin/routes.ts`), protegida por `Authorization: Bearer <ADMIN_API_KEY>` (D10 — nunca Basic Auth). El dashboard en `/admin` (`src/admin/dashboardHtml.ts`) es solo un cliente de esa misma API.
+
+1. Sube el secret de admin: `npx wrangler secret put ADMIN_API_KEY`.
+2. Aplica las migraciones: `migrations/0005_admin_actions.sql` (auditoría) y `migrations/0006_tenant_settings.sql` (config en caliente).
+3. `npx wrangler deploy`, abre `https://<tu-worker>.workers.dev/admin` y entra con la key.
+4. Endpoints: `GET/POST /tenants`, `POST /tenants/:id/channels`, `GET /tenants/:id` (detalle + métricas), `PUT /tenants/:id/settings` (tono/idioma/moneda/override de prompt), `GET /verticals`, `GET/POST /handoffs`, `GET /usage`.
+5. Prueba de aceptación: crear un tenant y vincular un canal desde el panel (sin `wrangler d1 execute` a mano); cambiar el tono de un tenant real y confirmar en el canal real que el registro de la respuesta cambia; abrir el detalle de un bot y ver métricas reales (mensajes in/out, conversaciones, handoffs abiertos).
+
+Ver `docs/06-roadmap-agencia.md` para qué features del panel de Forja se aceptaron, se difirieron o se rechazaron, y por qué.
+
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)
+- `docs/06-roadmap-agencia.md` — ampliación de roadmap hacia modelo de agencia (Etapa 8.5)
 - `docs/identidad-visual.md` — paletas de marca

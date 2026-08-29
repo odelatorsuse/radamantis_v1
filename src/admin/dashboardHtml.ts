@@ -595,8 +595,6 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       document.getElementById("settingsCurrency").value = t.settings.currency;
       document.getElementById("settingsTimezone").value = t.settings.timezone;
       renderBusinessHours(t.settings.businessHours);
-      document.getElementById("settingsBusinessHoursStart").value = t.settings.businessHoursStart;
-      document.getElementById("settingsBusinessHoursEnd").value = t.settings.businessHoursEnd;
       document.getElementById("settingsPromptOverride").value = t.settings.promptOverride || "";
       document.getElementById("settingsError").textContent = "";
       document.getElementById("settingsError").className = "";

@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 10, Fase A y B completas — booking real: cada tenant conecta su propio Google Calendar desde `/admin` (OAuth) y el bot consulta disponibilidad y agenda citas por conversación (tool calling real del LLM), verificado con citas reales creadas/rechazadas en Telegram. Etapa 9 (alta de cliente self-service, sin CLI) y las etapas anteriores siguen completas — ver secciones abajo.
+Etapa 10, Fase A y B completas — booking real: cada tenant conecta su propio Google Calendar desde `/admin` (OAuth) y el bot consulta disponibilidad y agenda citas por conversación (tool calling real del LLM), verificado con citas reales creadas/rechazadas en Telegram. Superpower "Recupera no-shows" también completo: cada cita agendada se le da seguimiento automático si su hora ya pasó sin confirmación. Etapa 9 (alta de cliente self-service, sin CLI) y las etapas anteriores siguen completas — ver secciones abajo.
 
 ## Requisitos
 - Node.js 20+
@@ -209,6 +209,18 @@ Con esta herramienta se encontraron y corrigieron 4 bugs reales de booking (2026
 2. `checkAvailability` con un rango degenerado (`rangeStart == rangeEnd`) hacía que Google rechazara con 400 y esa excepción tumbaba toda la petición — en Telegram real, el bot se quedaba mudo. `src/calendar/tools.ts` ahora valida el rango y envuelve las llamadas al proveedor en try/catch.
 3. Sin saber qué día de la semana es "hoy", el modelo calculaba mal fechas relativas. `weekdayNameEs()`/`upcomingWeekdaysEs()` (`src/calendar/timezone.ts`) le dan una tabla de los próximos 21 días ya resuelta.
 4. Incluso con esa tabla, el modelo llegó a alucinar que una fecha real "no existe". `src/calendar/dateParser.ts` resuelve en código (no LLM) las fechas que el cliente menciona ("hoy", "mañana", "el próximo lunes", "31 de agosto") y se las entrega ya calculadas.
+
+## Etapa 10 — superpower "Recupera no-shows"
+
+Cada vez que `bookAppointment` agenda con éxito, se guarda un rastro local en D1 (`appointments`, migración `0011_appointments.sql`) — Google Calendar no nos devuelve el `chat_id`/canal necesario para volver a contactar al cliente.
+
+`src/noShowSweep.ts` corre el barrido: toda cita cuya hora de fin ya pasó (con 30 min de margen, `GRACE_PERIOD_MS`) y no tiene seguimiento se trata como posible no-show — no existe ninguna señal real de si el cliente llegó o no, así que se contacta siempre, como touchpoint de recuperación/reagendado, no como acusación. El mensaje es una plantilla fija en código (`buildNoShowMessage`, no generada por el LLM) para que sea 100% predecible. Queda acotado automáticamente a los giros con agenda: `appointments` solo se llena para verticales que ya tienen `bookAppointment` habilitado, sin necesidad de un flag nuevo.
+
+Dos formas de dispararlo:
+- **Cron Trigger** (`wrangler.toml`, `*/30 * * * *`) — producción, automático.
+- **`POST /api/admin/no-show-sweep`** — bajo demanda, para probar sin esperar al cron o para forzar una corrida si el cron falló. Responde `{processed, sent, errors}`.
+
+Una cita ya atendida no se vuelve a contactar (`no_show_followup_sent_at` se marca solo tras un envío exitoso); si el envío falla (canal no soportado, token inválido), el error queda en la respuesta y la cita se reintenta en la siguiente corrida.
 
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)

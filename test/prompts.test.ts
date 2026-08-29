@@ -29,6 +29,13 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("sin resultados relevantes");
   });
 
+  it("no descarta un match real con score moderado (Etapa 9 — regresión con caso real)", () => {
+    // "¿Cuál es el horario?" contra el doc de horario real dio 0.486 con
+    // text-embedding-3-small y se filtraba por error con el umbral de 0.5.
+    const prompt = buildSystemPrompt("prompt base", [{ content: "Horario: martes a sábado 10 a 19.", score: 0.486 }]);
+    expect(prompt).toContain("Horario: martes a sábado 10 a 19.");
+  });
+
   it("indica que no hay contexto cuando la KB no tiene matches", () => {
     const prompt = buildSystemPrompt("prompt base", []);
     expect(prompt).toContain("sin resultados relevantes");

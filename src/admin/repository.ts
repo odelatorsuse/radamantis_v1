@@ -82,6 +82,26 @@ export async function addChannelBinding(
     .run();
 }
 
+// Etapa 9: rotar/actualizar el token de un canal ya vinculado (ej. Oscar
+// revocó el token viejo por accidente en BotFather). external_id es parte
+// de la PK, así que esto borra la fila vieja e inserta la nueva — no un
+// UPDATE simple, para no dejar basura si el canal cambia de tipo también.
+export async function updateChannelBinding(
+  db: D1Database,
+  tenantId: string,
+  channel: string,
+  newExternalId: string,
+): Promise<void> {
+  await db
+    .prepare("DELETE FROM channel_bindings WHERE tenant_id = ? AND channel = ?")
+    .bind(tenantId, channel)
+    .run();
+  await db
+    .prepare("INSERT INTO channel_bindings (channel, external_id, tenant_id) VALUES (?, ?, ?)")
+    .bind(channel, newExternalId, tenantId)
+    .run();
+}
+
 export async function listHandoffs(db: D1Database, onlyOpen: boolean): Promise<HandoffRow[]> {
   const query = onlyOpen
     ? "SELECT * FROM handoffs WHERE resolved_at IS NULL ORDER BY created_at DESC"

@@ -7,6 +7,7 @@ import { resolveTenant } from "./tenants";
 interface Env {
   DB: D1Database;
   AGENT: DurableObjectNamespace;
+  VECTORIZE: VectorizeIndex;
   TELEGRAM_WEBHOOK_SECRET: string;
   OPENAI_API_KEY: string;
   ADMIN_API_KEY: string;
@@ -14,7 +15,7 @@ interface Env {
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-8" }));
+app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-9" }));
 
 // Etapa 8 (D9): toda gestión de tenants/verticales vive primero como API;
 // el dashboard (y el futuro Skill) son clientes de esta misma API, nunca

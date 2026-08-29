@@ -198,6 +198,11 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       </button>
       <h3 style="margin:14px 0" id="detailTitle">Detalle</h3>
       <div class="metrics" id="detailMetrics"></div>
+
+      <h2 class="section-title">Canales</h2>
+      <div class="panel" id="channelsList" style="background:transparent;border:none;padding:0"></div>
+      <p id="channelUpdateError"></p>
+
       <h2 class="section-title">Config en caliente</h2>
       <form id="settingsForm">
         <select id="settingsTone">
@@ -216,6 +221,14 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       <label for="settingsPromptOverride" style="font-size:0.85rem;color:var(--text-muted)">Override de prompt (vacío = usa el del vertical)</label>
       <textarea id="settingsPromptOverride" placeholder="Instrucciones a medida para este tenant..."></textarea>
       <p id="settingsError"></p>
+
+      <h2 class="section-title">Base de conocimiento (KB)</h2>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Pega un array JSON de <code>{"id": "...", "content": "..."}</code> — se embebe y se sube a Vectorize directo, sin CLI.</p>
+      <form id="kbForm">
+        <textarea id="kbDocsInput" placeholder='[{"id":"horario","content":"Lunes a viernes 9 a 18"}]' style="min-height:120px"></textarea>
+        <button type="submit">Cargar KB</button>
+      </form>
+      <p id="kbError"></p>
     </div>
 
     <div id="botsListView">
@@ -466,6 +479,53 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       metricsEl.appendChild(metricTile(t.metrics.conversations, "Conversaciones"));
       metricsEl.appendChild(metricTile(t.channels.length, "Canales conectados"));
 
+      var channelsList = document.getElementById("channelsList");
+      channelsList.innerHTML = "";
+      document.getElementById("channelUpdateError").textContent = "";
+      if (t.channels.length === 0) {
+        channelsList.innerHTML = "<p class='empty'>Sin canales vinculados.</p>";
+      }
+      t.channels.forEach(function (ch) {
+        var row = document.createElement("form");
+        row.style.marginBottom = "6px";
+        var label = document.createElement("span");
+        label.className = "bot-badge";
+        label.textContent = ch.channel;
+        var tokenInput = document.createElement("input");
+        tokenInput.type = "text";
+        tokenInput.value = ch.external_id;
+        tokenInput.style.flex = "1";
+        var updateBtn = document.createElement("button");
+        updateBtn.type = "submit";
+        updateBtn.className = "secondary";
+        updateBtn.textContent = "Actualizar token";
+        row.appendChild(label);
+        row.appendChild(tokenInput);
+        row.appendChild(updateBtn);
+        row.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var msgEl = document.getElementById("channelUpdateError");
+          api("/tenants/" + tenantId + "/channels/" + ch.channel, {
+            method: "PUT",
+            body: JSON.stringify({ externalId: tokenInput.value }),
+          })
+            .then(function (data) {
+              if (data.webhookRegistered) {
+                msgEl.className = "success-msg";
+                msgEl.textContent = "Token actualizado y webhook re-registrado.";
+              } else if (data.webhookError) {
+                msgEl.className = "error";
+                msgEl.textContent = "Token guardado, pero el webhook falló: " + data.webhookError;
+              } else {
+                msgEl.className = "success-msg";
+                msgEl.textContent = "Token actualizado.";
+              }
+            })
+            .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+        });
+        channelsList.appendChild(row);
+      });
+
       document.getElementById("settingsTone").value = t.settings.tone;
       document.getElementById("settingsLanguage").value = t.settings.language;
       document.getElementById("settingsCurrency").value = t.settings.currency;
@@ -497,6 +557,29 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     var msgEl = document.getElementById("settingsError");
     api("/tenants/" + currentDetailTenantId + "/settings", { method: "PUT", body: JSON.stringify(body) })
       .then(function () { msgEl.className = "success-msg"; msgEl.textContent = "Guardado."; })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
+  document.getElementById("kbForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!currentDetailTenantId) return;
+    var msgEl = document.getElementById("kbError");
+    var docs;
+    try {
+      docs = JSON.parse(document.getElementById("kbDocsInput").value);
+    } catch (parseErr) {
+      msgEl.className = "error";
+      msgEl.textContent = "JSON inválido: " + parseErr.message;
+      return;
+    }
+    msgEl.className = "";
+    msgEl.textContent = "Cargando...";
+    api("/tenants/" + currentDetailTenantId + "/kb", { method: "POST", body: JSON.stringify({ docs: docs }) })
+      .then(function (data) {
+        msgEl.className = "success-msg";
+        msgEl.textContent = "Cargados " + data.count + " documentos.";
+        document.getElementById("kbDocsInput").value = "";
+      })
       .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
   });
 
@@ -534,14 +617,24 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       channel: document.getElementById("channelType").value,
       externalId: document.getElementById("channelExternalId").value,
     };
+    var msgEl = document.getElementById("channelError");
     api("/tenants/" + tenantId + "/channels", { method: "POST", body: JSON.stringify(body) })
-      .then(function () {
+      .then(function (data) {
         document.getElementById("channelForm").reset();
         document.getElementById("channelType").value = "telegram";
-        document.getElementById("channelError").textContent = "";
+        if (data.webhookRegistered) {
+          msgEl.className = "success-msg";
+          msgEl.textContent = "Canal vinculado y webhook registrado en Telegram.";
+        } else if (data.webhookError) {
+          msgEl.className = "error";
+          msgEl.textContent = "Canal vinculado, pero el webhook falló: " + data.webhookError;
+        } else {
+          msgEl.className = "success-msg";
+          msgEl.textContent = "Canal vinculado.";
+        }
         loadTenants();
       })
-      .catch(function (err) { document.getElementById("channelError").textContent = err.message; });
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
   });
 
   if (adminKey()) { api("/tenants").then(showApp).catch(function () { showAuthGate(); }); }

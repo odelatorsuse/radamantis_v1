@@ -5,13 +5,14 @@ import {
   getTenantDetail,
   logAdminAction,
   resolveHandoff,
+  updateChannelBinding,
   upsertTenantSettings,
 } from "../src/admin/repository";
 
 function mockDb() {
   const run = vi.fn().mockResolvedValue({ success: true });
   const bind = vi.fn().mockReturnValue({ run });
-  const prepare = vi.fn().mockReturnValue({ bind });
+  const prepare = vi.fn().mockReturnValue({ bind, run });
   return { db: { prepare } as unknown as D1Database, prepare, bind, run };
 }
 
@@ -30,6 +31,31 @@ describe("addChannelBinding", () => {
     await addChannelBinding(db, "vet-ch", "telegram", "bot-token");
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO channel_bindings"));
     expect(bind).toHaveBeenCalledWith("telegram", "bot-token", "vet-ch");
+  });
+});
+
+describe("updateChannelBinding", () => {
+  it("borra la fila vieja por tenant_id+channel e inserta la nueva con el token actualizado", async () => {
+    const prepareCalls: string[] = [];
+    const bindCalls: unknown[][] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        prepareCalls.push(sql);
+        return {
+          bind: (...args: unknown[]) => {
+            bindCalls.push(args);
+            return { run: vi.fn().mockResolvedValue({ success: true }) };
+          },
+        };
+      }),
+    } as unknown as D1Database;
+
+    await updateChannelBinding(db, "vet-ch", "telegram", "token-nuevo");
+
+    expect(prepareCalls[0]).toContain("DELETE FROM channel_bindings");
+    expect(bindCalls[0]).toEqual(["vet-ch", "telegram"]);
+    expect(prepareCalls[1]).toContain("INSERT INTO channel_bindings");
+    expect(bindCalls[1]).toEqual(["telegram", "token-nuevo", "vet-ch"]);
   });
 });
 

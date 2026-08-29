@@ -15,10 +15,15 @@ export const CORE_ANTI_INVENTION_RULES =
   "3. Nunca des un diagnóstico veterinario definitivo. Puedes orientar de forma general, " +
   "pero ante síntomas de una mascota siempre recomienda una consulta presencial.";
 
-// Etapa 5: umbral de similitud coseno por debajo del cual tratamos un match
-// como ruido, no como contexto real — evita que un resultado débil de
-// Vectorize se cuele y el modelo lo use como si fuera información confiable.
-const MIN_RELEVANCE_SCORE = 0.5;
+// Etapa 5/9: umbral de similitud coseno por debajo del cual tratamos un match
+// como ruido. Calibrado en Etapa 9: con text-embedding-3-small, preguntas
+// reales en español contra documentos cortos de KB dan scores en el rango
+// 0.4-0.6 incluso cuando SÍ son el match correcto (0.5 descartaba respuestas
+// legítimas — caso real: "¿Cuál es el horario?" contra el doc de horario dio
+// 0.486 y se filtró por error). 0.35 deja pasar esos casos; el "úsalo
+// EXCLUSIVAMENTE / si no está ahí dilo" de abajo + CORE_ANTI_INVENTION_RULES
+// son la segunda capa de defensa contra contexto poco relevante.
+const MIN_RELEVANCE_SCORE = 0.35;
 
 // Etapa 7: promptBase viene del Vertical Template del tenant (D6). Etapa 8.5:
 // tenantSettings.promptOverride, si existe, reemplaza promptBase — pero

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { listVerticalTemplates } from "../verticals/registry";
+import { ingestKbDocs, type KbDocInput } from "./kb";
 import {
   addChannelBinding,
   createTenant,
@@ -9,12 +10,17 @@ import {
   listTenants,
   logAdminAction,
   resolveHandoff,
+  updateChannelBinding,
   upsertTenantSettings,
 } from "./repository";
+import { registerTelegramWebhook } from "./telegramSetup";
 
 interface Env {
   DB: D1Database;
+  VECTORIZE: VectorizeIndex;
   ADMIN_API_KEY: string;
+  OPENAI_API_KEY: string;
+  TELEGRAM_WEBHOOK_SECRET: string;
 }
 
 export const adminApp = new Hono<{ Bindings: Env }>();
@@ -57,7 +63,52 @@ adminApp.post("/tenants/:id/channels", async (c) => {
     action: "add_channel_binding",
     details: { channel: body.channel },
   });
-  return c.json({ ok: true }, 201);
+
+  // Etapa 9 (D8): alta de canal = INSERT + registrar el webhook en el mismo
+  // paso, sin curl manual. Solo aplica a Telegram por ahora (D2).
+  if (body.channel === "telegram") {
+    const origin = new URL(c.req.url).origin;
+    const webhook = await registerTelegramWebhook(origin, body.externalId, c.env.TELEGRAM_WEBHOOK_SECRET);
+    if (!webhook.ok) {
+      return c.json({ ok: true, webhookRegistered: false, webhookError: webhook.error }, 201);
+    }
+  }
+
+  return c.json({ ok: true, webhookRegistered: body.channel === "telegram" }, 201);
+});
+
+// Etapa 9: rotar el token de un canal ya vinculado (ej. un token revocado
+// por accidente en BotFather) sin borrar y recrear el tenant.
+adminApp.put("/tenants/:id/channels/:channel", async (c) => {
+  const tenantId = c.req.param("id");
+  const channel = c.req.param("channel");
+  const body = await c.req.json<{ externalId?: string }>();
+  if (!body.externalId) {
+    return c.json({ error: "externalId es requerido" }, 400);
+  }
+  await updateChannelBinding(c.env.DB, tenantId, channel, body.externalId);
+  await logAdminAction(c.env.DB, { tenantId, action: "update_channel_binding", details: { channel } });
+
+  if (channel === "telegram") {
+    const origin = new URL(c.req.url).origin;
+    const webhook = await registerTelegramWebhook(origin, body.externalId, c.env.TELEGRAM_WEBHOOK_SECRET);
+    if (!webhook.ok) {
+      return c.json({ ok: true, webhookRegistered: false, webhookError: webhook.error });
+    }
+  }
+
+  return c.json({ ok: true, webhookRegistered: channel === "telegram" });
+});
+
+adminApp.post("/tenants/:id/kb", async (c) => {
+  const tenantId = c.req.param("id");
+  const body = await c.req.json<{ docs?: KbDocInput[] }>();
+  if (!body.docs || !Array.isArray(body.docs) || body.docs.length === 0) {
+    return c.json({ error: "docs (array de {id, content}) es requerido" }, 400);
+  }
+  const count = await ingestKbDocs(c.env.VECTORIZE, c.env.OPENAI_API_KEY, tenantId, body.docs);
+  await logAdminAction(c.env.DB, { tenantId, action: "ingest_kb", details: { count } });
+  return c.json({ ok: true, count });
 });
 
 adminApp.get("/tenants/:id", async (c) => {

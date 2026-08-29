@@ -3,7 +3,7 @@
 Plataforma multi-tenant de asistentes virtuales con IA. Ver `CLAUDE.md` para contexto completo del proyecto (reglas, roadmap, decisiones de arquitectura).
 
 ## Estado
-Etapa 8.5 completa — dashboard admin en `/admin` (auth por `ADMIN_API_KEY`, `Authorization: Bearer`, nunca Basic Auth): vista de bots (sidebar + tarjetas, paleta Slate/Indigo), alta manual de tenants/canales, detalle por bot con métricas reales, config en caliente (tono/idioma/moneda) y override de prompt sin redeploy. Ver `docs/06-roadmap-agencia.md` para el roadmap ampliado (Equipo/roles y White-label en backlog, CLI tipo Forja explícitamente rechazado). Pipeline de alta de cliente self-service llega en Etapa 9.
+Etapa 9 completa — alta de cliente self-service (D8) desde `/admin`, sin CLI: crear tenant, vincular canal (registra el webhook de Telegram solo, con reintento si Telegram rate-limita con 429), y cargar la base de conocimiento (embeddings + upsert a Vectorize desde el propio endpoint). Probado con un 3er cliente real en menos de 1 minuto. El dashboard también permite rotar el token de un canal ya vinculado. Superpowers restantes + Claude Skill llegan en Etapa 10.
 
 ## Requisitos
 - Node.js 20+
@@ -154,6 +154,20 @@ Toda gestión de tenants vive primero como API (`/api/admin/*`, Hono sub-app en 
 5. Prueba de aceptación: crear un tenant y vincular un canal desde el panel (sin `wrangler d1 execute` a mano); cambiar el tono de un tenant real y confirmar en el canal real que el registro de la respuesta cambia; abrir el detalle de un bot y ver métricas reales (mensajes in/out, conversaciones, handoffs abiertos).
 
 Ver `docs/06-roadmap-agencia.md` para qué features del panel de Forja se aceptaron, se difirieron o se rechazaron, y por qué.
+
+## Etapa 9 — pipeline de alta de cliente (D8)
+
+Alta de cliente sin CLI, transaccional, en 3 llamadas (o 3 formularios del dashboard):
+
+1. `POST /api/admin/tenants` — crea el tenant (id, name, verticalId).
+2. `POST /api/admin/tenants/:id/channels` — vincula el canal; si es `telegram`, registra el webhook automáticamente contra la API de Telegram (con reintento si Telegram responde 429, `src/admin/telegramSetup.ts`) — ya no hace falta un `curl` manual como en Etapas 4-8.
+3. `POST /api/admin/tenants/:id/kb` — recibe `{ docs: [{id, content}] }`, embebe cada doc (OpenAI) y hace `upsert` directo a Vectorize desde el Worker (`src/admin/kb.ts`) — ya no hace falta `scripts/seed-kb.mjs` ni `wrangler vectorize upsert` a mano.
+
+Además, `PUT /api/admin/tenants/:id/channels/:channel` permite rotar el token de un canal ya vinculado (borra + re-inserta el `channel_binding` y re-registra el webhook) — se agregó tras un incidente real: Oscar revocó sin querer el token de un bot existente en BotFather al crear uno nuevo.
+
+**Nota de calibración importante:** el umbral de relevancia del RAG (`MIN_RELEVANCE_SCORE` en `src/prompts.ts`) se bajó de 0.5 a 0.35 en esta etapa — con `text-embedding-3-small`, preguntas cortas reales en español pueden dar scores de 0.4-0.6 contra el documento correcto de la KB, y 0.5 estaba descartando respuestas legítimas.
+
+Prueba de aceptación pasada: alta de un 3er cliente real (Sofía Estética, `@Asistente_sofiabot`, vertical `estetica`) — tenant + canal + KB en 36 segundos de llamadas a la API, confirmado con preguntas reales en Telegram.
 
 ## Documentación
 - `docs/05-arquitectura-radamantis.md` — arquitectura completa (Fase 2)

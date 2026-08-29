@@ -162,4 +162,47 @@ describe("executeCalendarTool — casos de error", () => {
     );
     expect(JSON.parse(result).error).toContain("checkAvailability");
   });
+
+  it("rechaza un rango degenerado (rangeStart == rangeEnd) sin llamar al proveedor (Etapa 10 — bug real: tumbaba toda la petición)", async () => {
+    const provider = mockProvider();
+    const result = await executeCalendarTool(
+      "checkAvailability",
+      JSON.stringify({ rangeStart: "2026-09-01T12:00:00", rangeEnd: "2026-09-01T12:00:00" }),
+      provider,
+      "UTC",
+      businessHours,
+    );
+    expect(provider.checkAvailability).not.toHaveBeenCalled();
+    expect(JSON.parse(result).error).toContain("rangeStart");
+  });
+
+  it("convierte una falla real del proveedor en un resultado de error en vez de propagar la excepción", async () => {
+    const provider: CalendarProvider = {
+      checkAvailability: vi.fn().mockRejectedValue(new Error("Google freeBusy falló: 400 timeRangeEmpty")),
+      bookAppointment: vi.fn(),
+    };
+    const result = await executeCalendarTool(
+      "checkAvailability",
+      JSON.stringify({ rangeStart: "2026-09-01T00:00:00", rangeEnd: "2026-09-01T23:59:59" }),
+      provider,
+      "UTC",
+      businessHours,
+    );
+    expect(JSON.parse(result).error).toContain("Google freeBusy falló");
+  });
+
+  it("convierte una falla real del proveedor al agendar en un resultado ok:false en vez de propagar la excepción", async () => {
+    const provider: CalendarProvider = {
+      checkAvailability: vi.fn().mockResolvedValue([{ start: "2026-09-01T00:00:00.000Z", end: "2026-09-01T23:59:59.000Z" }]),
+      bookAppointment: vi.fn().mockRejectedValue(new Error("Google events.insert falló: 500")),
+    };
+    const result = await executeCalendarTool(
+      "bookAppointment",
+      JSON.stringify({ start: "2026-09-01T10:00:00", end: "2026-09-01T10:30:00", summary: "Consulta", ...clientArgs }),
+      provider,
+      "UTC",
+      businessHours,
+    );
+    expect(JSON.parse(result)).toEqual({ ok: false, error: "No se pudo agendar: Google events.insert falló: 500" });
+  });
 });

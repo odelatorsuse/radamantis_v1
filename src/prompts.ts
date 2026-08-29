@@ -1,5 +1,6 @@
 import { formatBusinessHours } from "./calendar/businessHours";
-import { getCurrentLocalDateTimeString } from "./calendar/timezone";
+import { extractMentionedDates, formatDateMentionsNote } from "./calendar/dateParser";
+import { getCurrentLocalDateTimeString, upcomingWeekdaysEs, weekdayNameEs } from "./calendar/timezone";
 import type { KbMatch } from "./rag/search";
 import type { TenantSettings } from "./tenants";
 
@@ -37,6 +38,7 @@ export function buildSystemPrompt(
   kbMatches: KbMatch[] | null,
   tenantSettings?: TenantSettings,
   calendarEnabled = false,
+  userText?: string,
 ): string {
   const effectiveBase = tenantSettings?.promptOverride || promptBase;
   let prompt = `${effectiveBase}\n\n${CORE_ANTI_INVENTION_RULES}`;
@@ -70,12 +72,41 @@ export function buildSystemPrompt(
       `${formatBusinessHours(tenantSettings.businessHours)}. Cuando llames a estas herramientas, da las ` +
       'fechas/horas SIEMPRE en hora LOCAL de esa zona, formato "YYYY-MM-DDTHH:MM:SS" (sin "Z" ni offset) — ' +
       "el sistema se encarga de convertirlas a UTC correctamente y de rechazar horarios fuera de atención. " +
-      `Fecha y hora actual en esa zona: ${getCurrentLocalDateTimeString(timezone)}.\n` +
+      `Hoy es ${weekdayNameEs(getCurrentLocalDateTimeString(timezone))}. Fecha y hora actual en esa zona: ` +
+      `${getCurrentLocalDateTimeString(timezone)}. NUNCA calcules tú qué día de la semana cae una fecha — ` +
+      "sueles equivocarte. Usa exclusivamente esta tabla ya calculada (formato fecha=día): " +
+      `${upcomingWeekdaysEs(timezone, 21)}. Si el cliente menciona una fecha (ej. "el 31 de agosto") o un día ` +
+      "relativo (ej. \"el próximo lunes\"), búscalo en esta tabla para saber a qué fecha exacta corresponde " +
+      "y qué día de la semana es — nunca lo asumas ni lo calcules de memoria. Esta tabla es la única fuente " +
+      "de verdad sobre el calendario: nunca digas que una fecha \"no existe\", que un mes tiene menos días de " +
+      "los que tiene en realidad, ni ninguna otra afirmación sobre el calendario que contradiga la tabla — " +
+      "si una fecha que te mencionan no aparece en la tabla, es simplemente porque está fuera del rango de " +
+      "los próximos 21 días, no porque sea inválida.\n";
+
+    // Bug real: incluso con la tabla de arriba, el modelo a veces alucinaba
+    // sobre fechas concretas ("el 31 de agosto no existe"). En vez de pedirle
+    // que busque en la tabla por su cuenta, el sistema ya resuelve las fechas
+    // que el cliente mencionó en ESTE mensaje y se las entrega calculadas —
+    // el modelo solo tiene que leerlas, no interpretarlas.
+    if (userText) {
+      const mentions = extractMentionedDates(userText, timezone);
+      const note = formatDateMentionsNote(mentions);
+      if (note) prompt += `${note}\n`;
+    }
+
+    prompt +=
       "Antes de agendar (bookAppointment), es OBLIGATORIO tener: (1) la fecha y hora exacta, (2) el nombre " +
       "completo del cliente, (3) un teléfono o contacto de vuelta, y (4) el motivo de la cita. Si falta alguno " +
       "de estos datos, pregúntalo antes de intentar agendar. IMPORTANTE: si el cliente ya te dio su nombre, " +
-      "contacto o el motivo en algún mensaje anterior de esta misma conversación, reutiliza esos datos — no " +
-      "los vuelvas a pedir ni le hagas repetirse.";
+      "contacto o el motivo en algún mensaje anterior de esta misma conversación — sin importar cuántos " +
+      "mensajes antes, ni en qué orden llegaron los datos — reutilízalos, no los vuelvas a pedir ni le hagas " +
+      "repetirse. CRÍTICO: en cuanto tengas los 4 datos completos (sea que lleguen todos juntos o repartidos " +
+      "en varios mensajes anteriores), LLAMA A bookAppointment de inmediato, en esa misma respuesta — nunca " +
+      "digas frases como 'voy a agendar', 'un momento' o 'dame un segundo' sin haber llamado ya a la " +
+      "herramienta en ese mismo turno, y nunca le digas al cliente que la cita quedó agendada, que NO quedó " +
+      "agendada, o que un horario está o no está disponible, si no llamaste a bookAppointment/checkAvailability " +
+      "en ese mismo turno y viste su resultado real — nunca lo afirmes de memoria ni lo asumas. No pidas una " +
+      "confirmación aparte del cliente una vez que ya tienes los 4 datos — agenda directamente.";
   }
 
   if (kbMatches !== null) {

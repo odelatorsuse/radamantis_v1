@@ -58,3 +58,33 @@ export function utcToLocalDateTimeString(utcIso: string, timeZone: string): stri
   const r = formatInTimeZone(new Date(utcIso), timeZone);
   return `${r.year}-${r.month}-${r.day}T${r.hour}:${r.minute}:${r.second}`;
 }
+
+const WEEKDAY_NAMES_ES = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+// Bug real encontrado en producción: el modelo recibía solo la fecha en
+// formato "YYYY-MM-DD" y calculaba MAL qué día de la semana es "hoy" y qué
+// fecha cae "el próximo lunes" (dijo que un lunes futuro "ya había pasado").
+// Mismo tipo de error que dayKeyFor() en businessHours.ts evita para el
+// horario de atención — aquí se calcula igual de determinista, nunca se le
+// pide al modelo que lo infiera solo.
+export function weekdayNameEs(localDateTime: string): string {
+  const dow = new Date(`${localDateTime.slice(0, 10)}T00:00:00Z`).getUTCDay();
+  return WEEKDAY_NAMES_ES[dow];
+}
+
+// Bug real: aun diciéndole al modelo qué día es "hoy", sigue calculando MAL
+// el día de la semana de otras fechas futuras cercanas (afirmó que un lunes
+// real caía en jueves, y que "el próximo lunes" era un domingo). Los LLM no
+// hacen aritmética de calendario de forma confiable — en vez de pedirle que
+// la infiera, se le da ya resuelta para un rango corto, igual que el resto
+// de la lógica de fechas de este módulo.
+export function upcomingWeekdaysEs(timeZone: string, days: number): string {
+  const today = getCurrentLocalDateTimeString(timeZone).slice(0, 10);
+  const startUtc = new Date(`${today}T00:00:00Z`).getTime();
+  const rows: string[] = [];
+  for (let i = 0; i < days; i++) {
+    const date = new Date(startUtc + i * 86400000).toISOString().slice(0, 10);
+    rows.push(`${date}=${WEEKDAY_NAMES_ES[new Date(`${date}T00:00:00Z`).getUTCDay()]}`);
+  }
+  return rows.join(", ");
+}

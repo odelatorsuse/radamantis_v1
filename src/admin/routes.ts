@@ -21,6 +21,7 @@ import { registerTelegramWebhook } from "./telegramSetup";
 interface Env {
   DB: D1Database;
   VECTORIZE: VectorizeIndex;
+  AGENT: DurableObjectNamespace;
   ADMIN_API_KEY: string;
   OPENAI_API_KEY: string;
   TELEGRAM_WEBHOOK_SECRET: string;
@@ -198,4 +199,37 @@ adminApp.post("/handoffs/:id/resolve", async (c) => {
 adminApp.get("/usage", async (c) => {
   const usage = await getUsageSummary(c.env.DB);
   return c.json({ usage });
+});
+
+// Herramienta de prueba: habla directo con el ConversationAgent real de un
+// tenant (mismo LLM, mismo GoogleCalendarProvider, mismas reglas de horario)
+// sin pasar por Telegram — para poder reproducir y depurar conversaciones
+// (ej. booking) sin necesitar el bot en producción. channel fijo "debug" para
+// no mezclar nunca con historial real de un canal de verdad; usa el mismo
+// chatId para mantener memoria entre turnos de una misma prueba.
+adminApp.post("/tenants/:id/test-message", async (c) => {
+  const tenantId = c.req.param("id");
+  const body = await c.req.json<{ chatId?: string; text?: string }>();
+  if (!body.chatId || !body.text) {
+    return c.json({ error: "chatId y text son requeridos" }, 400);
+  }
+
+  const tenant = await getTenantDetail(c.env.DB, tenantId);
+  if (!tenant) return c.json({ error: "Tenant no encontrado" }, 404);
+
+  const conversationKey = `${tenantId}:debug:${body.chatId}`;
+  const stub = c.env.AGENT.get(c.env.AGENT.idFromName(conversationKey));
+  const agentRes = await stub.fetch("https://agent/reply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tenantId,
+      channel: "debug",
+      chatId: body.chatId,
+      userText: body.text,
+      verticalId: tenant.vertical_id,
+    }),
+  });
+  const result = await agentRes.json<{ replyText: string | null }>();
+  return c.json(result);
 });

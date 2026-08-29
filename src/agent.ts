@@ -88,7 +88,13 @@ export class ConversationAgent {
     // Etapa 8.5: config en caliente (tono/idioma/moneda/override de prompt),
     // sin redeploy — se lee en cada request, no hay caché.
     const tenantSettings = await getTenantSettings(this.env.DB, tenantId);
-    const systemPrompt = buildSystemPrompt(template.promptBase, kbMatches, tenantSettings, calendarProvider !== null);
+    const systemPrompt = buildSystemPrompt(
+      template.promptBase,
+      kbMatches,
+      tenantSettings,
+      calendarProvider !== null,
+      userText,
+    );
 
     const llm = new OpenAIProvider(this.env.OPENAI_API_KEY);
     const messages = buildMessages(systemPrompt, historyMessages, userText);

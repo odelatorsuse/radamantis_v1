@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getCurrentLocalDateTimeString, localToUtcISOString, normalizeToUtcISOString, utcToLocalDateTimeString } from "../src/calendar/timezone";
+import { getCurrentLocalDateTimeString, localToUtcISOString, normalizeToUtcISOString, utcToLocalDateTimeString, weekdayNameEs } from "../src/calendar/timezone";
 
 describe("localToUtcISOString", () => {
   it("convierte hora local de Ciudad de México (UTC-6) a UTC correctamente", () => {
@@ -37,5 +37,19 @@ describe("utcToLocalDateTimeString", () => {
 describe("getCurrentLocalDateTimeString", () => {
   it("devuelve un string con el formato YYYY-MM-DDTHH:MM:SS", () => {
     expect(getCurrentLocalDateTimeString("America/Mexico_City")).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+  });
+});
+
+describe("weekdayNameEs", () => {
+  // Bug real: sin decirle al modelo qué día de la semana es "hoy", calculó
+  // mal cuál era "el próximo lunes" y hasta afirmó que un lunes futuro ya
+  // había pasado. Días verificados con getUTCDay() forzando UTC (mismas
+  // fechas que test/calendar-tools.test.ts): 2026-08-28 = viernes,
+  // 2026-09-01 = martes, 2026-09-06 = domingo, 2026-09-07 = lunes.
+  it("calcula el día de la semana en español a partir de una fecha local", () => {
+    expect(weekdayNameEs("2026-08-28T10:00:00")).toBe("viernes");
+    expect(weekdayNameEs("2026-09-01T00:00:00")).toBe("martes");
+    expect(weekdayNameEs("2026-09-06T23:59:00")).toBe("domingo");
+    expect(weekdayNameEs("2026-09-07T00:00:00")).toBe("lunes");
   });
 });

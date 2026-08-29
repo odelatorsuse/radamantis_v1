@@ -77,18 +77,39 @@ export async function executeCalendarTool(
   if (toolName === "checkAvailability" && args.rangeStart && args.rangeEnd) {
     const rangeStartUtc = normalizeToUtcISOString(args.rangeStart, timeZone);
     const rangeEndUtc = normalizeToUtcISOString(args.rangeEnd, timeZone);
-    const freeSlots = await provider.checkAvailability(rangeStartUtc, rangeEndUtc);
-    const freeSlotsLocal = freeSlots.map((slot) => ({
-      start: utcToLocalDateTimeString(slot.start, timeZone),
-      end: utcToLocalDateTimeString(slot.end, timeZone),
-    }));
-    const withinBusinessHours = freeSlotsLocal.flatMap((slot) => clipToBusinessHours(slot, businessHours));
-    return JSON.stringify({ freeSlots: withinBusinessHours, timezone: timeZone });
+
+    // Guarda contra un rango degenerado (start >= end) — bug real: el modelo
+    // a veces pide un "rango" de un solo punto (ej. rangeStart == rangeEnd
+    // para preguntar por un horario puntual). Google Calendar rechaza esto
+    // con un 400 "timeRangeEmpty"; sin este check, esa excepción tumbaba
+    // toda la petición (el usuario se quedaba sin respuesta en Telegram).
+    if (rangeStartUtc >= rangeEndUtc) {
+      return JSON.stringify({ error: "rangeStart debe ser anterior a rangeEnd — usa un rango con duración, no un punto exacto." });
+    }
+
+    try {
+      const freeSlots = await provider.checkAvailability(rangeStartUtc, rangeEndUtc);
+      const freeSlotsLocal = freeSlots.map((slot) => ({
+        start: utcToLocalDateTimeString(slot.start, timeZone),
+        end: utcToLocalDateTimeString(slot.end, timeZone),
+      }));
+      const withinBusinessHours = freeSlotsLocal.flatMap((slot) => clipToBusinessHours(slot, businessHours));
+      return JSON.stringify({ freeSlots: withinBusinessHours, timezone: timeZone });
+    } catch (err) {
+      // Cualquier falla real del proveedor (Google caído, token inválido,
+      // etc.) se convierte en un resultado de tool que el modelo puede leer
+      // y explicar al cliente, en vez de tumbar toda la conversación.
+      return JSON.stringify({ error: `No se pudo consultar el calendario: ${(err as Error).message}` });
+    }
   }
 
   if (toolName === "bookAppointment" && args.start && args.end && args.summary && args.attendeeName && args.attendeeContact) {
     const startUtc = normalizeToUtcISOString(args.start, timeZone);
     const endUtc = normalizeToUtcISOString(args.end, timeZone);
+
+    if (startUtc >= endUtc) {
+      return JSON.stringify({ ok: false, error: "start debe ser anterior a end." });
+    }
 
     // Validación de horario de atención ANTES de tocar Google — siempre
     // sobre la hora LOCAL derivada (no el string crudo: si ya venía en UTC,
@@ -104,14 +125,18 @@ export async function executeCalendarTool(
       return JSON.stringify({ ok: false, error: message });
     }
 
-    const result = await provider.bookAppointment({
-      start: startUtc,
-      end: endUtc,
-      summary: args.summary,
-      attendeeName: args.attendeeName,
-      attendeeContact: args.attendeeContact,
-    });
-    return JSON.stringify(result);
+    try {
+      const result = await provider.bookAppointment({
+        start: startUtc,
+        end: endUtc,
+        summary: args.summary,
+        attendeeName: args.attendeeName,
+        attendeeContact: args.attendeeContact,
+      });
+      return JSON.stringify(result);
+    } catch (err) {
+      return JSON.stringify({ ok: false, error: `No se pudo agendar: ${(err as Error).message}` });
+    }
   }
 
   return JSON.stringify({ error: `Faltan argumentos obligatorios para ${toolName} (revisa nombre, contacto, horario y motivo).` });

@@ -7,6 +7,7 @@ import { buildGoogleAuthUrl } from "../calendar/oauth";
 import { deleteCalendarConnection, getCalendarConnection } from "../calendar/repository";
 import { getChannelProvider, listSupportedChannels } from "../channels/registry";
 import { buildFacebookAuthUrl } from "../channels/metaOauth";
+import { getPlatformSettings, upsertPlatformSettings } from "../platformSettings";
 import { fetchCloudflareUsageThisMonth } from "../cloudflareAnalytics";
 import { estimateCloudflareCostUsd } from "../cloudflareCosts";
 import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
@@ -45,7 +46,6 @@ interface Env {
   GOOGLE_OAUTH_CLIENT_ID: string;
   CLOUDFLARE_API_TOKEN: string;
   CLOUDFLARE_ACCOUNT_ID: string;
-  META_APP_ID: string;
 }
 
 // Agencia (widgets de costo, parte Cloudflare): deben coincidir con
@@ -285,11 +285,36 @@ adminApp.delete("/tenants/:id/calendar", async (c) => {
 // /calendar/connect-url — arma la URL de autorización de Meta, el dashboard
 // la abre en una pestaña nueva. El callback público vive en index.ts
 // (/oauth/facebook/callback), Meta redirige el navegador ahí directo.
-adminApp.get("/tenants/:id/channels/meta/connect-url", (c) => {
+// El App ID sale de platform_settings (D1), no de un secret de Worker —
+// Oscar lo guarda desde la pestaña "Plataforma" del panel.
+adminApp.get("/tenants/:id/channels/meta/connect-url", async (c) => {
+  const settings = await getPlatformSettings(c.env.DB);
+  if (!settings.metaAppId) {
+    return c.json({ error: "Falta configurar el App ID de Meta — ve a la pestaña Plataforma" }, 400);
+  }
   const origin = new URL(c.req.url).origin;
   const redirectUri = `${origin}/oauth/facebook/callback`;
-  const url = buildFacebookAuthUrl(c.env.META_APP_ID, redirectUri, c.req.param("id"));
+  const url = buildFacebookAuthUrl(settings.metaAppId, redirectUri, c.req.param("id"));
   return c.json({ url });
+});
+
+// Agencia (conectores, autoservicio real): App ID/Secret/Verify Token de
+// Meta editables desde el panel — Oscar pidió explícitamente no depender
+// de que Claude los configure vía wrangler cada vez. metaAppSecret se
+// devuelve tal cual (mismo nivel de "sandbox" ya aceptado para bot
+// tokens/Page Access Tokens en este proyecto — ver nota de seguridad en
+// CLAUDE.md), consistente con que el resto del panel ya muestra tokens
+// en texto plano.
+adminApp.get("/platform-settings", requireAdmin, async (c) => {
+  const settings = await getPlatformSettings(c.env.DB);
+  return c.json(settings);
+});
+
+adminApp.put("/platform-settings", requireAdmin, async (c) => {
+  const body = await c.req.json<Partial<{ metaAppId: string; metaAppSecret: string; metaVerifyToken: string }>>();
+  await upsertPlatformSettings(c.env.DB, body);
+  await logAdminAction(c.env.DB, { tenantId: null, actor: c.get("actor"), action: "update_platform_settings" });
+  return c.json({ ok: true });
 });
 
 adminApp.get("/verticals", (c) => {

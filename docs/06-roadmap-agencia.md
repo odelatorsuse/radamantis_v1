@@ -123,6 +123,8 @@ Oscar ya tiene cuentas de prueba (Página de Facebook + Instagram) para la veter
 | Backend Facebook Messenger + Instagram (modo clásico) | **Completa (2026-08-30)** | Webhook compartido de Meta, `channel_bindings.route_key` nuevo para resolver tenant — ver `CLAUDE.md` y memoria `project_meta_connectors`. |
 | Sección "Conectores" en `/admin` con íconos reales | **Completa (2026-08-30)** | Simple Icons (Telegram/Facebook/Instagram/WhatsApp), WhatsApp marcada "Próximamente". |
 | Autoservicio real ("Conectar con Facebook", OAuth) | **Completa (2026-08-30)** | Pedido explícito de Oscar tras la primera vuelta manual: "no te lo voy a pedir directamente, debe ser fácil" — mismo patrón que Google Calendar. |
-| Primera conexión real end-to-end | **Pendiente** | Oscar necesita crear la App en developers.facebook.com y darle a Claude App ID/App Secret. |
+| Configuración 100% desde el portal (sin `wrangler` ni pedirle a Claude) | **Completa (2026-08-30)** | Nueva tabla `platform_settings` + pestaña "Plataforma" en `/admin` — App ID/Secret/Verify Token de Meta editables ahí, ya no son secrets de Worker. |
+| Conectores dentro de cada cliente (no en el home) | **Completa (2026-08-30)** | Sección "Conectores" movida al detalle de cada tenant, sin selector de tenant — actúa sobre el tenant abierto. |
+| Primera conexión real end-to-end | **Pendiente** | Oscar necesita crear la App en developers.facebook.com y guardar App ID/App Secret desde la pestaña Plataforma. |
 
 No se prioriza el resto del backlog general sin pedido explícito de Oscar.

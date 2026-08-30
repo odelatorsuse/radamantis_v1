@@ -7,6 +7,7 @@ import { getChannelProvider } from "./channels/registry";
 import { parseMetaWebhookMessages, verifyMetaSignature } from "./channels/meta";
 import { exchangeCodeForUserToken, exchangeForLongLivedUserToken, listManagedPages } from "./channels/metaOauth";
 import { updateChannelBinding } from "./admin/repository";
+import { getPlatformSettings } from "./platformSettings";
 import { CONSOLE_HTML } from "./client/consoleHtml";
 import { setAlertChatId } from "./client/repository";
 import { clientApp } from "./client/routes";
@@ -30,9 +31,6 @@ interface Env {
   GOOGLE_OAUTH_CLIENT_ID: string;
   GOOGLE_OAUTH_CLIENT_SECRET: string;
   CLIENT_SESSION_SECRET: string;
-  META_APP_SECRET: string;
-  META_VERIFY_TOKEN: string;
-  META_APP_ID: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -122,8 +120,12 @@ app.get("/oauth/facebook/callback", async (c) => {
   const origin = new URL(c.req.url).origin;
   const redirectUri = `${origin}/oauth/facebook/callback`;
   try {
-    const shortLivedToken = await exchangeCodeForUserToken(c.env.META_APP_ID, c.env.META_APP_SECRET, redirectUri, code);
-    const longLivedToken = await exchangeForLongLivedUserToken(c.env.META_APP_ID, c.env.META_APP_SECRET, shortLivedToken);
+    const platformSettings = await getPlatformSettings(c.env.DB);
+    if (!platformSettings.metaAppId || !platformSettings.metaAppSecret) {
+      return c.html("<p>Falta configurar el App ID/App Secret de Meta en la pestaña Plataforma antes de conectar.</p>", 400);
+    }
+    const shortLivedToken = await exchangeCodeForUserToken(platformSettings.metaAppId, platformSettings.metaAppSecret, redirectUri, code);
+    const longLivedToken = await exchangeForLongLivedUserToken(platformSettings.metaAppId, platformSettings.metaAppSecret, shortLivedToken);
     const pages = await listManagedPages(longLivedToken);
 
     if (pages.length === 0) {
@@ -262,14 +264,15 @@ app.post("/webhook/telegram/:botToken", async (c) => {
 // webhook por bot, el token va en la URL), Meta usa UN webhook COMPARTIDO
 // para todos los tenants y ambos canales — el App Dashboard de Meta solo
 // admite registrar una URL. La verificación inicial (GET) confirma la
-// propiedad del endpoint ante Meta; META_VERIFY_TOKEN es un secreto
-// compartido de la plataforma (no por tenant), igual que
-// TELEGRAM_WEBHOOK_SECRET.
-app.get("/webhook/meta", (c) => {
+// propiedad del endpoint ante Meta; el Verify Token/App Secret salen de
+// platform_settings (D1), editables desde la pestaña Plataforma del panel
+// — no un secret de Worker, a pedido explícito de Oscar.
+app.get("/webhook/meta", async (c) => {
   const mode = c.req.query("hub.mode");
   const token = c.req.query("hub.verify_token");
   const challenge = c.req.query("hub.challenge");
-  if (mode === "subscribe" && token === c.env.META_VERIFY_TOKEN && challenge) {
+  const settings = await getPlatformSettings(c.env.DB);
+  if (mode === "subscribe" && token && settings.metaVerifyToken && token === settings.metaVerifyToken && challenge) {
     return c.text(challenge);
   }
   return c.text("Forbidden", 403);
@@ -277,7 +280,8 @@ app.get("/webhook/meta", (c) => {
 
 app.post("/webhook/meta", async (c) => {
   const rawBody = await c.req.text();
-  const valid = await verifyMetaSignature(c.env.META_APP_SECRET, rawBody, c.req.header("X-Hub-Signature-256"));
+  const settings = await getPlatformSettings(c.env.DB);
+  const valid = await verifyMetaSignature(settings.metaAppSecret ?? "", rawBody, c.req.header("X-Hub-Signature-256"));
   if (!valid) return c.text("Unauthorized", 401);
 
   const body = JSON.parse(rawBody) as { object?: string };

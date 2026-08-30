@@ -25,17 +25,14 @@ compatibility_date = "2026-08-01"
 #                                  GraphQL Analytics API de Cloudflare y estimar el costo real de
 #                                  Workers/D1/Durable Objects/Vectorize. account_id NO es secreto,
 #                                  va en [vars] abajo.
-#   META_APP_ID / META_APP_SECRET   — Agencia (conectores Facebook/Instagram): una sola App de
-#                                      Meta compartida (developers.facebook.com), igual patrón que
-#                                      Google Calendar — cada tenant autoriza SU PROPIA Página vía
-#                                      "Conectar con Facebook" (OAuth, src/channels/metaOauth.ts).
-#                                      META_APP_ID no es sensible en sí (va en la URL de login que
-#                                      abre el navegador) pero se guarda como secret por
-#                                      consistencia con GOOGLE_OAUTH_CLIENT_ID.
-#   META_VERIFY_TOKEN                — string aleatorio propio (no lo da Meta) — se pega en la
-#                                      configuración del Webhook de la App de Meta, valida el GET
-#                                      de verificación inicial (/webhook/meta). Compartido para
-#                                      toda la plataforma, igual que TELEGRAM_WEBHOOK_SECRET.
+#
+# Nota conectores Facebook/Instagram (Agencia): App ID/App Secret/Verify Token de
+# Meta NO son secrets de Worker — a pedido explícito de Oscar ("no te lo voy a
+# pedir directamente, debe ser fácil"), viven en D1 (tabla platform_settings,
+# migración 0026, src/platformSettings.ts) y se editan desde la pestaña
+# "Plataforma" del panel (/admin), sin `wrangler secret put`. Mismo nivel de
+# seguridad "sandbox" ya aceptado en el proyecto para otros tokens en D1 (bot
+# tokens de Telegram, Page Access Tokens, refresh tokens de Google Calendar).
 #
 # Nota Etapa 4: el token de cada bot de Telegram YA NO es un secret de Worker.
 # Vive en la tabla channel_bindings (D1) — alta de canal = INSERT, no

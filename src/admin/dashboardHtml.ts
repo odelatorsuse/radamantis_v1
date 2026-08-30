@@ -239,6 +239,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       Equipo
     </button>
+    <button class="nav-item" data-tab="platform" id="navPlatform">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><circle cx="7" cy="6.5" r="0.6" fill="currentColor" stroke="none"/><circle cx="10" cy="6.5" r="0.6" fill="currentColor" stroke="none"/></svg>
+      Plataforma
+    </button>
   </nav>
   <button class="secondary" id="logoutBtn" style="margin-top:auto">Cerrar sesión</button>
 </aside>
@@ -278,7 +282,20 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         </div>
       </div>
 
-      <h2 class="section-title">Canales</h2>
+      <h2 class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11.5 4.5"/><path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L12.5 19.5"/></svg>
+        Conectores
+      </h2>
+      <div class="panel">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Elige un canal y vincúlalo a este tenant.</p>
+        <div class="connector-grid" id="connectorGrid"></div>
+        <form id="channelForm" style="margin-top:16px;flex-wrap:wrap">
+          <div id="channelFieldsContainer" style="display:flex;gap:8px;flex:1;flex-wrap:wrap"></div>
+          <button type="submit">Vincular canal</button>
+        </form>
+        <p class="error" id="channelError"></p>
+      </div>
+
       <div class="panel" id="channelsList" style="background:transparent;border:none;padding:0"></div>
       <p id="channelUpdateError"></p>
 
@@ -339,21 +356,6 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           </form>
           <p class="error" id="tenantError"></p>
         </div>
-      </div>
-
-      <h2 class="section-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11.5 4.5"/><path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L12.5 19.5"/></svg>
-        Conectores
-      </h2>
-      <div class="panel">
-        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Elige un canal, completa sus datos y vincúlalo a un tenant. Un mismo tenant puede tener varios canales conectados a la vez.</p>
-        <div class="connector-grid" id="connectorGrid"></div>
-        <form id="channelForm" style="margin-top:16px;flex-wrap:wrap">
-          <select id="channelTenant"></select>
-          <div id="channelFieldsContainer" style="display:flex;gap:8px;flex:1;flex-wrap:wrap"></div>
-          <button type="submit">Vincular canal</button>
-        </form>
-        <p class="error" id="channelError"></p>
       </div>
     </div>
   </section>
@@ -440,6 +442,57 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     </div>
   </section>
 
+  <!-- Tab: Plataforma (solo rol admin) -->
+  <section class="tab-view" id="tab-platform">
+    <div class="topbar">
+      <div>
+        <div class="breadcrumb">Panel / Plataforma</div>
+        <h1 class="page-title">Plataforma</h1>
+      </div>
+    </div>
+    <p style="font-size:0.85rem;color:var(--text-muted)">Credenciales compartidas por TODOS los tenants — se configuran una sola vez aquí, nunca por cliente. Los conectores de cada cliente (incluida la conexión real con su Facebook/Instagram) se hacen desde el detalle de cada tenant, en "Conectores".</p>
+
+    <h2 class="section-title">
+      <span style="width:16px;height:16px;display:inline-flex;vertical-align:-3px;margin-right:2px"><svg viewBox="0 0 24 24" fill="#1877F2" xmlns="http://www.w3.org/2000/svg"><path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z"/></svg></span>
+      Meta (Facebook e Instagram)
+    </h2>
+    <div class="panel">
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Pasos en <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener" style="color:var(--primary)">developers.facebook.com/apps</a>:</p>
+      <ol style="font-size:0.85rem;color:var(--text-muted);padding-left:18px;margin-top:0">
+        <li>Crear app → tipo "Negocio" → agregar el producto <strong>Messenger</strong>.</li>
+        <li>En Messenger → Webhooks, pega la URL y el Verify Token de abajo, suscribe el campo <code>messages</code>.</li>
+        <li>Vincula tu Instagram profesional a la misma Página (Configuración de la Página → Cuentas vinculadas).</li>
+        <li>Copia el App ID y el App Secret (Configuración → Básica) y pégalos abajo.</li>
+      </ol>
+
+      <label style="font-size:0.8rem;color:var(--text-muted)">Webhook URL (pégala en Meta)</label>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input id="platformWebhookUrl" readonly style="flex:1;font-family:'Fira Code',monospace;font-size:0.78rem" />
+        <button type="button" class="secondary" id="copyWebhookUrlBtn">Copiar</button>
+      </div>
+
+      <form id="platformSettingsForm">
+        <div class="channel-field-group">
+          <label>Verify Token (pégalo en Meta, no lo cambies si ya lo pegaste)</label>
+          <div style="display:flex;gap:8px">
+            <input id="platformVerifyToken" style="flex:1;font-family:'Fira Code',monospace;font-size:0.8rem" />
+            <button type="button" class="secondary" id="generateVerifyTokenBtn">Generar nuevo</button>
+          </div>
+        </div>
+        <div class="channel-field-group">
+          <label>App ID</label>
+          <input id="platformMetaAppId" placeholder="id numérico de tu App de Meta" />
+        </div>
+        <div class="channel-field-group">
+          <label>App Secret</label>
+          <input id="platformMetaAppSecret" placeholder="app secret (Configuración → Básica)" />
+        </div>
+        <button type="submit">Guardar</button>
+      </form>
+      <p id="platformSettingsMsg"></p>
+    </div>
+  </section>
+
 </main>
 
 <script>
@@ -494,6 +547,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     var admin = isAdmin();
     document.getElementById("navUsage").style.display = admin ? "" : "none";
     document.getElementById("navTeam").style.display = admin ? "" : "none";
+    document.getElementById("navPlatform").style.display = admin ? "" : "none";
     document.getElementById("tenantCreateSection").style.display = admin ? "" : "none";
   }
 
@@ -545,8 +599,6 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         card.querySelector(".bot-card-link").addEventListener("click", function () { openTenantDetail(t.id); });
         grid.appendChild(card);
       });
-
-      fillSelect(document.getElementById("channelTenant"), data.tenants, "id", "id");
     });
   }
 
@@ -643,8 +695,51 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       loadUsage().catch(function () {});
       loadCloudflareUsage();
       loadTeam().catch(function () {});
+      loadPlatformSettings().catch(function () {});
     }
   }
+
+  // Agencia (conectores, autoservicio real): App ID/Secret/Verify Token de
+  // Meta se editan aquí — Oscar pidió explícitamente no depender de que
+  // Claude los configure vía wrangler cada vez que arranca un canal nuevo.
+  function loadPlatformSettings() {
+    document.getElementById("platformWebhookUrl").value = window.location.origin + "/webhook/meta";
+    return api("/platform-settings").then(function (data) {
+      document.getElementById("platformVerifyToken").value = data.metaVerifyToken || "";
+      document.getElementById("platformMetaAppId").value = data.metaAppId || "";
+      document.getElementById("platformMetaAppSecret").value = data.metaAppSecret || "";
+    });
+  }
+
+  document.getElementById("copyWebhookUrlBtn").addEventListener("click", function () {
+    var input = document.getElementById("platformWebhookUrl");
+    navigator.clipboard.writeText(input.value).then(function () {
+      var btn = document.getElementById("copyWebhookUrlBtn");
+      btn.textContent = "¡Copiado!";
+      setTimeout(function () { btn.textContent = "Copiar"; }, 1500);
+    });
+  });
+
+  document.getElementById("generateVerifyTokenBtn").addEventListener("click", function () {
+    // Solo lo llena en el input — no se guarda hasta que se aprieta
+    // "Guardar", para no invalidar por accidente el que ya está pegado
+    // en el Webhook de Meta si el operador solo quería ver cómo se ve.
+    var token = "rad-" + Array.from(crypto.getRandomValues(new Uint8Array(18))).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+    document.getElementById("platformVerifyToken").value = token;
+  });
+
+  document.getElementById("platformSettingsForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var body = {
+      metaVerifyToken: document.getElementById("platformVerifyToken").value,
+      metaAppId: document.getElementById("platformMetaAppId").value,
+      metaAppSecret: document.getElementById("platformMetaAppSecret").value,
+    };
+    var msgEl = document.getElementById("platformSettingsMsg");
+    api("/platform-settings", { method: "PUT", body: JSON.stringify(body) })
+      .then(function () { msgEl.className = "success-msg"; msgEl.textContent = "Guardado."; })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
 
   function loadTeam() {
     return api("/admin-users").then(function (data) {
@@ -868,6 +963,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       window.scrollTo(0, 0);
       loadCalendarStatus(tenantId);
       loadFlow(tenantId);
+      selectedChannel = "telegram";
+      renderConnectorGrid();
+      renderChannelFields();
+      document.getElementById("channelError").textContent = "";
     });
   }
 
@@ -1278,11 +1377,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       connectBtn.type = "button";
       connectBtn.textContent = "Conectar con Facebook";
       connectBtn.onclick = function () {
-        var tenantId = document.getElementById("channelTenant").value;
         var msgEl = document.getElementById("channelError");
-        if (!tenantId) { msgEl.className = "error"; msgEl.textContent = "Elige un tenant primero."; return; }
+        if (!currentDetailTenantId) { msgEl.className = "error"; msgEl.textContent = "Abre un tenant primero."; return; }
         msgEl.textContent = "";
-        api("/tenants/" + tenantId + "/channels/meta/connect-url").then(function (data) {
+        api("/tenants/" + currentDetailTenantId + "/channels/meta/connect-url").then(function (data) {
           window.open(data.url, "_blank");
         }).catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
       };
@@ -1314,12 +1412,13 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   document.getElementById("channelForm").addEventListener("submit", function (e) {
     e.preventDefault();
     if (CHANNEL_CONFIG[selectedChannel].oauth) return;
-    var tenantId = document.getElementById("channelTenant").value;
+    var msgEl = document.getElementById("channelError");
+    if (!currentDetailTenantId) { msgEl.className = "error"; msgEl.textContent = "Abre un tenant primero."; return; }
+    var tenantId = currentDetailTenantId;
     var body = { channel: selectedChannel };
     document.querySelectorAll("#channelFieldsContainer input").forEach(function (input) {
       body[input.dataset.fieldKey] = input.value;
     });
-    var msgEl = document.getElementById("channelError");
     api("/tenants/" + tenantId + "/channels", { method: "POST", body: JSON.stringify(body) })
       .then(function (data) {
         var channelType = selectedChannel;
@@ -1339,6 +1438,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           msgEl.className = "success-msg";
           msgEl.textContent = "Canal vinculado.";
         }
+        openTenantDetail(tenantId);
         loadTenants();
       })
       .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });

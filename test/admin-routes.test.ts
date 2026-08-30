@@ -200,6 +200,57 @@ describe("adminApp channels/supported (Etapa 10 — multi-canal)", () => {
   });
 });
 
+function mockPlatformSettingsDb(row: { meta_app_id: string | null; meta_app_secret: string | null; meta_verify_token: string | null } | null) {
+  const first = vi.fn().mockResolvedValue(row);
+  const run = vi.fn().mockResolvedValue({ success: true });
+  const bind = vi.fn().mockReturnValue({ first, run });
+  const prepare = vi.fn().mockReturnValue({ bind, first, run });
+  return { prepare, batch: vi.fn() } as unknown as D1Database;
+}
+
+describe("adminApp platform-settings (Agencia — conectores Meta, autoservicio)", () => {
+  it("GET /platform-settings devuelve null en todo si no se ha configurado nada", async () => {
+    const res = await adminApp.request(
+      "/platform-settings",
+      { headers: { Authorization: "Bearer test-admin-key" } },
+      mockEnv({ DB: mockPlatformSettingsDb(null) }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ metaAppId: null, metaAppSecret: null, metaVerifyToken: null });
+  });
+
+  it("PUT /platform-settings guarda App ID/Secret/Verify Token", async () => {
+    const res = await adminApp.request(
+      "/platform-settings",
+      { method: "PUT", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({ metaAppId: "app-1", metaAppSecret: "secret-1" }) },
+      mockEnv({ DB: mockPlatformSettingsDb(null) }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("GET /tenants/:id/channels/meta/connect-url devuelve 400 si falta el App ID", async () => {
+    const res = await adminApp.request(
+      "/tenants/vet-ch/channels/meta/connect-url",
+      { headers: { Authorization: "Bearer test-admin-key" } },
+      mockEnv({ DB: mockPlatformSettingsDb(null) }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /tenants/:id/channels/meta/connect-url arma la URL cuando el App ID ya está guardado", async () => {
+    const res = await adminApp.request(
+      "/tenants/vet-ch/channels/meta/connect-url",
+      { headers: { Authorization: "Bearer test-admin-key" } },
+      mockEnv({ DB: mockPlatformSettingsDb({ meta_app_id: "app-123", meta_app_secret: "s", meta_verify_token: "v" }) }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<{ url: string }>();
+    expect(body.url).toContain("client_id=app-123");
+    expect(body.url).toContain("state=vet-ch");
+  });
+});
+
 describe("adminApp KB ingestion (Etapa 9)", () => {
   it("POST /tenants/:id/kb hace upsert de los docs recibidos", async () => {
     const upsert = vi.fn().mockResolvedValue({});

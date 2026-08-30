@@ -39,3 +39,14 @@ export async function appendMessage(
     .bind(ref.tenantId, ref.channel, ref.chatId, message.role, message.content, message.sentBy ?? null)
     .run();
 }
+
+// Agencia ("Flujo"): indicador de "actividad reciente" en el diagrama —
+// no es monitoreo en vivo, es "¿hubo algún mensaje real en los últimos N
+// minutos?" contra D1.
+export async function hasRecentActivity(db: D1Database, tenantId: string, minutes = 5): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT 1 FROM messages WHERE tenant_id = ? AND created_at >= datetime('now', ?) LIMIT 1`)
+    .bind(tenantId, `-${minutes} minutes`)
+    .first();
+  return row !== null;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { appendMessage, getHistory } from "../src/messages";
+import { appendMessage, getHistory, hasRecentActivity } from "../src/messages";
 
 const ref = { tenantId: "sandbox", channel: "telegram", chatId: "42" };
 
@@ -52,5 +52,27 @@ describe("appendMessage", () => {
     await appendMessage(db, ref, { role: "assistant", content: "hola desde el negocio", sentBy: "human" });
 
     expect(bind).toHaveBeenCalledWith("sandbox", "telegram", "42", "assistant", "hola desde el negocio", "human");
+  });
+});
+
+describe("hasRecentActivity", () => {
+  it("true si hay un mensaje dentro de la ventana de minutos", async () => {
+    const first = vi.fn().mockResolvedValue({ 1: 1 });
+    const bind = vi.fn().mockReturnValue({ first });
+    const prepare = vi.fn().mockReturnValue({ bind });
+    const db = { prepare } as unknown as D1Database;
+
+    expect(await hasRecentActivity(db, "vet-ch")).toBe(true);
+    expect(bind).toHaveBeenCalledWith("vet-ch", "-5 minutes");
+  });
+
+  it("false si no hay ningún mensaje reciente", async () => {
+    const first = vi.fn().mockResolvedValue(null);
+    const bind = vi.fn().mockReturnValue({ first });
+    const prepare = vi.fn().mockReturnValue({ bind });
+    const db = { prepare } as unknown as D1Database;
+
+    expect(await hasRecentActivity(db, "vet-ch", 10)).toBe(false);
+    expect(bind).toHaveBeenCalledWith("vet-ch", "-10 minutes");
   });
 });

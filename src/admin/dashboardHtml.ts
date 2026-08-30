@@ -99,13 +99,18 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     50% { opacity: 0.45; box-shadow: 0 0 10px var(--accent); }
   }
 
-  .flow-section-label { font-family: "Fira Code", monospace; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin: 4px 0 8px; }
-  .flow-row { display: flex; gap: 18px; align-items: stretch; flex-wrap: wrap; }
-  .flow-node { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 160px; }
+  .flow-canvas { position: relative; padding: 30px 10px 50px; min-width: max-content; }
+  .flow-connectors { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible; }
+  .flow-main-row { display: flex; gap: 70px; align-items: center; position: relative; z-index: 2; }
+  .flow-resource-row { display: flex; gap: 22px; flex-wrap: nowrap; margin-top: 90px; position: relative; z-index: 2; }
+  .flow-node { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 160px; flex-shrink: 0; }
+  .flow-node.flow-node-main { border-color: var(--primary); }
   .flow-node-title { font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; gap: 6px; }
   .flow-node-detail { font-size: 0.76rem; color: var(--text-muted); margin-top: 4px; line-height: 1.45; }
   .flow-node.flow-node-off { opacity: 0.4; }
-  .flow-arrow { color: var(--text-muted); font-size: 1.4rem; align-self: center; flex-shrink: 0; padding: 0 2px; }
+  .flow-legend { display: flex; gap: 22px; font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; align-items: center; flex-wrap: wrap; }
+  .flow-legend-line { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--text-muted); vertical-align: middle; margin-right: 6px; }
+  .flow-legend-line.dashed { border-top-style: dashed; }
 
   @media (prefers-reduced-motion: reduce) {
     .status-dot.ok { animation: none; }
@@ -224,8 +229,19 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       <div class="metrics" id="detailMetrics"></div>
 
       <h2 class="section-title">Flujo</h2>
-      <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Así está armado este bot ahora mismo — datos reales, no una maqueta. Los conteos son de los últimos 30 días.</p>
-      <div class="panel" id="flowDiagram" style="overflow-x:auto"></div>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Así está armado este bot ahora mismo — datos reales, no una maqueta.</p>
+      <div class="panel" id="flowDiagram" style="overflow-x:auto">
+        <div class="flow-canvas" id="flowCanvas">
+          <svg class="flow-connectors" id="flowConnectors"></svg>
+          <div class="flow-main-row" id="flowMainRow"></div>
+          <div class="flow-resource-row" id="flowResourceRow"></div>
+        </div>
+        <div class="flow-legend">
+          <span><span class="flow-legend-line solid"></span>flujo de mensajes</span>
+          <span><span class="flow-legend-line dashed"></span>recursos del agente</span>
+          <span><span class="status-dot ok" style="display:inline-block"></span>actividad en los últimos 5 min</span>
+        </div>
+      </div>
 
       <h2 class="section-title">Canales</h2>
       <div class="panel" id="channelsList" style="background:transparent;border:none;padding:0"></div>
@@ -734,12 +750,18 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     recordAppointmentFeedback: "recordAppointmentFeedback",
   };
 
-  function flowNode(title, detailLines, enabled) {
+  function flowNode(title, detailLines, opts) {
+    opts = opts || {};
     var node = document.createElement("div");
-    node.className = "flow-node" + (enabled === false ? " flow-node-off" : "");
+    node.className = "flow-node" + (opts.main ? " flow-node-main" : "") + (opts.off ? " flow-node-off" : "");
     var titleEl = document.createElement("div");
     titleEl.className = "flow-node-title";
     titleEl.textContent = title;
+    if (opts.recentActivity) {
+      var dot = document.createElement("span");
+      dot.className = "status-dot ok";
+      titleEl.appendChild(dot);
+    }
     node.appendChild(titleEl);
     detailLines.forEach(function (line) {
       var d = document.createElement("div");
@@ -750,47 +772,71 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     return node;
   }
 
-  function flowArrow() {
-    var span = document.createElement("span");
-    span.className = "flow-arrow";
-    span.textContent = "→";
-    return span;
+  // Dibuja las líneas del canvas (estilo n8n) DESPUÉS de que los nodos ya
+  // están en el DOM — mide posiciones reales con getBoundingClientRect en
+  // vez de coordenadas fijas, así se acomoda solo sin importar cuántas
+  // tools tenga habilitadas cada tenant.
+  function drawFlowConnectors(canvasEl, svgEl, connections) {
+    var canvasRect = canvasEl.getBoundingClientRect();
+    svgEl.setAttribute("width", canvasEl.scrollWidth);
+    svgEl.setAttribute("height", canvasEl.scrollHeight);
+    svgEl.innerHTML = "";
+    connections.forEach(function (conn) {
+      var fromRect = conn.from.getBoundingClientRect();
+      var toRect = conn.to.getBoundingClientRect();
+      var x1, y1, x2, y2, d;
+      if (conn.direction === "horizontal") {
+        x1 = fromRect.right - canvasRect.left;
+        y1 = fromRect.top - canvasRect.top + fromRect.height / 2;
+        x2 = toRect.left - canvasRect.left;
+        y2 = toRect.top - canvasRect.top + toRect.height / 2;
+        d = "M " + x1 + " " + y1 + " L " + x2 + " " + y2;
+      } else {
+        x1 = fromRect.left - canvasRect.left + fromRect.width / 2;
+        y1 = fromRect.bottom - canvasRect.top;
+        x2 = toRect.left - canvasRect.left + toRect.width / 2;
+        y2 = toRect.top - canvasRect.top;
+        var midY = (y1 + y2) / 2;
+        d = "M " + x1 + " " + y1 + " C " + x1 + " " + midY + ", " + x2 + " " + midY + ", " + x2 + " " + y2;
+      }
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", "#3A4A6B");
+      path.setAttribute("stroke-width", "1.5");
+      if (conn.style === "dashed") path.setAttribute("stroke-dasharray", "5,4");
+      svgEl.appendChild(path);
+    });
   }
 
-  // Agencia ("Flujo"): diagrama con los nodos REALES de Radamantis (nunca
-  // los de Forja) — cada dato viene de GET /tenants/:id/flow, nada
+  // Agencia ("Flujo"): canvas tipo n8n con los nodos REALES de Radamantis
+  // (nunca los de Forja) — cada dato viene de GET /tenants/:id/flow, nada
   // decorativo ni inventado. 0 llamadas significa "no se ha usado todavía",
   // no "no existe".
   function loadFlow(tenantId) {
-    var container = document.getElementById("flowDiagram");
-    container.innerHTML = "<p class='empty'>Cargando...</p>";
+    var canvas = document.getElementById("flowCanvas");
+    var svg = document.getElementById("flowConnectors");
+    var mainRow = document.getElementById("flowMainRow");
+    var resourceRow = document.getElementById("flowResourceRow");
+    mainRow.innerHTML = "";
+    resourceRow.innerHTML = "";
+    svg.innerHTML = "";
+
     api("/tenants/" + tenantId + "/flow").then(function (f) {
-      container.innerHTML = "";
-
-      var mainRow = document.createElement("div");
-      mainRow.className = "flow-row";
       var channelLabel = f.channels.length ? f.channels.map(function (c) { return c.channel; }).join(", ") : "sin canal";
-      mainRow.appendChild(flowNode("Canal", [channelLabel, f.conversationCount + " conversaciones"], f.channels.length > 0));
-      mainRow.appendChild(flowArrow());
-      mainRow.appendChild(flowNode("Memoria", [f.memory.store, "últimos " + f.memory.windowMessages + " mensajes"]));
-      mainRow.appendChild(flowArrow());
-      mainRow.appendChild(flowNode("Agente", ["Durable Object · 1 por conversación"]));
-      mainRow.appendChild(flowArrow());
-      mainRow.appendChild(flowNode("Modelo", [f.model.provider, f.model.name]));
-      mainRow.appendChild(flowArrow());
-      mainRow.appendChild(flowNode("Respuesta", ["se envía por el canal de origen"]));
-      container.appendChild(mainRow);
+      var canalNode = flowNode("Canal", [channelLabel, f.conversationCount + " conversaciones"], { off: f.channels.length === 0, recentActivity: f.recentActivity });
+      var agenteNode = flowNode("Agente", ["Durable Object", "1 por conversación"], { main: true });
+      var respuestaNode = flowNode("Respuesta", ["se envía por el canal de origen"]);
+      mainRow.appendChild(canalNode);
+      mainRow.appendChild(agenteNode);
+      mainRow.appendChild(respuestaNode);
 
-      var capLabel = document.createElement("div");
-      capLabel.className = "flow-section-label";
-      capLabel.textContent = "Capacidades del agente — llamadas en los últimos 30 días";
-      container.appendChild(capLabel);
-
-      var capRow = document.createElement("div");
-      capRow.className = "flow-row";
+      var resourceNodes = [];
+      resourceNodes.push(flowNode("Modelo", [f.model.provider, f.model.name]));
+      resourceNodes.push(flowNode("Memoria", [f.memory.store, "últimos " + f.memory.windowMessages + " mensajes"]));
 
       if (f.rag.enabled) {
-        capRow.appendChild(flowNode("RAG / Conocimiento", [
+        resourceNodes.push(flowNode("RAG / Conocimiento", [
           "umbral de relevancia " + f.rag.minRelevanceScore,
           f.rag.documentCount + " documento(s) indexado(s)",
           (f.toolCallCounts30d.searchKb || 0) + " llamadas/30d",
@@ -800,21 +846,36 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       f.toolsEnabled.forEach(function (toolName) {
         if (toolName === "searchKb") return; // ya mostrado arriba como RAG/Conocimiento
         var isCalendarTool = toolName === "checkAvailability" || toolName === "bookAppointment";
-        var enabled = toolName === "handoffHuman" ? true : (isCalendarTool || toolName === "recordAppointmentFeedback") ? f.calendarConnected : true;
+        var off = (isCalendarTool || toolName === "recordAppointmentFeedback") && !f.calendarConnected;
         var detail = [(f.toolCallCounts30d[toolName] || 0) + " llamadas/30d"];
-        if (isCalendarTool && !f.calendarConnected) detail.push("calendario no conectado");
-        capRow.appendChild(flowNode(TOOL_LABELS[toolName] || toolName, detail, enabled));
+        if (off) detail.push("calendario no conectado");
+        resourceNodes.push(flowNode(TOOL_LABELS[toolName] || toolName, detail, { off: off }));
       });
 
-      container.appendChild(capRow);
+      resourceNodes.forEach(function (n) { resourceRow.appendChild(n); });
+
+      // Layout ya resuelto por flexbox — ahora sí se puede medir para trazar
+      // las líneas reales entre los nodos.
+      var connections = [
+        { from: canalNode, to: agenteNode, direction: "horizontal", style: "solid" },
+        { from: agenteNode, to: respuestaNode, direction: "horizontal", style: "solid" },
+      ];
+      resourceNodes.forEach(function (n) { connections.push({ from: agenteNode, to: n, direction: "vertical", style: "dashed" }); });
+      drawFlowConnectors(canvas, svg, connections);
     }).catch(function (err) {
-      container.innerHTML = "";
+      mainRow.innerHTML = "";
       var errEl = document.createElement("p");
       errEl.className = "error";
       errEl.textContent = err.message;
-      container.appendChild(errEl);
+      mainRow.appendChild(errEl);
     });
   }
+
+  window.addEventListener("resize", function () {
+    if (currentDetailTenantId && document.getElementById("tenantDetail").style.display !== "none") {
+      loadFlow(currentDetailTenantId);
+    }
+  });
 
   function loadCalendarStatus(tenantId) {
     var statusEl = document.getElementById("calendarStatus");

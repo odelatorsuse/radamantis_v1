@@ -10,6 +10,7 @@ import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from ".
 import { hashPassword, verifyPassword } from "../passwords";
 import { runColdLeadSweep } from "../coldLeads";
 import { runDailyReportSweep } from "../dailyReport";
+import { hasRecentActivity } from "../messages";
 import { runNoShowSweep } from "../noShowSweep";
 import { MIN_RELEVANCE_SCORE } from "../prompts";
 import { ingestKbDocs, listKbDocuments, type KbDocInput } from "../rag/kb";
@@ -178,15 +179,17 @@ adminApp.get("/tenants/:id/flow", async (c) => {
   if (!detail) return c.json({ error: "Tenant no encontrado" }, 404);
 
   const template = getVerticalTemplate(detail.vertical_id);
-  const [calendarConnection, kbDocs, toolCallCounts30d] = await Promise.all([
+  const [calendarConnection, kbDocs, toolCallCounts30d, recentActivity] = await Promise.all([
     getCalendarConnection(c.env.DB, tenantId),
     template.toolsEnabled.includes("searchKb") ? listKbDocuments(c.env.DB, tenantId) : Promise.resolve([]),
     getToolCallCounts30d(c.env.DB, tenantId),
+    hasRecentActivity(c.env.DB, tenantId),
   ]);
 
   return c.json({
     channels: detail.channels.map((ch) => ({ channel: ch.channel })),
     conversationCount: detail.metrics.conversations,
+    recentActivity,
     memory: { store: "D1", windowMessages: 20 },
     model: { provider: "OpenAI", name: "gpt-4o-mini" },
     rag: template.toolsEnabled.includes("searchKb")

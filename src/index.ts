@@ -13,6 +13,7 @@ import { describeImage, transcribeVoice } from "./media";
 import { runNoShowSweep } from "./noShowSweep";
 import { downloadTelegramFile, extractIncomingMessage, sendTelegramMessage } from "./telegram";
 import { getTenantSettings, resolveTenant } from "./tenants";
+import { logUsage } from "./usage";
 import { WIDGET_JS, widgetApp } from "./widget";
 
 interface Env {
@@ -126,7 +127,15 @@ app.post("/webhook/telegram/:botToken", async (c) => {
   } else if (incoming.voice) {
     try {
       const audio = await downloadTelegramFile(botToken, incoming.voice.fileId);
-      userText = await transcribeVoice(c.env.OPENAI_API_KEY, audio, incoming.voice.mimeType);
+      const transcription = await transcribeVoice(c.env.OPENAI_API_KEY, audio, incoming.voice.mimeType);
+      userText = transcription.text;
+      await logUsage(c.env.DB, {
+        tenantId,
+        channel: "telegram",
+        model: "whisper-1",
+        usage: { promptTokens: 0, completionTokens: 0 },
+        audioSeconds: transcription.durationSeconds,
+      });
     } catch {
       await sendTelegramMessage(botToken, incoming.chatId, "No pude escuchar tu nota de voz, ¿me la puedes escribir?");
       return c.text("ok");
@@ -134,11 +143,17 @@ app.post("/webhook/telegram/:botToken", async (c) => {
   } else if (incoming.photo) {
     try {
       const image = await downloadTelegramFile(botToken, incoming.photo.fileId);
-      const description = await describeImage(c.env.OPENAI_API_KEY, image, "image/jpeg");
+      const vision = await describeImage(c.env.OPENAI_API_KEY, image, "image/jpeg");
+      await logUsage(c.env.DB, {
+        tenantId,
+        channel: "telegram",
+        model: "gpt-4o-mini",
+        usage: { promptTokens: vision.promptTokens, completionTokens: vision.completionTokens },
+      });
       // Sin este encabezado, el modelo ve la descripción como si el cliente
       // la hubiera escrito literalmente — en el siguiente turno se confunde
       // y cree que le están "describiendo una imagen" en vez de que envió una foto.
-      userText = `[El cliente envió una imagen] ${description}`;
+      userText = `[El cliente envió una imagen] ${vision.description}`;
     } catch {
       await sendTelegramMessage(botToken, incoming.chatId, "No pude ver tu imagen, ¿me puedes contar qué es?");
       return c.text("ok");

@@ -366,15 +366,25 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     <div class="topbar">
       <div>
         <div class="breadcrumb">Panel / Uso</div>
-        <h1 class="page-title">Uso (tokens por tenant)</h1>
+        <h1 class="page-title">Uso y costos</h1>
       </div>
     </div>
+
+    <h2 class="section-title">OpenAI</h2>
+    <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Costo ESTIMADO calculado sobre uso real (tokens, minutos de audio) con las tarifas públicas de OpenAI — no es el número exacto de tu factura, pero se calcula sobre datos reales, nunca inventados.</p>
+    <div class="metrics" id="usageCostMetrics"></div>
+
     <div class="panel">
       <table id="usageTable">
-        <thead><tr><th>Tenant</th><th>Requests</th><th>Prompt tokens</th><th>Completion tokens</th></tr></thead>
+        <thead><tr><th>Tenant</th><th>Requests</th><th>Prompt tokens</th><th>Completion tokens</th><th>Costo estimado (total)</th><th>Detalle</th></tr></thead>
         <tbody></tbody>
       </table>
       <p class="empty" id="usageEmpty" style="display:none">Sin uso registrado todavía.</p>
+    </div>
+
+    <h2 class="section-title">Cloudflare</h2>
+    <div class="panel" id="cloudflareUsagePanel">
+      <p class="empty">Todavía no está conectado. Pídele a Claude Code que lo configure — necesita un API Token de tu cuenta de Cloudflare con permiso de Analytics.</p>
     </div>
   </section>
 
@@ -549,15 +559,33 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     });
   }
 
+  function formatUsd(n) {
+    return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  }
+
+  // Agencia ("widgets de costo real en /admin"): todo lo que se muestra
+  // aquí sale de GET /usage, que a su vez calcula sobre uso real
+  // (usage_log) — nunca un número decorativo. "Estimado" en el copy es a
+  // propósito: no es el número exacto de la factura de OpenAI.
   function loadUsage() {
     return api("/usage").then(function (data) {
+      var metricsEl = document.getElementById("usageCostMetrics");
+      metricsEl.innerHTML = "";
+      metricsEl.appendChild(metricTile(formatUsd(data.totalEstimatedCostUsdThisMonth), "Estimado este mes"));
+      metricsEl.appendChild(metricTile(formatUsd(data.totalEstimatedCostUsd), "Estimado total (histórico)"));
+
       var tbody = document.querySelector("#usageTable tbody");
       tbody.innerHTML = "";
       document.getElementById("usageEmpty").style.display = data.usage.length ? "none" : "block";
       data.usage.forEach(function (u) {
         var tr = document.createElement("tr");
+        var detail = u.breakdown.map(function (b) {
+          var extra = b.audioSeconds ? Math.round(b.audioSeconds) + "s audio" : b.promptTokens + "/" + b.completionTokens + " tok";
+          return b.model + " (" + b.requests + "x, " + extra + ", " + formatUsd(b.estimatedCostUsd) + ")";
+        }).join("; ");
         tr.innerHTML = "<td>" + u.tenant_id + "</td><td>" + u.requests + "</td><td>" +
-          u.prompt_tokens + "</td><td>" + u.completion_tokens + "</td>";
+          u.prompt_tokens + "</td><td>" + u.completion_tokens + "</td><td>" + formatUsd(u.estimatedCostUsd) + "</td>" +
+          "<td class='mono' style='font-size:0.72rem;color:var(--text-muted)'>" + detail + "</td>";
         tbody.appendChild(tr);
       });
     });

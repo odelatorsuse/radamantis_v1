@@ -3,6 +3,8 @@ import {
   addChannelBinding,
   createTenant,
   getTenantDetail,
+  getUsageSummary,
+  getUsageSummaryThisMonth,
   logAdminAction,
   resolveHandoff,
   updateChannelBinding,
@@ -129,5 +131,45 @@ describe("logAdminAction", () => {
     const { db, bind } = mockDb();
     await logAdminAction(db, { tenantId: "vet-ch", actor: "oscar@radamantis.dev", action: "create_tenant", details: { name: "x" } });
     expect(bind).toHaveBeenCalledWith("vet-ch", "oscar@radamantis.dev", "create_tenant", JSON.stringify({ name: "x" }));
+  });
+});
+
+function mockUsageDb(rows: unknown[]) {
+  const all = vi.fn().mockResolvedValue({ results: rows });
+  const prepare = vi.fn().mockReturnValue({ all });
+  return { db: { prepare } as unknown as D1Database, prepare, all };
+}
+
+describe("getUsageSummary", () => {
+  it("agrupa por tenant, calcula el costo real por modelo y arma el breakdown", async () => {
+    const { db } = mockUsageDb([
+      { tenant_id: "vet-ch", model: "gpt-4o-mini", requests: 10, prompt_tokens: 1_000_000, completion_tokens: 500_000, audio_seconds: null },
+      { tenant_id: "vet-ch", model: "whisper-1", requests: 2, prompt_tokens: 0, completion_tokens: 0, audio_seconds: 60 },
+    ]);
+
+    const summary = await getUsageSummary(db);
+
+    expect(summary).toHaveLength(1);
+    expect(summary[0].tenant_id).toBe("vet-ch");
+    expect(summary[0].requests).toBe(12);
+    // gpt-4o-mini: 1M*0.15 + 0.5M*0.60 = 0.15 + 0.30 = 0.45 ; whisper-1: 1 min * 0.006 = 0.006
+    expect(summary[0].estimatedCostUsd).toBeCloseTo(0.456, 6);
+    expect(summary[0].breakdown).toHaveLength(2);
+  });
+
+  it("no incluye la cláusula WHERE de 'este mes' en el total all-time", async () => {
+    const { db, prepare } = mockUsageDb([]);
+    await getUsageSummary(db);
+    const sql = prepare.mock.calls[0][0] as string;
+    expect(sql).not.toContain("WHERE");
+  });
+});
+
+describe("getUsageSummaryThisMonth", () => {
+  it("filtra por el mes calendario en curso (SQLite date(), no ISO)", async () => {
+    const { db, prepare } = mockUsageDb([]);
+    await getUsageSummaryThisMonth(db);
+    const sql = prepare.mock.calls[0][0] as string;
+    expect(sql).toContain("date(created_at) >= date('now', 'start of month')");
   });
 });

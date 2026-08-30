@@ -156,7 +156,13 @@ export class ConversationAgent {
     // embeddings ni en Vectorize.
     let kbMatches: KbMatch[] | null = null;
     if (template.toolsEnabled.includes("searchKb")) {
-      const queryEmbedding = await embedText(this.env.OPENAI_API_KEY, userText);
+      const { embedding: queryEmbedding, totalTokens: embeddingTokens } = await embedText(this.env.OPENAI_API_KEY, userText);
+      await logUsage(this.env.DB, {
+        tenantId,
+        channel,
+        model: "text-embedding-3-small",
+        usage: { promptTokens: embeddingTokens, completionTokens: 0 },
+      });
       kbMatches = await searchKb(this.env.VECTORIZE, queryEmbedding, tenantId);
       // Etapa 10 (superpower "Mejoras"): ninguna respuesta con confianza en
       // la KB — se registra para que el dueño sepa qué le falta agregar. El

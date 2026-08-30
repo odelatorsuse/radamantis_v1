@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createKbDocument, deleteKbDocument, ingestKbDocs, listKbDocuments, reindexAllKbDocuments, updateKbDocument } from "../src/rag/kb";
 
 vi.mock("../src/rag/embeddings", () => ({
-  embedText: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+  embedText: vi.fn().mockResolvedValue({ embedding: [0.1, 0.2, 0.3], totalTokens: 5 }),
 }));
 
 function mockDb(firstResult: unknown = null, allResults: unknown[] = []) {

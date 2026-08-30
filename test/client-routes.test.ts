@@ -4,7 +4,7 @@ import { hashPassword } from "../src/passwords";
 import { createSessionToken } from "../src/client/session";
 
 vi.mock("../src/rag/embeddings", () => ({
-  embedText: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+  embedText: vi.fn().mockResolvedValue({ embedding: [0.1, 0.2, 0.3], totalTokens: 5 }),
 }));
 
 const SECRET = "test-client-session-secret";

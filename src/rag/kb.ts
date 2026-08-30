@@ -1,4 +1,5 @@
 import { embedText } from "./embeddings";
+import { logUsage } from "../usage";
 
 // Etapa Agencia ("Conocimiento" en /console, autoservicio del dueño del
 // negocio): Vectorize solo soporta búsqueda por similitud, no "listar
@@ -29,10 +30,14 @@ export async function ingestKbDocs(
 ): Promise<number> {
   const vectors = await Promise.all(
     docs.map(async (doc) => {
-      const values = await embedText(openaiApiKey, doc.content);
+      const { embedding, totalTokens } = await embedText(openaiApiKey, doc.content);
+      // "kb" como channel sintético — esto es una acción de administración,
+      // no una conversación real con un cliente (mismo criterio que
+      // channel="debug" en /test-message).
+      await logUsage(db, { tenantId, channel: "kb", model: "text-embedding-3-small", usage: { promptTokens: totalTokens, completionTokens: 0 } });
       return {
         id: `${tenantId}:${doc.id}`,
-        values,
+        values: embedding,
         metadata: { tenant_id: tenantId, doc_id: doc.id, content: doc.content },
       };
     }),

@@ -102,3 +102,14 @@ Clasificación de lo visto en las 5 páginas:
 No se prioriza nada de esta lista más allá de "Conocimiento" (ya en construcción) sin que Oscar lo pida explícitamente — quedan aquí registrados para no perderlos, siguiendo el mismo criterio de "confirmar necesidad real antes de construir" ya aplicado en Equipo/roles.
 
 **Actualización (2026-08-30, fin de la Tercera ronda):** Oscar pidió seguir con la lista completa, en el orden dado — los 5 ítems quedaron completos el mismo día: Conocimiento, Flujo (con su pasada extra de íconos/animación/LEDs), Sitio web, Velocidad de respuesta, Auto-reanudar y Palabras de handoff. Sin pendientes de esta ronda. Los únicos temas del backlog general que siguen abiertos son White-label y Marketplace (Agencia, sin caso de uso real confirmado) y los canales bloqueados por credenciales (WhatsApp/Meta).
+
+## Cuarta ronda: widgets de costo real en `/admin` (2026-08-30)
+
+Oscar pidió, fuera de la lista anterior: *"en el Dashboard de administrador quiero widgets de indicación de billing, de cloudfare, de los LLM, configurado y lo que sea que me esté generando costó."*
+
+| Ítem | Estado | Nota |
+|---|---|---|
+| Costo real de OpenAI/LLM en `/admin` | **Completa (2026-08-30)** | Cerró 3 huecos de instrumentación reales (Whisper, Vision, embeddings nunca se registraban en `usage_log`), tabla de precios pública verificada (`src/costs.ts`), desglose por tenant/modelo, "este mes" y total histórico — ver `CLAUDE.md` y memoria `project_cost_widgets`. |
+| Costo real de Cloudflare en `/admin` | **Pendiente** | Oscar confirmó que quiere montarlo ("Sí, quiero montarlo"). Requiere que Oscar cree un API Token de Cloudflare (Account Analytics Read) — no arrancado todavía, placeholder visible en la UI mientras tanto. |
+
+No se prioriza el resto del backlog general (White-label, Marketplace, canales bloqueados por credenciales) sin pedido explícito de Oscar.

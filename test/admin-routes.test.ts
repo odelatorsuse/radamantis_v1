@@ -3,7 +3,7 @@ import { adminApp } from "../src/admin/routes";
 import { hashPassword } from "../src/passwords";
 
 vi.mock("../src/rag/embeddings", () => ({
-  embedText: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+  embedText: vi.fn().mockResolvedValue({ embedding: [0.1, 0.2, 0.3], totalTokens: 5 }),
 }));
 
 const SESSION_SECRET = "test-admin-session-secret";
@@ -98,8 +98,12 @@ describe("adminApp tenant detail + settings", () => {
 });
 
 describe("adminApp channels (Etapa 9 — auto-registro de webhook)", () => {
+  // vi.restoreAllMocks() también limpiaba el mock de embedText definido a
+  // nivel de módulo (vi.mock arriba), rompiendo tests de OTROS describe
+  // blocks más adelante en este archivo — solo hace falta deshacer los
+  // vi.stubGlobal("fetch", ...) de este bloque, no todos los mocks.
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("POST /tenants/:id/channels registra el webhook automáticamente para telegram", async () => {

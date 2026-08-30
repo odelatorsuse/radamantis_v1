@@ -7,10 +7,20 @@
 // va directo a OpenAI con fetch, sin SDK — D5 (LLMProvider) cubre
 // completions de chat de texto, no hay equivalente multimodal ahí todavía.
 
-export async function transcribeVoice(apiKey: string, audio: ArrayBuffer, mimeType: string): Promise<string> {
+export interface TranscriptionResult {
+  text: string;
+  // Agencia ("widgets de costo real"): whisper-1 se factura por minuto de
+  // audio, no por tokens — se pide verbose_json específicamente para tener
+  // la duración REAL que devuelve OpenAI, nunca una estimación por tamaño
+  // de archivo.
+  durationSeconds: number;
+}
+
+export async function transcribeVoice(apiKey: string, audio: ArrayBuffer, mimeType: string): Promise<TranscriptionResult> {
   const form = new FormData();
   form.append("file", new Blob([audio], { type: mimeType }), "audio.ogg");
   form.append("model", "whisper-1");
+  form.append("response_format", "verbose_json");
 
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
@@ -20,8 +30,8 @@ export async function transcribeVoice(apiKey: string, audio: ArrayBuffer, mimeTy
   if (!res.ok) {
     throw new Error(`OpenAI transcription falló: ${res.status} ${await res.text()}`);
   }
-  const data = (await res.json()) as { text: string };
-  return data.text;
+  const data = (await res.json()) as { text: string; duration: number };
+  return { text: data.text, durationSeconds: data.duration };
 }
 
 // Describe la imagen en vez de dejar que el modelo principal "vea" los
@@ -35,7 +45,13 @@ const IMAGE_DESCRIPTION_PROMPT =
   'conclusión definitiva sobre qué le pasa — solo describe lo observable (ej. "un perro con una mancha ' +
   'roja en la pata trasera izquierda", nunca "tiene una infección").';
 
-export async function describeImage(apiKey: string, image: ArrayBuffer, mimeType: string): Promise<string> {
+export interface ImageDescriptionResult {
+  description: string;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+export async function describeImage(apiKey: string, image: ArrayBuffer, mimeType: string): Promise<ImageDescriptionResult> {
   const base64 = arrayBufferToBase64(image);
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -57,8 +73,15 @@ export async function describeImage(apiKey: string, image: ArrayBuffer, mimeType
   if (!res.ok) {
     throw new Error(`OpenAI vision falló: ${res.status} ${await res.text()}`);
   }
-  const data = (await res.json()) as { choices: { message: { content: string } }[] };
-  return data.choices[0].message.content;
+  const data = (await res.json()) as {
+    choices: { message: { content: string } }[];
+    usage?: { prompt_tokens: number; completion_tokens: number };
+  };
+  return {
+    description: data.choices[0].message.content,
+    promptTokens: data.usage?.prompt_tokens ?? 0,
+    completionTokens: data.usage?.completion_tokens ?? 0,
+  };
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {

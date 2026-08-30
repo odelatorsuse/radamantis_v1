@@ -1,3 +1,4 @@
+import { estimateCostUsd } from "../costs";
 import { getTenantSettings, type TenantSettings } from "../tenants";
 
 export interface TenantSummary {
@@ -9,11 +10,22 @@ export interface TenantSummary {
   open_handoffs: number;
 }
 
+export interface UsageModelBreakdown {
+  model: string;
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  audioSeconds: number;
+  estimatedCostUsd: number;
+}
+
 export interface UsageSummary {
   tenant_id: string;
   requests: number;
   prompt_tokens: number;
   completion_tokens: number;
+  estimatedCostUsd: number;
+  breakdown: UsageModelBreakdown[];
 }
 
 export interface HandoffRow {
@@ -114,15 +126,65 @@ export async function resolveHandoff(db: D1Database, id: number): Promise<void> 
   await db.prepare("UPDATE handoffs SET resolved_at = datetime('now') WHERE id = ? AND resolved_at IS NULL").bind(id).run();
 }
 
-export async function getUsageSummary(db: D1Database): Promise<UsageSummary[]> {
+interface UsageLogRow {
+  tenant_id: string;
+  model: string;
+  requests: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  audio_seconds: number | null;
+}
+
+async function queryUsageSummary(db: D1Database, sinceClause: string): Promise<UsageSummary[]> {
   const { results } = await db
     .prepare(
-      `SELECT tenant_id, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens
+      `SELECT tenant_id, model, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(audio_seconds) AS audio_seconds
        FROM usage_log
-       GROUP BY tenant_id`,
+       ${sinceClause}
+       GROUP BY tenant_id, model`,
     )
-    .all<UsageSummary>();
-  return results;
+    .all<UsageLogRow>();
+
+  const byTenant = new Map<string, UsageSummary>();
+  for (const row of results) {
+    const cost = estimateCostUsd({
+      model: row.model,
+      promptTokens: row.prompt_tokens,
+      completionTokens: row.completion_tokens,
+      audioSeconds: row.audio_seconds,
+    });
+    let summary = byTenant.get(row.tenant_id);
+    if (!summary) {
+      summary = { tenant_id: row.tenant_id, requests: 0, prompt_tokens: 0, completion_tokens: 0, estimatedCostUsd: 0, breakdown: [] };
+      byTenant.set(row.tenant_id, summary);
+    }
+    summary.requests += row.requests;
+    summary.prompt_tokens += row.prompt_tokens;
+    summary.completion_tokens += row.completion_tokens;
+    summary.estimatedCostUsd += cost;
+    summary.breakdown.push({
+      model: row.model,
+      requests: row.requests,
+      promptTokens: row.prompt_tokens,
+      completionTokens: row.completion_tokens,
+      audioSeconds: row.audio_seconds ?? 0,
+      estimatedCostUsd: cost,
+    });
+  }
+  return Array.from(byTenant.values());
+}
+
+// Agencia ("widgets de costo real en /admin"): costo real de OpenAI, no
+// inventado — se calcula sobre uso real (usage_log) con las tarifas
+// públicas de src/costs.ts. all-time y "este mes" (SQLite-vs-SQLite,
+// nunca ISO-vs-JS-Date, mismo patrón seguro ya establecido en el
+// proyecto para columnas con datetime('now') por default).
+export async function getUsageSummary(db: D1Database): Promise<UsageSummary[]> {
+  return queryUsageSummary(db, "");
+}
+
+export async function getUsageSummaryThisMonth(db: D1Database): Promise<UsageSummary[]> {
+  return queryUsageSummary(db, "WHERE date(created_at) >= date('now', 'start of month')");
 }
 
 

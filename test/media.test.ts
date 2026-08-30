@@ -4,17 +4,20 @@ import { describeImage, transcribeVoice } from "../src/media";
 describe("transcribeVoice", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("devuelve el texto transcrito por Whisper", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ text: "hola doctor" }) });
+  it("devuelve el texto transcrito y la duración real (verbose_json)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ text: "hola doctor", duration: 4.2 }) });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await transcribeVoice("sk-test", new ArrayBuffer(4), "audio/ogg");
 
-    expect(result).toBe("hola doctor");
+    expect(result).toEqual({ text: "hola doctor", durationSeconds: 4.2 });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.openai.com/v1/audio/transcriptions",
       expect.objectContaining({ method: "POST" }),
     );
+    const [, init] = fetchMock.mock.calls[0];
+    const form = init.body as FormData;
+    expect(form.get("response_format")).toBe("verbose_json");
   });
 
   it("lanza un error claro si OpenAI falla", async () => {
@@ -27,16 +30,19 @@ describe("transcribeVoice", () => {
 describe("describeImage", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("devuelve la descripción generada por el modelo de visión", async () => {
+  it("devuelve la descripción y los tokens reales usados", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ choices: [{ message: { content: "un perro con una mancha roja en la pata" } }] }),
+      json: async () => ({
+        choices: [{ message: { content: "un perro con una mancha roja en la pata" } }],
+        usage: { prompt_tokens: 300, completion_tokens: 20 },
+      }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await describeImage("sk-test", new ArrayBuffer(4), "image/jpeg");
 
-    expect(result).toBe("un perro con una mancha roja en la pata");
+    expect(result).toEqual({ description: "un perro con una mancha roja en la pata", promptTokens: 300, completionTokens: 20 });
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(init.body as string);
     expect(body.model).toBe("gpt-4o-mini");

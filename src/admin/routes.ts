@@ -23,6 +23,7 @@ import {
   createTenant,
   getTenantDetail,
   getUsageSummary,
+  getUsageSummaryThisMonth,
   listHandoffs,
   listTenants,
   logAdminAction,
@@ -296,8 +297,10 @@ adminApp.post("/handoffs/:id/resolve", async (c) => {
 });
 
 adminApp.get("/usage", requireAdmin, async (c) => {
-  const usage = await getUsageSummary(c.env.DB);
-  return c.json({ usage });
+  const [usage, usageThisMonth] = await Promise.all([getUsageSummary(c.env.DB), getUsageSummaryThisMonth(c.env.DB)]);
+  const totalEstimatedCostUsd = usage.reduce((sum, u) => sum + u.estimatedCostUsd, 0);
+  const totalEstimatedCostUsdThisMonth = usageThisMonth.reduce((sum, u) => sum + u.estimatedCostUsd, 0);
+  return c.json({ usage, usageThisMonth, totalEstimatedCostUsd, totalEstimatedCostUsdThisMonth });
 });
 
 // Herramienta de prueba: habla directo con el ConversationAgent real de un

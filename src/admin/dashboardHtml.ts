@@ -75,6 +75,26 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   h2.section-title { font-size: 1rem; color: var(--accent); margin: 28px 0 12px; display: flex; align-items: center; gap: 8px; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; }
 
+  /* --- Conectores (Agencia: canales disponibles con íconos reales) --- */
+  .connector-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; margin-bottom: 6px; }
+  .connector-card {
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+    cursor: pointer; transition: border-color 150ms ease, transform 150ms ease; text-align: center;
+  }
+  .connector-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+  .connector-card.selected { border-color: var(--primary); background: rgba(91, 141, 239, 0.1); }
+  .connector-card.disabled { cursor: default; opacity: 0.45; }
+  .connector-card.disabled:hover { border-color: var(--border); transform: none; }
+  .connector-icon { width: 36px; height: 36px; flex-shrink: 0; }
+  .connector-icon svg { width: 100%; height: 100%; }
+  .connector-name { font-size: 0.82rem; font-weight: 600; }
+  .connector-status { font-size: 0.68rem; color: var(--text-muted); }
+  .channel-row-icon { width: 20px; height: 20px; flex-shrink: 0; display: inline-flex; }
+  .channel-row-icon svg { width: 100%; height: 100%; }
+  .channel-field-group { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 200px; }
+  .channel-field-group label { font-size: 0.72rem; color: var(--text-muted); }
+
   /* --- Bot cards --- */
   .bot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 8px; }
   .bot-card {
@@ -323,22 +343,16 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
       <h2 class="section-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11.5 4.5"/><path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L12.5 19.5"/></svg>
-        Alta de canal
+        Conectores
       </h2>
       <div class="panel">
-        <form id="channelForm">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Elige un canal, completa sus datos y vincúlalo a un tenant. Un mismo tenant puede tener varios canales conectados a la vez.</p>
+        <div class="connector-grid" id="connectorGrid"></div>
+        <form id="channelForm" style="margin-top:16px;flex-wrap:wrap">
           <select id="channelTenant"></select>
-          <select id="channelType">
-            <option value="telegram">Telegram</option>
-            <option value="web">Sitio web (widget)</option>
-            <option value="whatsapp" disabled>WhatsApp (próximamente)</option>
-            <option value="instagram" disabled>Instagram (próximamente)</option>
-            <option value="messenger" disabled>Messenger (próximamente)</option>
-          </select>
-          <input id="channelExternalId" placeholder="token del bot / id externo" required style="flex:1" />
+          <div id="channelFieldsContainer" style="display:flex;gap:8px;flex:1;flex-wrap:wrap"></div>
           <button type="submit">Vincular canal</button>
         </form>
-        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0" id="channelExternalIdHint">Para Telegram: el bot token de BotFather.</p>
         <p class="error" id="channelError"></p>
       </div>
     </div>
@@ -759,9 +773,29 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       t.channels.forEach(function (ch) {
         var row = document.createElement("form");
         row.style.marginBottom = "6px";
+        var icon = document.createElement("span");
+        icon.className = "channel-row-icon";
+        icon.innerHTML = CHANNEL_ICONS[ch.channel] || "";
         var label = document.createElement("span");
         label.className = "bot-badge";
-        label.textContent = ch.channel;
+        label.textContent = (CHANNEL_CONFIG[ch.channel] || {}).name || ch.channel;
+        // Facebook/Instagram necesitan mostrar también el routeKey (Page ID
+        // / Instagram Business Account ID) — sirve para resolver el tenant
+        // en el webhook COMPARTIDO de Meta, no es el token en sí.
+        var routeKeyInput = null;
+        // Facebook/Instagram se conectan por OAuth ahora (CHANNEL_CONFIG ya
+        // no lista routeKey como campo manual), pero su route_key real
+        // (Page ID / Instagram Business Account ID) sigue viviendo en la
+        // fila — mostrarlo aquí sirve para inspeccionar/corregir a mano.
+        var hasRouteKey = ch.channel === "facebook" || ch.channel === "instagram";
+        if (hasRouteKey) {
+          routeKeyInput = document.createElement("input");
+          routeKeyInput.type = "text";
+          routeKeyInput.value = ch.route_key || "";
+          routeKeyInput.placeholder = "Page ID / IG Business Account ID";
+          routeKeyInput.style.flex = "1";
+          routeKeyInput.disabled = !isAdmin();
+        }
         var tokenInput = document.createElement("input");
         tokenInput.type = "text";
         tokenInput.value = ch.external_id;
@@ -770,7 +804,9 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         // un operador el input queda de solo lectura, sin botón, en vez de
         // dejarlo enviar y recibir un 403.
         tokenInput.disabled = !isAdmin();
+        row.appendChild(icon);
         row.appendChild(label);
+        if (routeKeyInput) row.appendChild(routeKeyInput);
         row.appendChild(tokenInput);
         if (!isAdmin()) { channelsList.appendChild(row); return; }
         var updateBtn = document.createElement("button");
@@ -781,9 +817,11 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         row.addEventListener("submit", function (e) {
           e.preventDefault();
           var msgEl = document.getElementById("channelUpdateError");
+          var putBody = { externalId: tokenInput.value };
+          if (routeKeyInput) putBody.routeKey = routeKeyInput.value;
           api("/tenants/" + tenantId + "/channels/" + ch.channel, {
             method: "PUT",
-            body: JSON.stringify({ externalId: tokenInput.value }),
+            body: JSON.stringify(putBody),
           })
             .then(function (data) {
               if (data.webhookRegistered) {
@@ -1147,30 +1185,145 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       .catch(function (err) { document.getElementById("tenantError").textContent = err.message; });
   });
 
-  var CHANNEL_HINTS = {
-    telegram: { hint: "Para Telegram: el bot token de BotFather.", placeholder: "token del bot / id externo" },
-    web: { hint: "Para Sitio web: el dominio exacto donde vas a poner el widget (ej. https://minegocio.com) — es lo único que autoriza las peticiones del widget, así que debe coincidir exacto.", placeholder: "https://minegocio.com" },
+  // Agencia (conectores Facebook/Instagram): íconos REALES de cada
+  // producto (Simple Icons, no logos de Forja) — Oscar pidió explícitamente
+  // que se pudieran identificar de un vistazo. CHANNEL_CONFIG define los
+  // campos que pide cada canal: Telegram/Sitio web necesitan uno solo,
+  // Facebook/Instagram necesitan dos (el Page Access Token que se le pasa
+  // a ChannelProvider.sendMessage, y un routeKey — Page ID o Instagram
+  // Business Account ID — que solo sirve para resolver el tenant cuando
+  // llega un evento al webhook COMPARTIDO de Meta, ver src/index.ts).
+  var CHANNEL_ICONS = {
+    telegram: '<svg viewBox="0 0 24 24" fill="#26A5E4" xmlns="http://www.w3.org/2000/svg"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>',
+    web: '<svg viewBox="0 0 24 24" fill="none" stroke="#5B8DEF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+    facebook: '<svg viewBox="0 0 24 24" fill="#1877F2" xmlns="http://www.w3.org/2000/svg"><path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z"/></svg>',
+    instagram: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="radIgGrad" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#FFDC80"/><stop offset="25%" stop-color="#FCAF45"/><stop offset="50%" stop-color="#E1306C"/><stop offset="75%" stop-color="#C13584"/><stop offset="100%" stop-color="#5851DB"/></linearGradient></defs><path fill="url(#radIgGrad)" d="M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077"/></svg>',
+    whatsapp: '<svg viewBox="0 0 24 24" fill="#25D366" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>'
   };
 
-  document.getElementById("channelType").addEventListener("change", function () {
-    var cfg = CHANNEL_HINTS[this.value] || CHANNEL_HINTS.telegram;
-    document.getElementById("channelExternalIdHint").textContent = cfg.hint;
-    document.getElementById("channelExternalId").placeholder = cfg.placeholder;
-  });
+  var CHANNEL_CONFIG = {
+    telegram: {
+      name: "Telegram",
+      fields: [{ key: "externalId", label: "Bot token", placeholder: "token del bot", hint: "El bot token que te da @BotFather en Telegram." }],
+    },
+    web: {
+      name: "Sitio web",
+      fields: [{ key: "externalId", label: "Dominio permitido", placeholder: "https://minegocio.com", hint: "El dominio exacto donde vas a poner el widget — es lo único que autoriza las peticiones, debe coincidir exacto." }],
+    },
+    facebook: {
+      name: "Facebook Messenger",
+      oauth: true,
+      oauthNote: "Selecciona el tenant y conecta con Facebook — detecta tu Página automáticamente (y tu Instagram, si está vinculado a la misma Página).",
+      fields: [],
+    },
+    instagram: {
+      name: "Instagram",
+      oauth: true,
+      oauthNote: "Instagram se conecta con el mismo botón de Facebook — tu cuenta debe estar vinculada a una Página. Si ya conectaste Facebook para este tenant y tu Instagram estaba vinculado, ya quedó conectado también.",
+      fields: [],
+    },
+    whatsapp: { name: "WhatsApp", comingSoon: true, fields: [] },
+  };
+
+  var CHANNEL_ORDER = ["telegram", "web", "facebook", "instagram", "whatsapp"];
+  var selectedChannel = "telegram";
+
+  function renderConnectorGrid() {
+    var grid = document.getElementById("connectorGrid");
+    grid.innerHTML = "";
+    CHANNEL_ORDER.forEach(function (channel) {
+      var cfg = CHANNEL_CONFIG[channel];
+      var card = document.createElement("div");
+      card.className = "connector-card" + (channel === selectedChannel ? " selected" : "") + (cfg.comingSoon ? " disabled" : "");
+      var icon = document.createElement("div");
+      icon.className = "connector-icon";
+      icon.innerHTML = CHANNEL_ICONS[channel];
+      var name = document.createElement("div");
+      name.className = "connector-name";
+      name.textContent = cfg.name;
+      card.appendChild(icon);
+      card.appendChild(name);
+      if (cfg.comingSoon) {
+        var status = document.createElement("div");
+        status.className = "connector-status";
+        status.textContent = "Próximamente";
+        card.appendChild(status);
+      } else {
+        card.addEventListener("click", function () {
+          selectedChannel = channel;
+          renderConnectorGrid();
+          renderChannelFields();
+        });
+      }
+      grid.appendChild(card);
+    });
+  }
+
+  function renderChannelFields() {
+    var container = document.getElementById("channelFieldsContainer");
+    container.innerHTML = "";
+    var cfg = CHANNEL_CONFIG[selectedChannel];
+    var submitBtn = document.querySelector("#channelForm button[type=submit]");
+
+    // Agencia (conectores Facebook/Instagram, autoservicio real): en vez de
+    // pedir Page ID/token a mano, un botón abre el login real de Facebook
+    // — el callback (index.ts) detecta la Página y el Instagram vinculado
+    // solo. Nada que pegar, nada que buscar en el Graph API Explorer.
+    if (cfg.oauth) {
+      submitBtn.style.display = "none";
+      var note = document.createElement("p");
+      note.style.cssText = "font-size:0.8rem;color:var(--text-muted);margin:2px 0 8px;flex-basis:100%";
+      note.textContent = cfg.oauthNote;
+      var connectBtn = document.createElement("button");
+      connectBtn.type = "button";
+      connectBtn.textContent = "Conectar con Facebook";
+      connectBtn.onclick = function () {
+        var tenantId = document.getElementById("channelTenant").value;
+        var msgEl = document.getElementById("channelError");
+        if (!tenantId) { msgEl.className = "error"; msgEl.textContent = "Elige un tenant primero."; return; }
+        msgEl.textContent = "";
+        api("/tenants/" + tenantId + "/channels/meta/connect-url").then(function (data) {
+          window.open(data.url, "_blank");
+        }).catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+      };
+      container.appendChild(note);
+      container.appendChild(connectBtn);
+      return;
+    }
+
+    submitBtn.style.display = "";
+    cfg.fields.forEach(function (field) {
+      var group = document.createElement("div");
+      group.className = "channel-field-group";
+      var label = document.createElement("label");
+      label.textContent = field.label;
+      var input = document.createElement("input");
+      input.dataset.fieldKey = field.key;
+      input.placeholder = field.placeholder;
+      input.title = field.hint;
+      input.required = true;
+      group.appendChild(label);
+      group.appendChild(input);
+      container.appendChild(group);
+    });
+  }
+
+  renderConnectorGrid();
+  renderChannelFields();
 
   document.getElementById("channelForm").addEventListener("submit", function (e) {
     e.preventDefault();
+    if (CHANNEL_CONFIG[selectedChannel].oauth) return;
     var tenantId = document.getElementById("channelTenant").value;
-    var channelType = document.getElementById("channelType").value;
-    var externalId = document.getElementById("channelExternalId").value;
-    var body = { channel: channelType, externalId: externalId };
+    var body = { channel: selectedChannel };
+    document.querySelectorAll("#channelFieldsContainer input").forEach(function (input) {
+      body[input.dataset.fieldKey] = input.value;
+    });
     var msgEl = document.getElementById("channelError");
     api("/tenants/" + tenantId + "/channels", { method: "POST", body: JSON.stringify(body) })
       .then(function (data) {
+        var channelType = selectedChannel;
         document.getElementById("channelForm").reset();
-        document.getElementById("channelType").value = "telegram";
-        document.getElementById("channelExternalIdHint").textContent = CHANNEL_HINTS.telegram.hint;
-        document.getElementById("channelExternalId").placeholder = CHANNEL_HINTS.telegram.placeholder;
         if (channelType === "web") {
           var snippet = '<script src="' + window.location.origin + '/widget.js" data-tenant="' + tenantId + '"><\\/script>';
           msgEl.className = "success-msg";
@@ -1178,7 +1331,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           msgEl.querySelector("code:last-child").textContent = snippet;
         } else if (data.webhookRegistered) {
           msgEl.className = "success-msg";
-          msgEl.textContent = "Canal vinculado y webhook registrado en Telegram.";
+          msgEl.textContent = "Canal vinculado y webhook registrado.";
         } else if (data.webhookError) {
           msgEl.className = "error";
           msgEl.textContent = "Canal vinculado, pero el webhook falló: " + data.webhookError;

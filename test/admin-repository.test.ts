@@ -27,16 +27,22 @@ describe("createTenant", () => {
 });
 
 describe("addChannelBinding", () => {
-  it("inserta channel, external_id y tenant_id en ese orden para channel_bindings", async () => {
+  it("inserta channel, external_id, tenant_id y route_key en ese orden para channel_bindings", async () => {
     const { db, prepare, bind } = mockDb();
     await addChannelBinding(db, "vet-ch", "telegram", "bot-token");
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO channel_bindings"));
-    expect(bind).toHaveBeenCalledWith("telegram", "bot-token", "vet-ch");
+    expect(bind).toHaveBeenCalledWith("telegram", "bot-token", "vet-ch", null);
+  });
+
+  it("guarda route_key cuando se pasa (Facebook/Instagram: Page ID / IG Business Account ID)", async () => {
+    const { db, bind } = mockDb();
+    await addChannelBinding(db, "vet-ch", "facebook", "page-token", "page-123");
+    expect(bind).toHaveBeenCalledWith("facebook", "page-token", "vet-ch", "page-123");
   });
 });
 
 describe("updateChannelBinding", () => {
-  it("borra la fila vieja por tenant_id+channel e inserta la nueva con el token actualizado", async () => {
+  function mockDbWithExistingRouteKey(existingRouteKey: string | null) {
     const prepareCalls: string[] = [];
     const bindCalls: unknown[][] = [];
     const db = {
@@ -45,18 +51,42 @@ describe("updateChannelBinding", () => {
         return {
           bind: (...args: unknown[]) => {
             bindCalls.push(args);
-            return { run: vi.fn().mockResolvedValue({ success: true }) };
+            return {
+              run: vi.fn().mockResolvedValue({ success: true }),
+              first: vi.fn().mockResolvedValue({ route_key: existingRouteKey }),
+            };
           },
         };
       }),
     } as unknown as D1Database;
+    return { db, prepareCalls, bindCalls };
+  }
+
+  it("borra la fila vieja por tenant_id+channel e inserta la nueva con el token actualizado", async () => {
+    const { db, prepareCalls, bindCalls } = mockDbWithExistingRouteKey(null);
 
     await updateChannelBinding(db, "vet-ch", "telegram", "token-nuevo");
 
-    expect(prepareCalls[0]).toContain("DELETE FROM channel_bindings");
-    expect(bindCalls[0]).toEqual(["vet-ch", "telegram"]);
-    expect(prepareCalls[1]).toContain("INSERT INTO channel_bindings");
-    expect(bindCalls[1]).toEqual(["telegram", "token-nuevo", "vet-ch"]);
+    expect(prepareCalls[1]).toContain("DELETE FROM channel_bindings");
+    expect(bindCalls[1]).toEqual(["vet-ch", "telegram"]);
+    expect(prepareCalls[2]).toContain("INSERT INTO channel_bindings");
+    expect(bindCalls[2]).toEqual(["telegram", "token-nuevo", "vet-ch", null]);
+  });
+
+  it("preserva el route_key existente si no se pasa uno nuevo (rotar token no debe pedir de nuevo el Page ID)", async () => {
+    const { db, bindCalls } = mockDbWithExistingRouteKey("page-123");
+
+    await updateChannelBinding(db, "vet-ch", "facebook", "token-nuevo");
+
+    expect(bindCalls[2]).toEqual(["facebook", "token-nuevo", "vet-ch", "page-123"]);
+  });
+
+  it("usa el route_key nuevo cuando se pasa explícitamente", async () => {
+    const { db, bindCalls } = mockDbWithExistingRouteKey("page-vieja");
+
+    await updateChannelBinding(db, "vet-ch", "facebook", "token-nuevo", "page-nueva");
+
+    expect(bindCalls[2]).toEqual(["facebook", "token-nuevo", "vet-ch", "page-nueva"]);
   });
 });
 
@@ -101,7 +131,7 @@ describe("getTenantDetail", () => {
         if (sql.includes("FROM channel_bindings")) {
           return {
             bind: () => ({
-              all: async () => ({ results: [{ channel: "telegram", external_id: "tok" }] }),
+              all: async () => ({ results: [{ channel: "telegram", external_id: "tok", route_key: null }] }),
             }),
           };
         }
@@ -122,7 +152,7 @@ describe("getTenantDetail", () => {
       openHandoffs: 1,
       status: "necesita_atencion",
     });
-    expect(detail?.channels).toEqual([{ channel: "telegram", external_id: "tok" }]);
+    expect(detail?.channels).toEqual([{ channel: "telegram", external_id: "tok", route_key: null }]);
   });
 });
 

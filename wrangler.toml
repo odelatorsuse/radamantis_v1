@@ -25,6 +25,17 @@ compatibility_date = "2026-08-01"
 #                                  GraphQL Analytics API de Cloudflare y estimar el costo real de
 #                                  Workers/D1/Durable Objects/Vectorize. account_id NO es secreto,
 #                                  va en [vars] abajo.
+#   META_APP_ID / META_APP_SECRET   — Agencia (conectores Facebook/Instagram): una sola App de
+#                                      Meta compartida (developers.facebook.com), igual patrón que
+#                                      Google Calendar — cada tenant autoriza SU PROPIA Página vía
+#                                      "Conectar con Facebook" (OAuth, src/channels/metaOauth.ts).
+#                                      META_APP_ID no es sensible en sí (va en la URL de login que
+#                                      abre el navegador) pero se guarda como secret por
+#                                      consistencia con GOOGLE_OAUTH_CLIENT_ID.
+#   META_VERIFY_TOKEN                — string aleatorio propio (no lo da Meta) — se pega en la
+#                                      configuración del Webhook de la App de Meta, valida el GET
+#                                      de verificación inicial (/webhook/meta). Compartido para
+#                                      toda la plataforma, igual que TELEGRAM_WEBHOOK_SECRET.
 #
 # Nota Etapa 4: el token de cada bot de Telegram YA NO es un secret de Worker.
 # Vive en la tabla channel_bindings (D1) — alta de canal = INSERT, no

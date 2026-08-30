@@ -6,6 +6,7 @@ import { DEFAULT_BUSINESS_HOURS, type WeeklyBusinessHours } from "../calendar/bu
 import { buildGoogleAuthUrl } from "../calendar/oauth";
 import { deleteCalendarConnection, getCalendarConnection } from "../calendar/repository";
 import { getChannelProvider, listSupportedChannels } from "../channels/registry";
+import { buildFacebookAuthUrl } from "../channels/metaOauth";
 import { fetchCloudflareUsageThisMonth } from "../cloudflareAnalytics";
 import { estimateCloudflareCostUsd } from "../cloudflareCosts";
 import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
@@ -44,6 +45,7 @@ interface Env {
   GOOGLE_OAUTH_CLIENT_ID: string;
   CLOUDFLARE_API_TOKEN: string;
   CLOUDFLARE_ACCOUNT_ID: string;
+  META_APP_ID: string;
 }
 
 // Agencia (widgets de costo, parte Cloudflare): deben coincidir con
@@ -132,11 +134,11 @@ async function registerChannelWebhook(origin: string, channel: string, externalI
 
 adminApp.post("/tenants/:id/channels", async (c) => {
   const tenantId = c.req.param("id");
-  const body = await c.req.json<{ channel?: string; externalId?: string }>();
+  const body = await c.req.json<{ channel?: string; externalId?: string; routeKey?: string }>();
   if (!body.channel || !body.externalId) {
     return c.json({ error: "channel y externalId son requeridos" }, 400);
   }
-  await addChannelBinding(c.env.DB, tenantId, body.channel, body.externalId);
+  await addChannelBinding(c.env.DB, tenantId, body.channel, body.externalId, body.routeKey);
   await logAdminAction(c.env.DB, {
     tenantId,
     actor: c.get("actor"),
@@ -154,11 +156,11 @@ adminApp.post("/tenants/:id/channels", async (c) => {
 adminApp.put("/tenants/:id/channels/:channel", requireAdmin, async (c) => {
   const tenantId = c.req.param("id");
   const channel = c.req.param("channel");
-  const body = await c.req.json<{ externalId?: string }>();
+  const body = await c.req.json<{ externalId?: string; routeKey?: string }>();
   if (!body.externalId) {
     return c.json({ error: "externalId es requerido" }, 400);
   }
-  await updateChannelBinding(c.env.DB, tenantId, channel, body.externalId);
+  await updateChannelBinding(c.env.DB, tenantId, channel, body.externalId, body.routeKey);
   await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "update_channel_binding", details: { channel } });
 
   const origin = new URL(c.req.url).origin;
@@ -277,6 +279,17 @@ adminApp.delete("/tenants/:id/calendar", async (c) => {
   await deleteCalendarConnection(c.env.DB, tenantId);
   await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "disconnect_calendar" });
   return c.json({ ok: true });
+});
+
+// Agencia (conectores Facebook/Instagram, autoservicio): mismo patrón que
+// /calendar/connect-url — arma la URL de autorización de Meta, el dashboard
+// la abre en una pestaña nueva. El callback público vive en index.ts
+// (/oauth/facebook/callback), Meta redirige el navegador ahí directo.
+adminApp.get("/tenants/:id/channels/meta/connect-url", (c) => {
+  const origin = new URL(c.req.url).origin;
+  const redirectUri = `${origin}/oauth/facebook/callback`;
+  const url = buildFacebookAuthUrl(c.env.META_APP_ID, redirectUri, c.req.param("id"));
+  return c.json({ url });
 });
 
 adminApp.get("/verticals", (c) => {

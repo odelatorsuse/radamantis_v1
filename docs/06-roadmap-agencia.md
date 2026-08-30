@@ -113,3 +113,16 @@ Oscar pidió, fuera de la lista anterior: *"en el Dashboard de administrador qui
 | Costo real de Cloudflare en `/admin` | **Completa (2026-08-30)** | Oscar creó su propio API Token (Account Analytics Read); GraphQL Analytics API real de Cloudflare, esquema verificado por introspección en vivo — ver `CLAUDE.md` y memoria `project_cost_widgets`. |
 
 No se prioriza el resto del backlog general (White-label, Marketplace, canales bloqueados por credenciales) sin pedido explícito de Oscar.
+
+## Quinta ronda: conectores Facebook Messenger + Instagram (2026-08-30)
+
+Oscar ya tiene cuentas de prueba (Página de Facebook + Instagram) para la veterinaria y pidió que **todos** los conectores vivan en una sola sección del panel, con íconos reales de cada producto — desbloquea el ítem "Conexiones → WhatsApp/Instagram/Messenger" de la tabla de la Tercera ronda, empezando por Meta (WhatsApp sigue bloqueado, sin credenciales).
+
+| Ítem | Estado | Nota |
+|---|---|---|
+| Backend Facebook Messenger + Instagram (modo clásico) | **Completa (2026-08-30)** | Webhook compartido de Meta, `channel_bindings.route_key` nuevo para resolver tenant — ver `CLAUDE.md` y memoria `project_meta_connectors`. |
+| Sección "Conectores" en `/admin` con íconos reales | **Completa (2026-08-30)** | Simple Icons (Telegram/Facebook/Instagram/WhatsApp), WhatsApp marcada "Próximamente". |
+| Autoservicio real ("Conectar con Facebook", OAuth) | **Completa (2026-08-30)** | Pedido explícito de Oscar tras la primera vuelta manual: "no te lo voy a pedir directamente, debe ser fácil" — mismo patrón que Google Calendar. |
+| Primera conexión real end-to-end | **Pendiente** | Oscar necesita crear la App en developers.facebook.com y darle a Claude App ID/App Secret. |
+
+No se prioriza el resto del backlog general sin pedido explícito de Oscar.

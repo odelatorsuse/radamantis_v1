@@ -84,6 +84,30 @@ export async function resolveTenant(
   return { tenantId: row.tenant_id, verticalId: row.vertical_id };
 }
 
+// Agencia (conectores Facebook/Instagram): Meta usa un webhook COMPARTIDO
+// para todos los tenants — el payload solo trae el Page ID / Instagram
+// Business Account ID (route_key), nunca el access token. Variante de
+// resolveTenant para ese caso; el resto de los canales sigue resolviendo
+// por external_id como siempre.
+export async function resolveTenantByRouteKey(
+  db: D1Database,
+  channel: string,
+  routeKey: string,
+): Promise<ResolvedTenant | null> {
+  const row = await db
+    .prepare(
+      `SELECT cb.tenant_id AS tenant_id, t.vertical_id AS vertical_id
+       FROM channel_bindings cb
+       JOIN tenants t ON t.id = cb.tenant_id
+       WHERE cb.channel = ? AND cb.route_key = ?`,
+    )
+    .bind(channel, routeKey)
+    .first<{ tenant_id: string; vertical_id: string }>();
+
+  if (!row) return null;
+  return { tenantId: row.tenant_id, verticalId: row.vertical_id };
+}
+
 // Inverso de resolveTenant: dado un tenant+canal, el external_id (para
 // Telegram, el bot token) — lo necesita el barrido de no-shows para poder
 // mandar un mensaje saliente, ya que ahí no llega ninguna request entrante

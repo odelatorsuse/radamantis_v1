@@ -41,6 +41,7 @@ export interface HandoffRow {
 export interface ChannelBindingRow {
   channel: string;
   external_id: string;
+  route_key: string | null;
 }
 
 export interface TenantDetail {
@@ -87,10 +88,11 @@ export async function addChannelBinding(
   tenantId: string,
   channel: string,
   externalId: string,
+  routeKey?: string | null,
 ): Promise<void> {
   await db
-    .prepare("INSERT INTO channel_bindings (channel, external_id, tenant_id) VALUES (?, ?, ?)")
-    .bind(channel, externalId, tenantId)
+    .prepare("INSERT INTO channel_bindings (channel, external_id, tenant_id, route_key) VALUES (?, ?, ?, ?)")
+    .bind(channel, externalId, tenantId, routeKey ?? null)
     .run();
 }
 
@@ -103,14 +105,19 @@ export async function updateChannelBinding(
   tenantId: string,
   channel: string,
   newExternalId: string,
+  routeKey?: string | null,
 ): Promise<void> {
+  const existing = await db
+    .prepare("SELECT route_key FROM channel_bindings WHERE tenant_id = ? AND channel = ?")
+    .bind(tenantId, channel)
+    .first<{ route_key: string | null }>();
   await db
     .prepare("DELETE FROM channel_bindings WHERE tenant_id = ? AND channel = ?")
     .bind(tenantId, channel)
     .run();
   await db
-    .prepare("INSERT INTO channel_bindings (channel, external_id, tenant_id) VALUES (?, ?, ?)")
-    .bind(channel, newExternalId, tenantId)
+    .prepare("INSERT INTO channel_bindings (channel, external_id, tenant_id, route_key) VALUES (?, ?, ?, ?)")
+    .bind(channel, newExternalId, tenantId, routeKey ?? existing?.route_key ?? null)
     .run();
 }
 
@@ -198,7 +205,7 @@ export async function getTenantDetail(db: D1Database, tenantId: string): Promise
   const [settings, channels, counts] = await Promise.all([
     getTenantSettings(db, tenantId),
     db
-      .prepare("SELECT channel, external_id FROM channel_bindings WHERE tenant_id = ?")
+      .prepare("SELECT channel, external_id, route_key FROM channel_bindings WHERE tenant_id = ?")
       .bind(tenantId)
       .all<ChannelBindingRow>(),
     db

@@ -3,6 +3,10 @@ import { adminApp } from "./admin/routes";
 import { DASHBOARD_HTML } from "./admin/dashboardHtml";
 import { exchangeCodeForTokens } from "./calendar/oauth";
 import { saveCalendarConnection } from "./calendar/repository";
+import { getChannelProvider } from "./channels/registry";
+import { parseMetaWebhookMessages, verifyMetaSignature } from "./channels/meta";
+import { exchangeCodeForUserToken, exchangeForLongLivedUserToken, listManagedPages } from "./channels/metaOauth";
+import { updateChannelBinding } from "./admin/repository";
 import { CONSOLE_HTML } from "./client/consoleHtml";
 import { setAlertChatId } from "./client/repository";
 import { clientApp } from "./client/routes";
@@ -12,7 +16,7 @@ import { runAutoResumeSweep } from "./handoffAutoResume";
 import { describeImage, transcribeVoice } from "./media";
 import { runNoShowSweep } from "./noShowSweep";
 import { downloadTelegramFile, extractIncomingMessage, sendTelegramMessage } from "./telegram";
-import { getTenantSettings, resolveTenant } from "./tenants";
+import { getChannelExternalId, getTenantSettings, resolveTenant, resolveTenantByRouteKey } from "./tenants";
 import { logUsage } from "./usage";
 import { WIDGET_JS, widgetApp } from "./widget";
 
@@ -26,6 +30,9 @@ interface Env {
   GOOGLE_OAUTH_CLIENT_ID: string;
   GOOGLE_OAUTH_CLIENT_SECRET: string;
   CLIENT_SESSION_SECRET: string;
+  META_APP_SECRET: string;
+  META_VERIFY_TOKEN: string;
+  META_APP_ID: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -91,6 +98,57 @@ app.get("/oauth/google/callback", async (c) => {
     return c.html("<p>Calendario conectado correctamente. Puedes cerrar esta pestaña y volver al panel.</p>");
   } catch (err) {
     return c.html(`<p>Error al conectar el calendario: ${(err as Error).message}</p>`, 500);
+  }
+});
+
+// Agencia (conectores Facebook/Instagram, autoservicio real): callback
+// público del "Conectar con Facebook" — Meta redirige el navegador aquí
+// directo (sin nuestro Bearer token), con ?state=tenantId, igual que el
+// callback de Google Calendar arriba. Detecta automáticamente la Página
+// (la primera, si administra varias) y su Instagram vinculado, sin que el
+// dueño del negocio tenga que buscar ningún ID a mano.
+app.get("/oauth/facebook/callback", async (c) => {
+  const code = c.req.query("code");
+  const tenantId = c.req.query("state");
+  const error = c.req.query("error");
+
+  if (error) {
+    return c.html(`<p>Autorización cancelada o rechazada: ${error}. Puedes cerrar esta pestaña.</p>`);
+  }
+  if (!code || !tenantId) {
+    return c.text("Faltan parámetros code/state en el callback de Facebook", 400);
+  }
+
+  const origin = new URL(c.req.url).origin;
+  const redirectUri = `${origin}/oauth/facebook/callback`;
+  try {
+    const shortLivedToken = await exchangeCodeForUserToken(c.env.META_APP_ID, c.env.META_APP_SECRET, redirectUri, code);
+    const longLivedToken = await exchangeForLongLivedUserToken(c.env.META_APP_ID, c.env.META_APP_SECRET, shortLivedToken);
+    const pages = await listManagedPages(longLivedToken);
+
+    if (pages.length === 0) {
+      return c.html("<p>No encontramos ninguna Página de Facebook que administres con este usuario. Verifica que aceptaste todos los permisos.</p>");
+    }
+
+    // v1: el caso común es un negocio con una sola Página — se conecta esa
+    // automáticamente en vez de pedir que elija, para que sea un solo paso.
+    const page = pages[0];
+    await updateChannelBinding(c.env.DB, tenantId, "facebook", page.pageAccessToken, page.pageId);
+    await getChannelProvider("facebook")?.registerWebhook?.(origin, page.pageAccessToken, "");
+
+    let summary = `Página "${page.pageName}" conectada a Facebook Messenger.`;
+    if (page.instagramBusinessAccountId) {
+      await updateChannelBinding(c.env.DB, tenantId, "instagram", page.pageAccessToken, page.instagramBusinessAccountId);
+      await getChannelProvider("instagram")?.registerWebhook?.(origin, page.pageAccessToken, "");
+      summary += " Tu Instagram vinculado también quedó conectado.";
+    }
+    if (pages.length > 1) {
+      summary += ` (Administras ${pages.length} Páginas — se conectó "${page.pageName}" por ser la primera; avísale a Oscar si necesitas otra.)`;
+    }
+
+    return c.html(`<p>${summary} Puedes cerrar esta pestaña y volver al panel.</p>`);
+  } catch (err) {
+    return c.html(`<p>Error al conectar Facebook/Instagram: ${(err as Error).message}</p>`, 500);
   }
 });
 
@@ -195,6 +253,57 @@ app.post("/webhook/telegram/:botToken", async (c) => {
   // ambos casos el bot se calla a propósito.
   if (replyText) {
     await sendTelegramMessage(botToken, incoming.chatId, replyText);
+  }
+
+  return c.text("ok");
+});
+
+// Agencia (conectores Facebook/Instagram): a diferencia de Telegram (un
+// webhook por bot, el token va en la URL), Meta usa UN webhook COMPARTIDO
+// para todos los tenants y ambos canales — el App Dashboard de Meta solo
+// admite registrar una URL. La verificación inicial (GET) confirma la
+// propiedad del endpoint ante Meta; META_VERIFY_TOKEN es un secreto
+// compartido de la plataforma (no por tenant), igual que
+// TELEGRAM_WEBHOOK_SECRET.
+app.get("/webhook/meta", (c) => {
+  const mode = c.req.query("hub.mode");
+  const token = c.req.query("hub.verify_token");
+  const challenge = c.req.query("hub.challenge");
+  if (mode === "subscribe" && token === c.env.META_VERIFY_TOKEN && challenge) {
+    return c.text(challenge);
+  }
+  return c.text("Forbidden", 403);
+});
+
+app.post("/webhook/meta", async (c) => {
+  const rawBody = await c.req.text();
+  const valid = await verifyMetaSignature(c.env.META_APP_SECRET, rawBody, c.req.header("X-Hub-Signature-256"));
+  if (!valid) return c.text("Unauthorized", 401);
+
+  const body = JSON.parse(rawBody) as { object?: string };
+  const channel = body.object === "instagram" ? "instagram" : body.object === "page" ? "facebook" : null;
+  if (!channel) return c.text("ok");
+
+  const messages = parseMetaWebhookMessages(body, body.object as "page" | "instagram");
+  for (const msg of messages) {
+    const resolved = await resolveTenantByRouteKey(c.env.DB, channel, msg.pageId);
+    if (!resolved) continue; // Page/cuenta no vinculada a ningún tenant — se ignora en silencio.
+    const { tenantId, verticalId } = resolved;
+    const externalId = await getChannelExternalId(c.env.DB, tenantId, channel);
+    if (!externalId) continue;
+
+    const chatId = msg.senderId;
+    const conversationKey = `${tenantId}:${channel}:${chatId}`;
+    const stub = c.env.AGENT.get(c.env.AGENT.idFromName(conversationKey));
+    const agentRes = await stub.fetch("https://agent/reply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenantId, channel, chatId, userText: msg.text, verticalId }),
+    });
+    const { replyText } = await agentRes.json<{ replyText: string | null }>();
+    if (replyText) {
+      await getChannelProvider(channel)?.sendMessage(externalId, chatId, replyText);
+    }
   }
 
   return c.text("ok");

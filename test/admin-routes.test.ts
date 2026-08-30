@@ -193,6 +193,8 @@ describe("adminApp channels/supported (Etapa 10 — multi-canal)", () => {
       channels: [
         { channel: "telegram", displayName: "Telegram" },
         { channel: "web", displayName: "Sitio web" },
+        { channel: "facebook", displayName: "Facebook Messenger" },
+        { channel: "instagram", displayName: "Instagram" },
       ],
     });
   });

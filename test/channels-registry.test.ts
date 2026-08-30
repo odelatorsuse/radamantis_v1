@@ -14,17 +14,30 @@ describe("getChannelProvider", () => {
     expect(provider?.displayName).toBe("Sitio web");
   });
 
+  it("devuelve el adaptador de facebook", () => {
+    const provider = getChannelProvider("facebook");
+    expect(provider?.channel).toBe("facebook");
+    expect(provider?.displayName).toBe("Facebook Messenger");
+  });
+
+  it("devuelve el adaptador de instagram", () => {
+    const provider = getChannelProvider("instagram");
+    expect(provider?.channel).toBe("instagram");
+    expect(provider?.displayName).toBe("Instagram");
+  });
+
   it("devuelve null para un canal sin adaptador todavía (ej. whatsapp)", () => {
     expect(getChannelProvider("whatsapp")).toBeNull();
     expect(getChannelProvider("messenger")).toBeNull();
-    expect(getChannelProvider("instagram")).toBeNull();
   });
 });
 
 describe("listSupportedChannels", () => {
-  it("incluye telegram y sitio web", () => {
+  it("incluye todos los canales con adaptador real", () => {
     const channels = listSupportedChannels().map((p) => p.channel);
     expect(channels).toContain("telegram");
     expect(channels).toContain("web");
+    expect(channels).toContain("facebook");
+    expect(channels).toContain("instagram");
   });
 });

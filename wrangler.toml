@@ -20,12 +20,23 @@ compatibility_date = "2026-08-01"
 #                                  sesión de /api/client/* (src/client/session.ts). Un solo
 #                                  secret compartido para firmar/verificar — las contraseñas
 #                                  de cada tenant_user viven en D1, hasheadas (src/client/passwords.ts).
+#   CLOUDFLARE_API_TOKEN         — Agencia ("widgets de costo real en /admin", parte Cloudflare):
+#                                  API Token propio (Account Analytics Read) para consultar la
+#                                  GraphQL Analytics API de Cloudflare y estimar el costo real de
+#                                  Workers/D1/Durable Objects/Vectorize. account_id NO es secreto,
+#                                  va en [vars] abajo.
 #
 # Nota Etapa 4: el token de cada bot de Telegram YA NO es un secret de Worker.
 # Vive en la tabla channel_bindings (D1) — alta de canal = INSERT, no
 # `wrangler secret put` ni deploy (D8). El token llega en la URL del webhook
 # (`/webhook/telegram/:botToken`, patrón recomendado por Telegram) y sirve a
 # la vez para resolver el tenant y para llamar a la API de Telegram.
+
+# Agencia ("widgets de costo real en /admin", parte Cloudflare): account_id
+# no es un secreto (es visible en cualquier dashboard de Cloudflare de Oscar),
+# así que vive en texto plano aquí en vez de como wrangler secret.
+[vars]
+CLOUDFLARE_ACCOUNT_ID = "cfc24686341fce4a626f661c6a265402"
 
 # Etapa 2-4 — D1: usage_log (costos), messages (memoria) y tenants/channel_bindings (D2/D3).
 [[d1_databases]]

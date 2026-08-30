@@ -6,6 +6,8 @@ import { DEFAULT_BUSINESS_HOURS, type WeeklyBusinessHours } from "../calendar/bu
 import { buildGoogleAuthUrl } from "../calendar/oauth";
 import { deleteCalendarConnection, getCalendarConnection } from "../calendar/repository";
 import { getChannelProvider, listSupportedChannels } from "../channels/registry";
+import { fetchCloudflareUsageThisMonth } from "../cloudflareAnalytics";
+import { estimateCloudflareCostUsd } from "../cloudflareCosts";
 import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
 import { hashPassword, verifyPassword } from "../passwords";
 import { runColdLeadSweep } from "../coldLeads";
@@ -40,7 +42,18 @@ interface Env {
   OPENAI_API_KEY: string;
   TELEGRAM_WEBHOOK_SECRET: string;
   GOOGLE_OAUTH_CLIENT_ID: string;
+  CLOUDFLARE_API_TOKEN: string;
+  CLOUDFLARE_ACCOUNT_ID: string;
 }
+
+// Agencia (widgets de costo, parte Cloudflare): deben coincidir con
+// database_id/index_name en wrangler.toml — no hay forma de leerlos desde
+// los bindings de Worker en tiempo de ejecución, así que quedan fijos
+// aquí, igual que otras constantes de infraestructura del proyecto (ej.
+// TELEGRAM_BUFFER_SECONDS en index.ts).
+const RADAMANTIS_SCRIPT_NAME = "radamantis";
+const RADAMANTIS_D1_DATABASE_ID = "37fd29a1-ddc2-4aa4-ab16-4d44648d0abb";
+const RADAMANTIS_VECTORIZE_INDEX_NAME = "radamantis-kb";
 
 type Variables = { role: AdminRole; actor: string };
 
@@ -301,6 +314,31 @@ adminApp.get("/usage", requireAdmin, async (c) => {
   const totalEstimatedCostUsd = usage.reduce((sum, u) => sum + u.estimatedCostUsd, 0);
   const totalEstimatedCostUsdThisMonth = usageThisMonth.reduce((sum, u) => sum + u.estimatedCostUsd, 0);
   return c.json({ usage, usageThisMonth, totalEstimatedCostUsd, totalEstimatedCostUsdThisMonth });
+});
+
+// Agencia ("widgets de costo real en /admin", parte Cloudflare): mes en
+// curso solamente — la GraphQL Analytics API de Cloudflare no retiene
+// histórico completo desde el inicio del proyecto como sí lo hace
+// usage_log para OpenAI. Nunca falla con 500 genérico: si Cloudflare
+// Analytics no responde (token no configurado, error de red), se
+// devuelve un error explícito para que la UI lo distinga de "$0 real".
+adminApp.get("/cloudflare-usage", requireAdmin, async (c) => {
+  if (!c.env.CLOUDFLARE_API_TOKEN || !c.env.CLOUDFLARE_ACCOUNT_ID) {
+    return c.json({ error: "Cloudflare Analytics no está configurado (falta CLOUDFLARE_API_TOKEN)" }, 501);
+  }
+  try {
+    const metrics = await fetchCloudflareUsageThisMonth({
+      apiToken: c.env.CLOUDFLARE_API_TOKEN,
+      accountId: c.env.CLOUDFLARE_ACCOUNT_ID,
+      scriptName: RADAMANTIS_SCRIPT_NAME,
+      d1DatabaseId: RADAMANTIS_D1_DATABASE_ID,
+      vectorizeIndexName: RADAMANTIS_VECTORIZE_INDEX_NAME,
+    });
+    const cost = estimateCloudflareCostUsd(metrics);
+    return c.json({ metrics, totalEstimatedCostUsd: cost.totalUsd, lines: cost.lines });
+  } catch (err) {
+    return c.json({ error: "No se pudo consultar Cloudflare Analytics", detail: String(err) }, 502);
+  }
 });
 
 // Herramienta de prueba: habla directo con el ConversationAgent real de un

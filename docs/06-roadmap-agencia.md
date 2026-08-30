@@ -110,6 +110,6 @@ Oscar pidió, fuera de la lista anterior: *"en el Dashboard de administrador qui
 | Ítem | Estado | Nota |
 |---|---|---|
 | Costo real de OpenAI/LLM en `/admin` | **Completa (2026-08-30)** | Cerró 3 huecos de instrumentación reales (Whisper, Vision, embeddings nunca se registraban en `usage_log`), tabla de precios pública verificada (`src/costs.ts`), desglose por tenant/modelo, "este mes" y total histórico — ver `CLAUDE.md` y memoria `project_cost_widgets`. |
-| Costo real de Cloudflare en `/admin` | **Pendiente** | Oscar confirmó que quiere montarlo ("Sí, quiero montarlo"). Requiere que Oscar cree un API Token de Cloudflare (Account Analytics Read) — no arrancado todavía, placeholder visible en la UI mientras tanto. |
+| Costo real de Cloudflare en `/admin` | **Completa (2026-08-30)** | Oscar creó su propio API Token (Account Analytics Read); GraphQL Analytics API real de Cloudflare, esquema verificado por introspección en vivo — ver `CLAUDE.md` y memoria `project_cost_widgets`. |
 
 No se prioriza el resto del backlog general (White-label, Marketplace, canales bloqueados por credenciales) sin pedido explícito de Oscar.

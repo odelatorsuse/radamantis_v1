@@ -383,8 +383,14 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     </div>
 
     <h2 class="section-title">Cloudflare</h2>
+    <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Costo ESTIMADO de infraestructura (Workers, D1, Durable Objects, Vectorize) solo del mes en curso — Cloudflare no expone histórico completo por esta vía. El almacenamiento de Durable Objects es a nivel de TODA la cuenta (la API de Cloudflare no permite aislarlo por Worker).</p>
+    <div class="metrics" id="cloudflareCostMetrics"></div>
     <div class="panel" id="cloudflareUsagePanel">
-      <p class="empty">Todavía no está conectado. Pídele a Claude Code que lo configure — necesita un API Token de tu cuenta de Cloudflare con permiso de Analytics.</p>
+      <table id="cloudflareUsageTable">
+        <thead><tr><th>Métrica</th><th>Uso</th><th>Costo estimado</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="cloudflareUsageEmpty" style="display:none">Todavía no está conectado. Pídele a Claude Code que lo configure — necesita un API Token de tu cuenta de Cloudflare con permiso de Analytics.</p>
     </div>
   </section>
 
@@ -591,11 +597,37 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     });
   }
 
+  // Agencia ("widgets de costo real en /admin", parte Cloudflare): igual
+  // que loadUsage(), pero sobre GET /cloudflare-usage — si el token de
+  // Cloudflare no está configurado o falla la consulta, se muestra el
+  // mensaje de "no disponible" en vez de un número inventado.
+  function loadCloudflareUsage() {
+    return api("/cloudflare-usage").then(function (data) {
+      var metricsEl = document.getElementById("cloudflareCostMetrics");
+      metricsEl.innerHTML = "";
+      metricsEl.appendChild(metricTile(formatUsd(data.totalEstimatedCostUsd), "Estimado este mes"));
+
+      var tbody = document.querySelector("#cloudflareUsageTable tbody");
+      tbody.innerHTML = "";
+      document.getElementById("cloudflareUsageEmpty").style.display = "none";
+      data.lines.forEach(function (l) {
+        var tr = document.createElement("tr");
+        tr.innerHTML = "<td>" + l.label + "</td><td>" + l.usage.toLocaleString("en-US") + " " + l.unit + "</td><td>" + formatUsd(l.estimatedCostUsd) + "</td>";
+        tbody.appendChild(tr);
+      });
+    }).catch(function () {
+      document.getElementById("cloudflareCostMetrics").innerHTML = "";
+      document.querySelector("#cloudflareUsageTable tbody").innerHTML = "";
+      document.getElementById("cloudflareUsageEmpty").style.display = "block";
+    });
+  }
+
   function loadAll() {
     loadVerticals().then(loadTenants).catch(function () {});
     loadHandoffs().catch(function () {});
     if (isAdmin()) {
       loadUsage().catch(function () {});
+      loadCloudflareUsage();
       loadTeam().catch(function () {});
     }
   }

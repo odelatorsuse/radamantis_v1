@@ -8,6 +8,7 @@ import { setAlertChatId } from "./client/repository";
 import { clientApp } from "./client/routes";
 import { runColdLeadSweep } from "./coldLeads";
 import { runDailyReportSweep } from "./dailyReport";
+import { runAutoResumeSweep } from "./handoffAutoResume";
 import { describeImage, transcribeVoice } from "./media";
 import { runNoShowSweep } from "./noShowSweep";
 import { downloadTelegramFile, extractIncomingMessage, sendTelegramMessage } from "./telegram";
@@ -196,5 +197,6 @@ export default {
     ctx.waitUntil(runNoShowSweep(env.DB));
     ctx.waitUntil(runDailyReportSweep(env.DB));
     ctx.waitUntil(runColdLeadSweep(env.DB));
+    ctx.waitUntil(runAutoResumeSweep(env.DB));
   },
 };

@@ -305,3 +305,10 @@ export async function setLeadReengagementEnabled(db: D1Database, tenantId: strin
   const current = await getTenantSettings(db, tenantId);
   await upsertTenantSettings(db, tenantId, { ...current, leadReengagementEnabled: enabled });
 }
+
+// Agencia ("auto-reanudar tras pausa por handoff"): opt-in, mismo criterio
+// que arriba.
+export async function setAutoResumeHandoffEnabled(db: D1Database, tenantId: string, enabled: boolean): Promise<void> {
+  const current = await getTenantSettings(db, tenantId);
+  await upsertTenantSettings(db, tenantId, { ...current, autoResumeHandoffEnabled: enabled });
+}

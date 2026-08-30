@@ -306,6 +306,16 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
         </label>
         <div class="error" id="leadReengagementMsg"></div>
       </div>
+
+      <div class="panel">
+        <h3>Reanudar el bot automáticamente</h3>
+        <p class="page-sub" style="margin-bottom:14px;">Cuando pausas una conversación (o el bot la pausa porque el cliente pidió un humano), normalmente se queda así hasta que la reanudes tú. Si activas esto, el bot vuelve a responder solo después de 3 horas. Apagado por default — actívalo solo si prefieres que el bot retome la conversación en vez de quedarse pausada indefinidamente.</p>
+        <label style="display:flex;align-items:center;gap:10px;font-size:0.92rem;cursor:pointer;">
+          <input type="checkbox" id="autoResumeToggle" style="width:auto;" />
+          Reanudar automáticamente después de 3 horas
+        </label>
+        <div class="error" id="autoResumeMsg"></div>
+      </div>
     </section>
 
     <section class="tab-view" id="tab-mejoras">
@@ -708,6 +718,23 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       });
   });
 
+  function loadAutoResume() {
+    api("/auto-resume-handoff").then(function (data) {
+      document.getElementById("autoResumeToggle").checked = !!data.enabled;
+    });
+  }
+
+  document.getElementById("autoResumeToggle").addEventListener("change", function (e) {
+    var msgEl = document.getElementById("autoResumeMsg");
+    api("/auto-resume-handoff", { method: "PUT", body: JSON.stringify({ enabled: e.target.checked }) })
+      .then(function () { msgEl.className = "success-msg"; msgEl.textContent = "Guardado."; })
+      .catch(function (err) {
+        msgEl.className = "error";
+        msgEl.textContent = err.message;
+        e.target.checked = !e.target.checked;
+      });
+  });
+
   function renderConversationList(conversations) {
     var list = document.getElementById("conversationList");
     list.innerHTML = "";
@@ -810,6 +837,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     loadAlertSettings();
     loadReviewLink();
     loadLeadReengagement();
+    loadAutoResume();
     loadKbGaps();
     loadKbDocs();
     loadConversations();

@@ -96,7 +96,7 @@ Clasificación de lo visto en las 5 páginas:
 | Configuración → tono/idioma/moneda | Ya cubierto | Sin cambios, ya existe en `/admin`. |
 | Configuración → multi-LLM / BYO API key / selector de modelo | **Sigue diferido** | Decisión explícita de Oscar ya tomada (primera ronda): key compartida por ahora. No se re-abre a menos que Oscar lo pida explícitamente. |
 | Configuración → velocidad de respuesta (agrupar mensajes seguidos antes de responder) | **Completa (2026-08-30)** | Solo Telegram, 12s fijos (Durable Object Alarms) — ver `CLAUDE.md`. |
-| Configuración → auto-reanudar el bot tras N horas de pausa | **Nuevo, roadmap — no construido** | Hoy la pausa por handoff es indefinida hasta reanudar a mano. |
+| Configuración → auto-reanudar el bot tras N horas de pausa | **Completa (2026-08-30)** | Opt-in, apagado por default, 3h fijas — ver `CLAUDE.md`. |
 | Configuración → palabras que activan handoff, editables por tenant | **Nuevo, roadmap — no construido** | Hoy `detectsHandoffRequest` es una lista fija en código (`src/handoff.ts`), igual para todos los tenants. |
 
 No se prioriza nada de esta lista más allá de "Conocimiento" (ya en construcción) sin que Oscar lo pida explícitamente — quedan aquí registrados para no perderlos, siguiendo el mismo criterio de "confirmar necesidad real antes de construir" ya aplicado en Equipo/roles.

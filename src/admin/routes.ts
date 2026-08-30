@@ -9,6 +9,7 @@ import { getChannelProvider, listSupportedChannels } from "../channels/registry"
 import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
 import { hashPassword, verifyPassword } from "../passwords";
 import { runColdLeadSweep } from "../coldLeads";
+import { runAutoResumeSweep } from "../handoffAutoResume";
 import { runDailyReportSweep } from "../dailyReport";
 import { hasRecentActivity } from "../messages";
 import { runNoShowSweep } from "../noShowSweep";
@@ -227,6 +228,7 @@ adminApp.put("/tenants/:id/settings", async (c) => {
     alertActivationCode: current.alertActivationCode,
     reviewLink: current.reviewLink,
     leadReengagementEnabled: current.leadReengagementEnabled,
+    autoResumeHandoffEnabled: current.autoResumeHandoffEnabled,
   };
   await upsertTenantSettings(c.env.DB, tenantId, settings);
   await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "update_tenant_settings", details: settings });
@@ -350,6 +352,13 @@ adminApp.post("/daily-report-sweep", async (c) => {
 // otros barridos — probarlo bajo demanda sin esperar 5 horas.
 adminApp.post("/cold-lead-sweep", async (c) => {
   const result = await runColdLeadSweep(c.env.DB);
+  return c.json(result);
+});
+
+// Agencia ("auto-reanudar tras pausa por handoff"): mismo patrón — probarlo
+// bajo demanda sin esperar 3 horas.
+adminApp.post("/auto-resume-sweep", async (c) => {
+  const result = await runAutoResumeSweep(c.env.DB);
   return c.json(result);
 });
 

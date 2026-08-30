@@ -18,6 +18,7 @@ import {
   getUpcomingAppointments,
   getWeeklyActivity,
   listConversations,
+  setAutoResumeHandoffEnabled,
   setLeadReengagementEnabled,
   setReviewLink,
 } from "./repository";
@@ -237,5 +238,19 @@ clientApp.get("/lead-reengagement", async (c) => {
 clientApp.put("/lead-reengagement", async (c) => {
   const body = await c.req.json<{ enabled?: boolean }>();
   await setLeadReengagementEnabled(c.env.DB, c.get("tenantId"), body.enabled === true);
+  return c.json({ ok: true });
+});
+
+// Agencia ("auto-reanudar tras pausa por handoff"): opt-in, mismo patrón
+// que arriba — apagado por default para no interrumpir si el negocio
+// sigue atendiendo al cliente por su cuenta.
+clientApp.get("/auto-resume-handoff", async (c) => {
+  const settings = await getTenantSettings(c.env.DB, c.get("tenantId"));
+  return c.json({ enabled: settings.autoResumeHandoffEnabled });
+});
+
+clientApp.put("/auto-resume-handoff", async (c) => {
+  const body = await c.req.json<{ enabled?: boolean }>();
+  await setAutoResumeHandoffEnabled(c.env.DB, c.get("tenantId"), body.enabled === true);
   return c.json({ ok: true });
 });

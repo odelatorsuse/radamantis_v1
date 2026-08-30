@@ -49,6 +49,7 @@ describe("getTenantSettings", () => {
       alert_activation_code: "ABCD1234",
       review_link: "https://g.page/r/tu-negocio/review",
       lead_reengagement_enabled: 1,
+      auto_resume_handoff_enabled: 0,
     });
     const bind = vi.fn().mockReturnValue({ first });
     const prepare = vi.fn().mockReturnValue({ bind });
@@ -65,6 +66,7 @@ describe("getTenantSettings", () => {
       alertActivationCode: "ABCD1234",
       reviewLink: "https://g.page/r/tu-negocio/review",
       leadReengagementEnabled: true,
+      autoResumeHandoffEnabled: false,
     });
   });
 });
@@ -88,6 +90,7 @@ describe("upsertTenantSettings", () => {
       alertActivationCode: "ABCD1234",
       reviewLink: "https://g.page/r/tu-negocio/review",
       leadReengagementEnabled: true,
+      autoResumeHandoffEnabled: false,
     });
 
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("ON CONFLICT (tenant_id) DO UPDATE"));
@@ -103,6 +106,7 @@ describe("upsertTenantSettings", () => {
       "ABCD1234",
       "https://g.page/r/tu-negocio/review",
       1,
+      0,
     );
   });
 });

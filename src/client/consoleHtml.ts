@@ -38,8 +38,9 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
   #authGate { max-width: 400px; margin: 90px auto; padding: 0 20px; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
   .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; justify-content: center; }
-  .brand .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--primary); }
+  .brand .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--primary); flex-shrink: 0; }
   .brand span { font-family: "Poppins", sans-serif; font-weight: 700; font-size: 1.3rem; }
+  .brand img.brand-logo { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
   label { display: block; font-size: 0.85rem; color: var(--text-muted); margin: 14px 0 4px; }
   input[type="email"], input[type="password"], input[type="text"], input[type="time"], textarea, select {
     width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; background: #fff; color: var(--text);
@@ -155,7 +156,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
 
 <div class="shell" id="shell">
   <aside class="sidebar">
-    <div class="brand"><span class="dot"></span><span>Radamantis</span></div>
+    <div class="brand" id="sidebarBrand"><span class="dot"></span><span>Radamantis</span></div>
     <div class="tenant-name" id="tenantNameLabel"></div>
     <button class="nav-item active" data-tab="resumen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="17" y="3" width="4" height="17" rx="1"/></svg>
@@ -184,6 +185,10 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     <button class="nav-item" data-tab="mejoras">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
       Mejoras
+    </button>
+    <button class="nav-item" data-tab="marca">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      Mi marca
     </button>
     <div class="sidebar-footer">
       <button class="btn-secondary" id="logoutBtn" style="width:100%;">Cerrar sesión</button>
@@ -334,6 +339,33 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       <div class="panel">
         <table id="kbGapsTable"><thead><tr><th>Pregunta</th><th>Fecha</th><th></th></tr></thead><tbody></tbody></table>
         <p class="empty" id="kbGapsEmpty" style="display:none;">No hay preguntas sin responder registradas — buena señal.</p>
+      </div>
+    </section>
+
+    <section class="tab-view" id="tab-marca">
+      <h1 class="page-title">Mi marca</h1>
+      <p class="page-sub">Personaliza cómo se ve esta consola — tu nombre, tu logo y tu color en vez de los de Radamantis. Ninguno es obligatorio: lo que dejes vacío usa el valor por default.</p>
+      <div class="panel">
+        <form id="brandingForm">
+          <label>Nombre para mostrar</label>
+          <input type="text" id="brandingName" placeholder="ej. Dr. Vet CH" />
+
+          <label>URL de tu logo</label>
+          <input type="text" id="brandingLogoUrl" placeholder="https://tusitio.com/logo.png" />
+          <p class="page-sub" style="margin:4px 0 0;">Cuadrado, idealmente 128×128px o más. Si la imagen no carga, se muestra el punto de color de siempre.</p>
+
+          <label>Color principal</label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="color" id="brandingColorPicker" style="width:44px;height:38px;padding:2px;" />
+            <input type="text" id="brandingColor" placeholder="#0E9F6E" style="max-width:140px;" />
+          </div>
+
+          <div style="margin-top:18px;display:flex;gap:10px;">
+            <button class="btn-primary" type="submit">Guardar</button>
+            <button class="btn-secondary" type="button" id="resetBrandingBtn">Quitar mi marca</button>
+          </div>
+          <div class="error" id="brandingMsg"></div>
+        </form>
       </div>
     </section>
 
@@ -760,6 +792,83 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
   });
 
+  // Agencia (White-label, por tenant): reconstruye el bloque de marca del
+  // sidebar cada vez (en vez de mutar el <img>/<span> existente) para que
+  // llamarla de nuevo tras guardar sea seguro sin rastrear qué elemento
+  // quedó en el DOM la vez anterior.
+  function applyBranding(data) {
+    var displayName = (data && data.brandName) || localStorage.getItem(STORAGE_TENANT) || "Radamantis";
+    document.getElementById("tenantNameLabel").textContent = displayName;
+    document.title = displayName + " · Mi consola";
+
+    var brandEl = document.getElementById("sidebarBrand");
+    brandEl.innerHTML = "";
+    if (data && data.brandLogoUrl) {
+      var img = document.createElement("img");
+      img.className = "brand-logo";
+      img.alt = displayName;
+      img.onerror = function () {
+        img.remove();
+        var dot = document.createElement("span");
+        dot.className = "dot";
+        brandEl.prepend(dot);
+      };
+      img.src = data.brandLogoUrl;
+      brandEl.appendChild(img);
+    } else {
+      var dot = document.createElement("span");
+      dot.className = "dot";
+      brandEl.appendChild(dot);
+    }
+    var nameSpan = document.createElement("span");
+    nameSpan.textContent = displayName;
+    brandEl.appendChild(nameSpan);
+
+    var color = (data && data.brandColor) || "#0E9F6E";
+    document.documentElement.style.setProperty("--primary", color);
+  }
+
+  function loadBranding() {
+    return api("/branding").then(function (data) {
+      applyBranding(data);
+      document.getElementById("brandingName").value = data.brandName || "";
+      document.getElementById("brandingLogoUrl").value = data.brandLogoUrl || "";
+      document.getElementById("brandingColor").value = data.brandColor || "";
+      document.getElementById("brandingColorPicker").value = data.brandColor || "#0e9f6e";
+    });
+  }
+
+  document.getElementById("brandingColorPicker").addEventListener("input", function (e) {
+    document.getElementById("brandingColor").value = e.target.value;
+  });
+
+  function saveBranding(patch) {
+    var msgEl = document.getElementById("brandingMsg");
+    return api("/branding", { method: "PUT", body: JSON.stringify(patch) })
+      .then(function () {
+        msgEl.className = "success-msg";
+        msgEl.textContent = "Guardado.";
+        return loadBranding();
+      })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  }
+
+  document.getElementById("brandingForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    saveBranding({
+      brandName: document.getElementById("brandingName").value,
+      brandLogoUrl: document.getElementById("brandingLogoUrl").value,
+      brandColor: document.getElementById("brandingColor").value,
+    });
+  });
+
+  document.getElementById("resetBrandingBtn").addEventListener("click", function () {
+    document.getElementById("brandingName").value = "";
+    document.getElementById("brandingLogoUrl").value = "";
+    document.getElementById("brandingColor").value = "";
+    saveBranding({ brandName: "", brandLogoUrl: "", brandColor: "" });
+  });
+
   function renderConversationList(conversations) {
     var list = document.getElementById("conversationList");
     list.innerHTML = "";
@@ -867,6 +976,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     loadKbGaps();
     loadKbDocs();
     loadConversations();
+    loadBranding();
   }
 
   document.getElementById("loginForm").addEventListener("submit", function (e) {

@@ -487,3 +487,54 @@ describe("GET/PUT /handoff-keywords (palabras de handoff editables por tenant)",
     expect(lastBind).toContain(JSON.stringify([]));
   });
 });
+
+describe("GET/PUT /branding (White-label por tenant)", () => {
+  it("GET devuelve null en los tres campos por default", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/branding", { headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ brandName: null, brandLogoUrl: null, brandColor: null });
+  });
+
+  it("PUT guarda nombre, logo y color, recortados", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/branding",
+      {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ brandName: "  Dr. Vet CH  ", brandLogoUrl: "https://ejemplo.com/logo.png", brandColor: "#0E9F6E" }),
+      },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const lastBind = (env.__bind as ReturnType<typeof vi.fn>).mock.calls[(env.__bind as ReturnType<typeof vi.fn>).mock.calls.length - 1];
+    expect(lastBind).toContain("Dr. Vet CH");
+    expect(lastBind).toContain("https://ejemplo.com/logo.png");
+    expect(lastBind).toContain("#0E9F6E");
+  });
+
+  it("PUT rechaza un color que no es hex válido", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/branding",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ brandColor: "verde" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT con campos vacíos los guarda como null (vuelve al default de Radamantis)", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/branding",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ brandName: "", brandLogoUrl: "", brandColor: "" }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const lastBind = (env.__bind as ReturnType<typeof vi.fn>).mock.calls[(env.__bind as ReturnType<typeof vi.fn>).mock.calls.length - 1];
+    expect(lastBind.slice(-3)).toEqual([null, null, null]);
+  });
+});

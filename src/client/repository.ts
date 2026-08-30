@@ -319,3 +319,17 @@ export async function setCustomHandoffKeywords(db: D1Database, tenantId: string,
   const current = await getTenantSettings(db, tenantId);
   await upsertTenantSettings(db, tenantId, { ...current, customHandoffKeywords: keywords });
 }
+
+// Agencia (White-label, por tenant en /console): el dueño del negocio pone
+// su propio nombre/logo/color — los tres opcionales, null vuelve a la
+// identidad visual de Radamantis por default.
+export interface BrandingPatch {
+  brandName: string | null;
+  brandLogoUrl: string | null;
+  brandColor: string | null;
+}
+
+export async function setBranding(db: D1Database, tenantId: string, branding: BrandingPatch): Promise<void> {
+  const current = await getTenantSettings(db, tenantId);
+  await upsertTenantSettings(db, tenantId, { ...current, ...branding });
+}

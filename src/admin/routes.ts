@@ -246,6 +246,9 @@ adminApp.put("/tenants/:id/settings", async (c) => {
     leadReengagementEnabled: current.leadReengagementEnabled,
     autoResumeHandoffEnabled: current.autoResumeHandoffEnabled,
     customHandoffKeywords: current.customHandoffKeywords,
+    brandName: current.brandName,
+    brandLogoUrl: current.brandLogoUrl,
+    brandColor: current.brandColor,
   };
   await upsertTenantSettings(c.env.DB, tenantId, settings);
   await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "update_tenant_settings", details: settings });

@@ -94,6 +94,9 @@ describe("upsertTenantSettings", () => {
       leadReengagementEnabled: true,
       autoResumeHandoffEnabled: false,
       customHandoffKeywords: ["quiero hablar con el doctor"],
+      brandName: "Dr. Vet CH",
+      brandLogoUrl: "https://ejemplo.com/logo.png",
+      brandColor: "#0E9F6E",
     });
 
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("ON CONFLICT (tenant_id) DO UPDATE"));
@@ -111,6 +114,9 @@ describe("upsertTenantSettings", () => {
       1,
       0,
       JSON.stringify(["quiero hablar con el doctor"]),
+      "Dr. Vet CH",
+      "https://ejemplo.com/logo.png",
+      "#0E9F6E",
     );
   });
 });

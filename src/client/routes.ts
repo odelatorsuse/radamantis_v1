@@ -19,6 +19,7 @@ import {
   getWeeklyActivity,
   listConversations,
   setAutoResumeHandoffEnabled,
+  setBranding,
   setCustomHandoffKeywords,
   setLeadReengagementEnabled,
   setReviewLink,
@@ -268,5 +269,30 @@ clientApp.put("/handoff-keywords", async (c) => {
   const body = await c.req.json<{ keywords?: string[] }>();
   const keywords = Array.isArray(body.keywords) ? body.keywords.map((k) => k.trim()).filter(Boolean) : [];
   await setCustomHandoffKeywords(c.env.DB, c.get("tenantId"), keywords);
+  return c.json({ ok: true });
+});
+
+// Agencia (White-label, alcance confirmado con Oscar: por tenant en
+// /console, no multi-agencia): el dueño del negocio ve SU propio nombre/
+// logo/color en su consola. Los tres son opcionales — vacío/ausente = null
+// = vuelve al default de Radamantis.
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+clientApp.get("/branding", async (c) => {
+  const settings = await getTenantSettings(c.env.DB, c.get("tenantId"));
+  return c.json({ brandName: settings.brandName, brandLogoUrl: settings.brandLogoUrl, brandColor: settings.brandColor });
+});
+
+clientApp.put("/branding", async (c) => {
+  const body = await c.req.json<{ brandName?: string | null; brandLogoUrl?: string | null; brandColor?: string | null }>();
+  const brandColor = body.brandColor?.trim() || null;
+  if (brandColor && !HEX_COLOR.test(brandColor)) {
+    return c.json({ error: "El color debe ser un hex válido, ej. #0E9F6E" }, 400);
+  }
+  await setBranding(c.env.DB, c.get("tenantId"), {
+    brandName: body.brandName?.trim() || null,
+    brandLogoUrl: body.brandLogoUrl?.trim() || null,
+    brandColor,
+  });
   return c.json({ ok: true });
 });

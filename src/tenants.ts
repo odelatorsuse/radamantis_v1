@@ -46,6 +46,14 @@ export interface TenantSettings {
   // HANDOFF_KEYWORDS (src/handoff.ts), nunca las reemplazan — un tenant
   // mal configurado no pierde el blindaje base.
   customHandoffKeywords: string[];
+  // Agencia (White-label, alcance: por tenant en /console, no multi-agencia
+  // — confirmado con Oscar): el dueño del negocio ve SU propio nombre/logo/
+  // color en su consola en vez de la identidad visual de Radamantis. Los
+  // tres son opcionales — null = usa el default de Radamantis, nunca se
+  // inventa un valor.
+  brandName: string | null;
+  brandLogoUrl: string | null;
+  brandColor: string | null;
 }
 
 export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
@@ -61,6 +69,9 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
   leadReengagementEnabled: false,
   autoResumeHandoffEnabled: false,
   customHandoffKeywords: [],
+  brandName: null,
+  brandLogoUrl: null,
+  brandColor: null,
 };
 
 // D2/D6: el router resuelve tenant Y vertical antes de instanciar el DO,
@@ -133,7 +144,7 @@ export async function getVerticalIdForTenant(db: D1Database, tenantId: string): 
 export async function getTenantSettings(db: D1Database, tenantId: string): Promise<TenantSettings> {
   const row = await db
     .prepare(
-      "SELECT tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, custom_handoff_keywords FROM tenant_settings WHERE tenant_id = ?",
+      "SELECT tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, custom_handoff_keywords, brand_name, brand_logo_url, brand_color FROM tenant_settings WHERE tenant_id = ?",
     )
     .bind(tenantId)
     .first<{
@@ -149,6 +160,9 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
       lead_reengagement_enabled: number;
       auto_resume_handoff_enabled: number;
       custom_handoff_keywords: string;
+      brand_name: string | null;
+      brand_logo_url: string | null;
+      brand_color: string | null;
     }>();
 
   if (!row) return DEFAULT_TENANT_SETTINGS;
@@ -165,6 +179,9 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
     leadReengagementEnabled: row.lead_reengagement_enabled === 1,
     autoResumeHandoffEnabled: row.auto_resume_handoff_enabled === 1,
     customHandoffKeywords: parseCustomHandoffKeywords(row.custom_handoff_keywords),
+    brandName: row.brand_name,
+    brandLogoUrl: row.brand_logo_url,
+    brandColor: row.brand_color,
   };
 }
 
@@ -176,8 +193,8 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
 export async function upsertTenantSettings(db: D1Database, tenantId: string, settings: TenantSettings): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, custom_handoff_keywords, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, custom_handoff_keywords, brand_name, brand_logo_url, brand_color, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT (tenant_id) DO UPDATE SET
          tone = excluded.tone,
          language = excluded.language,
@@ -191,6 +208,9 @@ export async function upsertTenantSettings(db: D1Database, tenantId: string, set
          lead_reengagement_enabled = excluded.lead_reengagement_enabled,
          auto_resume_handoff_enabled = excluded.auto_resume_handoff_enabled,
          custom_handoff_keywords = excluded.custom_handoff_keywords,
+         brand_name = excluded.brand_name,
+         brand_logo_url = excluded.brand_logo_url,
+         brand_color = excluded.brand_color,
          updated_at = excluded.updated_at`,
     )
     .bind(
@@ -207,6 +227,9 @@ export async function upsertTenantSettings(db: D1Database, tenantId: string, set
       settings.leadReengagementEnabled ? 1 : 0,
       settings.autoResumeHandoffEnabled ? 1 : 0,
       JSON.stringify(settings.customHandoffKeywords),
+      settings.brandName,
+      settings.brandLogoUrl,
+      settings.brandColor,
     )
     .run();
 }

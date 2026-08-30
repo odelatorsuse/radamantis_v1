@@ -125,6 +125,17 @@ Oscar ya tiene cuentas de prueba (Página de Facebook + Instagram) para la veter
 | Autoservicio real ("Conectar con Facebook", OAuth) | **Completa (2026-08-30)** | Pedido explícito de Oscar tras la primera vuelta manual: "no te lo voy a pedir directamente, debe ser fácil" — mismo patrón que Google Calendar. |
 | Configuración 100% desde el portal (sin `wrangler` ni pedirle a Claude) | **Completa (2026-08-30)** | Nueva tabla `platform_settings` + pestaña "Plataforma" en `/admin` — App ID/Secret/Verify Token de Meta editables ahí, ya no son secrets de Worker. |
 | Conectores dentro de cada cliente (no en el home) | **Completa (2026-08-30)** | Sección "Conectores" movida al detalle de cada tenant, sin selector de tenant — actúa sobre el tenant abierto. |
-| Primera conexión real end-to-end | **Pendiente** | Oscar necesita crear la App en developers.facebook.com y guardar App ID/App Secret desde la pestaña Plataforma. |
+| Primera conexión real end-to-end | **Pendiente** | Oscar necesita crear la App en developers.facebook.com y guardar App ID/App Secret desde la pestaña Plataforma. En pausa (2026-08-30): bloqueado porque no le están llegando los códigos de verificación de Meta — se retoma cuando lleguen. |
+
+## Sexta ronda: White-label por cliente (2026-08-30)
+
+Oscar pidió avanzar "White-label" (backlog aceptado desde la Segunda ronda, pero **DESCONOCIDO** — sin diseño ni caso de uso confirmado). Se le presentó la decisión real antes de construir: por cliente final en `/console` (acotado) vs. multi-agencia con `/admin` propio por revendedor (mucho más grande, sin caso de uso real hoy). Eligió por cliente final.
+
+| Ítem | Estado | Nota |
+|---|---|---|
+| Nombre/logo/color por tenant en `/console` | **Completa (2026-08-30)** | `tenant_settings.brand_name/brand_logo_url/brand_color`, pestaña "Mi marca" — ver `CLAUDE.md` y memoria `project_whitelabel_console`. |
+| White-label multi-agencia (revendedores externos) | **Sin construir, a propósito** | Requeriría un concepto de "agencia" por encima de tenant, logins/aislamiento separados — se documenta como el nivel más grande, para cuando exista una agencia real interesada. |
+
+Marketplace sigue **DESCONOCIDO**, sin pedido explícito de Oscar.
 
 No se prioriza el resto del backlog general sin pedido explícito de Oscar.

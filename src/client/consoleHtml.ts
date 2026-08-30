@@ -173,6 +173,10 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H8l-4 4V5z"/></svg>
       Conversaciones
     </button>
+    <button class="nav-item" data-tab="conocimiento">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Conocimiento
+    </button>
     <button class="nav-item" data-tab="salud">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h4l2-7 4 14 2-7h4"/></svg>
       Salud
@@ -239,6 +243,36 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
         <div class="panel conv-detail" id="conversationDetail">
           <p class="empty">Selecciona una conversación de la izquierda.</p>
         </div>
+      </div>
+    </section>
+
+    <section class="tab-view" id="tab-conocimiento">
+      <div class="topbar" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div>
+          <h1 class="page-title">Conocimiento</h1>
+          <p class="page-sub">Lo que tu bot sabe de tu negocio. Cada documento se indexa al guardar y el bot lo usa de inmediato.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button class="btn-secondary" id="kbReindexBtn">Reindexar todo</button>
+          <button class="btn-primary" id="kbNewBtn">+ Nuevo documento</button>
+        </div>
+      </div>
+      <p class="error" id="kbReindexMsg"></p>
+
+      <div class="panel" id="kbDocsPanel"></div>
+      <p class="empty" id="kbDocsEmpty" style="display:none;">Todavía no tienes documentos. Agrega el primero con "Nuevo documento".</p>
+
+      <div class="panel" id="kbFormPanel" style="display:none;">
+        <h3 id="kbFormTitle">Nuevo documento</h3>
+        <form id="kbForm">
+          <input type="text" id="kbTitleInput" placeholder="Título (ej. Preguntas Frecuentes)" style="width:100%;" required />
+          <textarea id="kbContentInput" placeholder="Contenido — lo que el bot debe saber sobre esto..." style="width:100%;min-height:160px;margin-top:10px;"></textarea>
+          <div style="margin-top:10px;display:flex;gap:8px;">
+            <button class="btn-primary" type="submit">Guardar</button>
+            <button class="btn-secondary" type="button" id="kbFormCancel">Cancelar</button>
+          </div>
+          <div class="error" id="kbFormMsg"></div>
+        </form>
       </div>
     </section>
 
@@ -551,6 +585,97 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     });
   }
 
+  var currentKbDocId = null; // null = creando uno nuevo; string = editando ese docId
+
+  function renderKbDoc(doc) {
+    var card = document.createElement("div");
+    card.style.cssText = "border-bottom:1px solid var(--border);padding:14px 0;display:flex;justify-content:space-between;gap:14px;align-items:flex-start;";
+    var info = document.createElement("div");
+    info.style.minWidth = "0";
+    var title = document.createElement("div");
+    title.style.fontWeight = "600";
+    title.textContent = doc.title;
+    var preview = document.createElement("div");
+    preview.style.cssText = "font-size:0.85rem;color:var(--text-muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px;";
+    preview.textContent = doc.content;
+    var meta = document.createElement("div");
+    meta.style.cssText = "font-size:0.78rem;color:var(--text-muted);margin-top:4px;";
+    meta.textContent = doc.charCount + " caracteres · actualizado " + formatDateTime(doc.updatedAt);
+    info.appendChild(title);
+    info.appendChild(preview);
+    info.appendChild(meta);
+
+    var actions = document.createElement("div");
+    actions.style.cssText = "display:flex;gap:8px;flex-shrink:0;";
+    var editBtn = document.createElement("button");
+    editBtn.className = "btn-secondary";
+    editBtn.textContent = "Editar";
+    editBtn.addEventListener("click", function () { openKbForm(doc); });
+    var delBtn = document.createElement("button");
+    delBtn.className = "btn-secondary";
+    delBtn.textContent = "Borrar";
+    delBtn.addEventListener("click", function () {
+      if (!confirm('¿Borrar "' + doc.title + '"? El bot dejará de saber esto de inmediato.')) return;
+      api("/kb/" + doc.docId, { method: "DELETE" }).then(loadKbDocs);
+    });
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+
+    card.appendChild(info);
+    card.appendChild(actions);
+    return card;
+  }
+
+  function loadKbDocs() {
+    api("/kb").then(function (data) {
+      var panel = document.getElementById("kbDocsPanel");
+      panel.innerHTML = "";
+      data.documents.forEach(function (doc) { panel.appendChild(renderKbDoc(doc)); });
+      document.getElementById("kbDocsEmpty").style.display = data.documents.length ? "none" : "block";
+    });
+  }
+
+  function openKbForm(doc) {
+    currentKbDocId = doc ? doc.docId : null;
+    document.getElementById("kbFormTitle").textContent = doc ? "Editar documento" : "Nuevo documento";
+    document.getElementById("kbTitleInput").value = doc ? doc.title : "";
+    document.getElementById("kbContentInput").value = doc ? doc.content : "";
+    document.getElementById("kbFormMsg").textContent = "";
+    document.getElementById("kbFormPanel").style.display = "block";
+  }
+
+  function closeKbForm() {
+    document.getElementById("kbFormPanel").style.display = "none";
+    currentKbDocId = null;
+  }
+
+  document.getElementById("kbNewBtn").addEventListener("click", function () { openKbForm(null); });
+  document.getElementById("kbFormCancel").addEventListener("click", closeKbForm);
+
+  document.getElementById("kbForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msgEl = document.getElementById("kbFormMsg");
+    var body = { title: document.getElementById("kbTitleInput").value, content: document.getElementById("kbContentInput").value };
+    var request = currentKbDocId
+      ? api("/kb/" + currentKbDocId, { method: "PUT", body: JSON.stringify(body) })
+      : api("/kb", { method: "POST", body: JSON.stringify(body) });
+    request
+      .then(function () { closeKbForm(); loadKbDocs(); })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
+  document.getElementById("kbReindexBtn").addEventListener("click", function () {
+    var msgEl = document.getElementById("kbReindexMsg");
+    msgEl.className = "";
+    msgEl.textContent = "Reindexando...";
+    api("/kb/reindex", { method: "POST" })
+      .then(function (data) {
+        msgEl.className = "success-msg";
+        msgEl.textContent = "Listo — " + data.count + " documento(s) reindexado(s).";
+      })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
   function loadReviewLink() {
     api("/review-link").then(function (data) {
       document.getElementById("reviewLinkInput").value = data.reviewLink || "";
@@ -686,6 +811,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     loadReviewLink();
     loadLeadReengagement();
     loadKbGaps();
+    loadKbDocs();
     loadConversations();
   }
 

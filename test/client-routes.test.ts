@@ -3,6 +3,10 @@ import { clientApp } from "../src/client/routes";
 import { hashPassword } from "../src/passwords";
 import { createSessionToken } from "../src/client/session";
 
+vi.mock("../src/rag/embeddings", () => ({
+  embedText: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+}));
+
 const SECRET = "test-client-session-secret";
 
 function mockEnv(overrides?: Record<string, unknown>) {
@@ -11,8 +15,20 @@ function mockEnv(overrides?: Record<string, unknown>) {
   const run = vi.fn().mockResolvedValue({ success: true });
   const bind = vi.fn().mockReturnValue({ first, all, run });
   const prepare = vi.fn().mockReturnValue({ bind });
-  const db = { prepare } as unknown as D1Database;
-  return { DB: db, CLIENT_SESSION_SECRET: SECRET, __first: first, __all: all, __bind: bind, __run: run, ...overrides };
+  const batch = vi.fn().mockResolvedValue([]);
+  const db = { prepare, batch } as unknown as D1Database;
+  return {
+    DB: db,
+    CLIENT_SESSION_SECRET: SECRET,
+    OPENAI_API_KEY: "fake-openai-key",
+    VECTORIZE: { upsert: vi.fn().mockResolvedValue({}), deleteByIds: vi.fn().mockResolvedValue({}) } as unknown as VectorizeIndex,
+    __first: first,
+    __all: all,
+    __bind: bind,
+    __run: run,
+    __batch: batch,
+    ...overrides,
+  };
 }
 
 // Para /send se necesitan respuestas distintas según la query (token del
@@ -277,6 +293,77 @@ describe("GET/DELETE /kb-gaps (superpower Mejoras)", () => {
     const res = await clientApp.request("/kb-gaps/7", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }, env);
     expect(res.status).toBe(200);
     expect(env.__bind).toHaveBeenCalledWith(7, "vet-ch");
+  });
+});
+
+describe("/kb (Conocimiento, Etapa Agencia — autoservicio del dueño del negocio)", () => {
+  it("GET lista los documentos del tenant autenticado", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    (env.__all as ReturnType<typeof vi.fn>).mockResolvedValue({
+      results: [{ doc_id: "faq", title: "FAQ", content: "...", char_count: 10, updated_at: "2026-08-30" }],
+    });
+    const res = await clientApp.request("/kb", { headers: { Authorization: `Bearer ${token}` } }, env);
+    expect(res.status).toBe(200);
+    const body = await res.json<{ documents: unknown[] }>();
+    expect(body.documents).toEqual([{ docId: "faq", title: "FAQ", content: "...", charCount: 10, updatedAt: "2026-08-30" }]);
+  });
+
+  it("POST crea un documento nuevo con un slug derivado del título", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv(); // first() -> null: el slug no existe todavía
+    const res = await clientApp.request(
+      "/kb",
+      { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ title: "Preguntas Frecuentes", content: "contenido" }) },
+      env,
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json<{ ok: boolean; docId: string }>();
+    expect(body.docId).toBe("preguntas-frecuentes");
+  });
+
+  it("POST rechaza sin title/content (400)", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/kb",
+      { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ title: "" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT actualiza un documento existente (mismo docId, sin generar uno nuevo)", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/kb/faq",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ title: "FAQ", content: "nuevo contenido" }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect((env.VECTORIZE as { upsert: ReturnType<typeof vi.fn> }).upsert).toHaveBeenCalledWith([
+      { id: "vet-ch:faq", values: expect.any(Array), metadata: { tenant_id: "vet-ch", doc_id: "faq", content: "nuevo contenido" } },
+    ]);
+  });
+
+  it("DELETE borra el vector y la fila, scoped al tenant del token", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request("/kb/faq", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }, env);
+    expect(res.status).toBe(200);
+    expect((env.VECTORIZE as { deleteByIds: ReturnType<typeof vi.fn> }).deleteByIds).toHaveBeenCalledWith(["vet-ch:faq"]);
+  });
+
+  it("POST /kb/reindex re-embebe todos los documentos existentes", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    (env.__all as ReturnType<typeof vi.fn>).mockResolvedValue({
+      results: [{ doc_id: "faq", title: "FAQ", content: "contenido", char_count: 9, updated_at: "2026-08-30" }],
+    });
+    const res = await clientApp.request("/kb/reindex", { method: "POST", headers: { Authorization: `Bearer ${token}` } }, env);
+    expect(res.status).toBe(200);
+    const body = await res.json<{ ok: boolean; count: number }>();
+    expect(body.count).toBe(1);
   });
 });
 

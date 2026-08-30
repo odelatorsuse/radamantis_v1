@@ -11,9 +11,9 @@ import { hashPassword, verifyPassword } from "../passwords";
 import { runColdLeadSweep } from "../coldLeads";
 import { runDailyReportSweep } from "../dailyReport";
 import { runNoShowSweep } from "../noShowSweep";
+import { ingestKbDocs, type KbDocInput } from "../rag/kb";
 import { getTenantSettings, upsertTenantSettings } from "../tenants";
 import { listVerticalTemplates } from "../verticals/registry";
-import { ingestKbDocs, type KbDocInput } from "./kb";
 import {
   addChannelBinding,
   createTenant,
@@ -154,7 +154,7 @@ adminApp.post("/tenants/:id/kb", async (c) => {
   if (!body.docs || !Array.isArray(body.docs) || body.docs.length === 0) {
     return c.json({ error: "docs (array de {id, content}) es requerido" }, 400);
   }
-  const count = await ingestKbDocs(c.env.VECTORIZE, c.env.OPENAI_API_KEY, tenantId, body.docs);
+  const count = await ingestKbDocs(c.env.DB, c.env.VECTORIZE, c.env.OPENAI_API_KEY, tenantId, body.docs);
   await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "ingest_kb", details: { count } });
   return c.json({ ok: true, count });
 });

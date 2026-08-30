@@ -14,7 +14,8 @@ function mockEnv(overrides?: Record<string, unknown>) {
   const run = vi.fn().mockResolvedValue({ success: true });
   const bind = vi.fn().mockReturnValue({ all, first, run });
   const prepare = vi.fn().mockReturnValue({ bind, all });
-  const db = { prepare } as unknown as D1Database;
+  const batch = vi.fn().mockResolvedValue([]);
+  const db = { prepare, batch } as unknown as D1Database;
   return {
     DB: db,
     ADMIN_API_KEY: "test-admin-key",

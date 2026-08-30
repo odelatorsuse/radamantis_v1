@@ -3,6 +3,7 @@ import { getChannelProvider } from "../channels/registry";
 import { createHandoff, isPaused, resolveHandoffByRef } from "../handoff";
 import { appendMessage, getHistory } from "../messages";
 import { dismissKbGap, listKbGaps } from "../rag/gaps";
+import { createKbDocument, deleteKbDocument, listKbDocuments, reindexAllKbDocuments, updateKbDocument } from "../rag/kb";
 import { getChannelExternalId, getTenantSettings } from "../tenants";
 import { verifyPassword } from "../passwords";
 import {
@@ -25,6 +26,8 @@ import { createSessionToken, verifySessionToken } from "./session";
 interface Env {
   DB: D1Database;
   CLIENT_SESSION_SECRET: string;
+  VECTORIZE: VectorizeIndex;
+  OPENAI_API_KEY: string;
 }
 
 // D10: consola del cliente — auth propia por tenant, separada del
@@ -172,6 +175,42 @@ clientApp.delete("/kb-gaps/:id", async (c) => {
   const id = Number(c.req.param("id"));
   await dismissKbGap(c.env.DB, c.get("tenantId"), id);
   return c.json({ ok: true });
+});
+
+// Etapa Agencia ("Conocimiento", autoservicio del dueño del negocio):
+// gestión propia de la base de conocimiento, sin depender de Oscar.
+// Un vector por documento (sin fragmentar), decisión explícita de Oscar.
+clientApp.get("/kb", async (c) => {
+  const documents = await listKbDocuments(c.env.DB, c.get("tenantId"));
+  return c.json({ documents });
+});
+
+clientApp.post("/kb", async (c) => {
+  const body = await c.req.json<{ title?: string; content?: string }>();
+  if (!body.title?.trim() || !body.content?.trim()) {
+    return c.json({ error: "title y content son requeridos" }, 400);
+  }
+  const docId = await createKbDocument(c.env.DB, c.env.VECTORIZE, c.env.OPENAI_API_KEY, c.get("tenantId"), body.title, body.content);
+  return c.json({ ok: true, docId }, 201);
+});
+
+clientApp.put("/kb/:docId", async (c) => {
+  const body = await c.req.json<{ title?: string; content?: string }>();
+  if (!body.title?.trim() || !body.content?.trim()) {
+    return c.json({ error: "title y content son requeridos" }, 400);
+  }
+  await updateKbDocument(c.env.DB, c.env.VECTORIZE, c.env.OPENAI_API_KEY, c.get("tenantId"), c.req.param("docId"), body.title, body.content);
+  return c.json({ ok: true });
+});
+
+clientApp.delete("/kb/:docId", async (c) => {
+  await deleteKbDocument(c.env.DB, c.env.VECTORIZE, c.get("tenantId"), c.req.param("docId"));
+  return c.json({ ok: true });
+});
+
+clientApp.post("/kb/reindex", async (c) => {
+  const count = await reindexAllKbDocuments(c.env.DB, c.env.VECTORIZE, c.env.OPENAI_API_KEY, c.get("tenantId"));
+  return c.json({ ok: true, count });
 });
 
 // Etapa 10 (unifica no-shows + encuesta + reseñas): link de reseñas (ej.

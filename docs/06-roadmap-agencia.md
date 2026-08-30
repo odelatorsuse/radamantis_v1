@@ -75,7 +75,28 @@ Oscar pidió una consola separada por tenant (para el dueño del negocio, no par
 | **8.5** | **Panel de bot: detalle, métricas y config en caliente** | Completa — confirmada por Oscar en producción (métricas reales, cambio de tono/idioma/moneda, editor de prompt, rediseño sidebar+cards con paleta Slate/Indigo) |
 | 9 | Pipeline de alta de cliente | Completa |
 | 10 | Superpowers restantes + Claude Skill | Completa (2026-08-29) |
-| Agencia (sin número fijo, post-10) | Equipo/roles, White-label | Backlog aceptado, sin diseño detallado todavía |
+| Agencia (sin número fijo, post-10) | Equipo/roles | **Completa (2026-08-29)** — login propio + roles admin/operador, ver `CLAUDE.md`. |
+| Agencia | White-label | Backlog aceptado, sin diseño detallado todavía — sin caso de uso real confirmado. |
 | — | Marketplace | Backlog, DESCONOCIDO |
 
 No avanzar a Etapa 9 sin pasar la prueba de aceptación de Etapa 8.5 (panel de bot funcional en producción, confirmado por Oscar).
+
+## Tercera ronda: exploración del starter de Forja (2026-08-30)
+
+Oscar desplegó el starter real de Forja ("HorizontesAgentOS") bajo su propia cuenta de Cloudflare para explorarlo de primera mano, y compartió capturas de 5 páginas completas de su panel (Flujo, Conocimiento, Conexiones, Configuración). Mismo principio de siempre: **replicar la funcionalidad observada está permitido, copiar su copy/nombres de página/arquitectura interna exacta no está permitido** (charter del proyecto, `CLAUDE.md`). Oscar confirmó explícitamente: *"No quiero que copies lo que tiene en su arquitectura"* — cualquier ítem de esta lista se construye con el diseño y los nodos reales de Radamantis, nunca los de Forja (ej. su capa de "Buffer" de 15s, sus nombres de tools `snoozeUser`/`pauseSuspectedBot`, etc. son arquitectura *de ellos*, no una referencia a copiar).
+
+Clasificación de lo visto en las 5 páginas:
+
+| Ítem visto en Forja | Veredicto | Nota |
+|---|---|---|
+| Conocimiento (KB por documento, listar/editar/reindexar) | **Aceptado — en construcción, 2026-08-30** | Radamantis ya tenía la función (subir KB), pero sin tracking de documentos individuales — requiere nueva tabla D1 `kb_documents` (Vectorize no soporta "listar todo"). **Decisión de Oscar: va en `/console` (autoservicio del dueño del negocio), no en `/admin`** — cambio de alcance real, hoy nadie fuera de Oscar toca el KB. Un vector por documento (sin fragmentar), decisión explícita de Oscar por ahora. |
+| Flujo (diagrama en vivo del pipeline, "canvas") | **Aceptado, roadmap — no construido todavía** | Oscar: *"quiero que el portal de Radamantis muestre una imagen real, traiga un canvas-wrap y que construya como está el bot del cliente funcionando"* — un diagrama visual real del pipeline de Radamantis (Telegram/canal → `ConversationAgent` (Durable Object) → RAG → LLM → tools reales: `searchKb`, `handoffHuman`, `checkAvailability`/`bookAppointment`, `recordAppointmentFeedback`) con datos reales (llamadas/30d, memoria, modelo), NUNCA los nodos/nombres de Forja. Pendiente de diseño y de decidir en qué panel vive (admin, console, o ambos). |
+| Conexiones → Sitio web (widget de chat embebible) | **Nuevo, roadmap — no construido, sin caso de uso confirmado todavía** | Canal que Radamantis no tenía contemplado: burbuja de chat para incrustar en la propia página del negocio del cliente. A diferencia de WhatsApp/Meta, no depende de aprobación de una plataforma externa — sería una implementación propia (widget JS + endpoint). Sin fecha, no bloqueante. |
+| Conexiones → WhatsApp (Twilio/Meta), Instagram+Messenger, ManyChat | Ya clasificado, sin cambios | Bloqueado hasta que Oscar consiga credenciales reales de Meta/Twilio. ManyChat: sin caso de uso confirmado, mismo criterio que Composio (`docs/06-roadmap-agencia.md`, primera ronda). |
+| Configuración → tono/idioma/moneda | Ya cubierto | Sin cambios, ya existe en `/admin`. |
+| Configuración → multi-LLM / BYO API key / selector de modelo | **Sigue diferido** | Decisión explícita de Oscar ya tomada (primera ronda): key compartida por ahora. No se re-abre a menos que Oscar lo pida explícitamente. |
+| Configuración → velocidad de respuesta (agrupar mensajes seguidos antes de responder) | **Nuevo, roadmap — no construido** | Cambio de arquitectura real: hoy cada mensaje entrante dispara al agente de inmediato, sin agrupar mensajes seguidos del mismo cliente. Valorar si vale la pena antes de construir (¿ha sido un problema real para algún tenant?). |
+| Configuración → auto-reanudar el bot tras N horas de pausa | **Nuevo, roadmap — no construido** | Hoy la pausa por handoff es indefinida hasta reanudar a mano. |
+| Configuración → palabras que activan handoff, editables por tenant | **Nuevo, roadmap — no construido** | Hoy `detectsHandoffRequest` es una lista fija en código (`src/handoff.ts`), igual para todos los tenants. |
+
+No se prioriza nada de esta lista más allá de "Conocimiento" (ya en construcción) sin que Oscar lo pida explícitamente — quedan aquí registrados para no perderlos, siguiendo el mismo criterio de "confirmar necesidad real antes de construir" ya aplicado en Equipo/roles.

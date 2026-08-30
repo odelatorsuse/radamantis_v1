@@ -126,7 +126,11 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
 
   @media (max-width: 800px) {
     .shell { grid-template-columns: 1fr; }
-    .sidebar { display: none; }
+    .sidebar { flex-direction: row; align-items: center; overflow-x: auto; gap: 10px; padding: 12px 14px; border-right: none; border-bottom: 1px solid var(--border); }
+    .sidebar .brand, .sidebar .tenant-name { display: none; }
+    .nav-item { width: auto; white-space: nowrap; margin-bottom: 0; }
+    .sidebar-footer { margin-top: 0; margin-left: auto; border-top: none; padding-top: 0; flex-shrink: 0; }
+    .sidebar-footer button { width: auto; white-space: nowrap; }
     .conv-layout { grid-template-columns: 1fr; }
   }
 </style>
@@ -201,6 +205,11 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     <section class="tab-view" id="tab-citas">
       <h1 class="page-title">Citas</h1>
       <p class="page-sub">Próximas citas y las más recientes ya pasadas.</p>
+      <div class="panel">
+        <h3 id="currentMonthTitle">Este mes</h3>
+        <table id="currentMonthTable"><thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Contacto</th><th>Motivo</th><th>Estado</th></tr></thead><tbody></tbody></table>
+        <p class="empty" id="currentMonthEmpty" style="display:none;">Sin citas este mes.</p>
+      </div>
       <div class="panel">
         <h3>Próximas</h3>
         <table id="upcomingTable"><thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Contacto</th><th>Motivo</th></tr></thead><tbody></tbody></table>
@@ -389,8 +398,29 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     return tr;
   }
 
+  function appointmentStatusLabel(attended) {
+    if (attended === 1) return "Asistió";
+    if (attended === 0) return "No asistió";
+    return "Pendiente";
+  }
+
+  function appointmentRowWithStatus(a) {
+    var tr = appointmentRow(a);
+    var td = document.createElement("td");
+    td.textContent = appointmentStatusLabel(a.attended);
+    tr.appendChild(td);
+    return tr;
+  }
+
   function loadAppointments() {
     api("/appointments").then(function (data) {
+      document.getElementById("currentMonthTitle").textContent =
+        "Este mes — " + new Date().toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+      var monthBody = document.querySelector("#currentMonthTable tbody");
+      monthBody.innerHTML = "";
+      data.currentMonth.forEach(function (a) { monthBody.appendChild(appointmentRowWithStatus(a)); });
+      document.getElementById("currentMonthEmpty").style.display = data.currentMonth.length ? "none" : "block";
+
       var upcomingBody = document.querySelector("#upcomingTable tbody");
       upcomingBody.innerHTML = "";
       data.upcoming.forEach(function (a) { upcomingBody.appendChild(appointmentRow(a)); });
@@ -482,7 +512,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
           ? "Para mandar las alertas a otro chat, envía este mismo código de nuevo desde el chat que quieras usar:"
           : "Para activarlas, abre el chat de tu bot en Telegram y manda este código (tal cual, sin nada más):") +
         "</p>" +
-        "<code style='display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:1.1rem;letter-spacing:0.05em;font-family:\"Fira Code\",monospace;'>" +
+        "<code style='display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:1.1rem;letter-spacing:0.05em;font-family:\\"Fira Code\\",monospace;'>" +
         esc(data.activationCode) + "</code>";
       panel.appendChild(instructions);
 

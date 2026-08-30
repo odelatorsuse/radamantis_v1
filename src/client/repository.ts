@@ -132,6 +132,29 @@ export interface AppointmentSummary {
   summary: string;
   attendeeName: string;
   attendeeContact: string;
+  attended: number | null;
+}
+
+type AppointmentRow = {
+  id: number;
+  start_utc: string;
+  end_utc: string;
+  summary: string;
+  attendee_name: string;
+  attendee_contact: string;
+  attended: number | null;
+};
+
+function mapAppointmentRow(r: AppointmentRow): AppointmentSummary {
+  return {
+    id: r.id,
+    startUtc: r.start_utc,
+    endUtc: r.end_utc,
+    summary: r.summary,
+    attendeeName: r.attendee_name,
+    attendeeContact: r.attendee_contact,
+    attended: r.attended,
+  };
 }
 
 async function queryAppointments(db: D1Database, tenantId: string, when: "upcoming" | "past"): Promise<AppointmentSummary[]> {
@@ -139,26 +162,41 @@ async function queryAppointments(db: D1Database, tenantId: string, when: "upcomi
   const order = when === "upcoming" ? "ASC" : "DESC";
   const { results } = await db
     .prepare(
-      `SELECT id, start_utc, end_utc, summary, attendee_name, attendee_contact
+      `SELECT id, start_utc, end_utc, summary, attendee_name, attendee_contact, attended
        FROM appointments
        WHERE tenant_id = ? AND end_utc ${comparison} datetime('now')
        ORDER BY start_utc ${order}
        LIMIT 50`,
     )
     .bind(tenantId)
-    .all<{ id: number; start_utc: string; end_utc: string; summary: string; attendee_name: string; attendee_contact: string }>();
-  return results.map((r) => ({
-    id: r.id,
-    startUtc: r.start_utc,
-    endUtc: r.end_utc,
-    summary: r.summary,
-    attendeeName: r.attendee_name,
-    attendeeContact: r.attendee_contact,
-  }));
+    .all<AppointmentRow>();
+  return results.map(mapAppointmentRow);
 }
 
 export const getUpcomingAppointments = (db: D1Database, tenantId: string) => queryAppointments(db, tenantId, "upcoming");
 export const getPastAppointments = (db: D1Database, tenantId: string) => queryAppointments(db, tenantId, "past");
+
+// Vista de "todo el mes en curso" pedida por Oscar — a diferencia de
+// próximas/recientes (una ventana relativa a "ahora", tope 50), esto
+// devuelve TODAS las citas cuyo inicio cae en el mes calendario actual,
+// pasadas o futuras, ordenadas cronológicamente. Mes calendario en UTC
+// (misma simplificación ya aceptada en getTodayStats/getWeeklyActivity)
+// — strftime('%Y-%m', ...) sobre datetime('now') es una comparación
+// SQLite-vs-SQLite, nunca ISO-string-vs-JS-Date, así que no cae en el
+// bug de formato ya documentado para estas columnas.
+export async function getAppointmentsForCurrentMonth(db: D1Database, tenantId: string): Promise<AppointmentSummary[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, start_utc, end_utc, summary, attendee_name, attendee_contact, attended
+       FROM appointments
+       WHERE tenant_id = ? AND strftime('%Y-%m', start_utc) = strftime('%Y-%m', 'now')
+       ORDER BY start_utc ASC
+       LIMIT 200`,
+    )
+    .bind(tenantId)
+    .all<AppointmentRow>();
+  return results.map(mapAppointmentRow);
+}
 
 export interface HealthStatus {
   channels: string[];

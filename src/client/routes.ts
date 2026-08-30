@@ -7,6 +7,7 @@ import { getChannelExternalId, getTenantSettings } from "../tenants";
 import { verifyPassword } from "../passwords";
 import {
   clearAlertChatId,
+  getAppointmentsForCurrentMonth,
   getHealthStatus,
   getOrCreateAlertSettings,
   getPastAppointments,
@@ -71,8 +72,12 @@ clientApp.get("/clients", async (c) => {
 
 clientApp.get("/appointments", async (c) => {
   const tenantId = c.get("tenantId");
-  const [upcoming, past] = await Promise.all([getUpcomingAppointments(c.env.DB, tenantId), getPastAppointments(c.env.DB, tenantId)]);
-  return c.json({ upcoming, past });
+  const [upcoming, past, currentMonth] = await Promise.all([
+    getUpcomingAppointments(c.env.DB, tenantId),
+    getPastAppointments(c.env.DB, tenantId),
+    getAppointmentsForCurrentMonth(c.env.DB, tenantId),
+  ]);
+  return c.json({ upcoming, past, currentMonth });
 });
 
 clientApp.get("/health", async (c) => {

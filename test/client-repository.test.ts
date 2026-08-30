@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   clearAlertChatId,
   createTenantUser,
+  getAppointmentsForCurrentMonth,
   getHealthStatus,
   getOrCreateAlertSettings,
   getPastAppointments,
@@ -106,6 +107,22 @@ describe("getUpcomingAppointments / getPastAppointments", () => {
     const sql = prepare.mock.calls[0][0] as string;
     expect(sql).toContain("<");
     expect(sql).toContain("DESC");
+  });
+});
+
+describe("getAppointmentsForCurrentMonth", () => {
+  it("filtra por mes calendario (strftime) y ordena ASC, incluyendo attended", async () => {
+    const { db, prepare, bind } = mockDb(null, [
+      { id: 1, start_utc: "2026-08-05 10:00:00", end_utc: "2026-08-05 10:30:00", summary: "Consulta", attendee_name: "Ana", attendee_contact: "555", attended: 1 },
+    ]);
+    const result = await getAppointmentsForCurrentMonth(db, "vet-ch");
+    const sql = prepare.mock.calls[0][0] as string;
+    expect(sql).toContain("strftime('%Y-%m', start_utc)");
+    expect(sql).toContain("ORDER BY start_utc ASC");
+    expect(bind).toHaveBeenCalledWith("vet-ch");
+    expect(result).toEqual([
+      { id: 1, startUtc: "2026-08-05 10:00:00", endUtc: "2026-08-05 10:30:00", summary: "Consulta", attendeeName: "Ana", attendeeContact: "555", attended: 1 },
+    ]);
   });
 });
 

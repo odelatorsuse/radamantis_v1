@@ -65,6 +65,15 @@ describe("adminApp tenant detail + settings", () => {
     expect(res.status).toBe(404);
   });
 
+  it("GET /tenants/:id/flow devuelve 404 si no existe (Agencia)", async () => {
+    const res = await adminApp.request(
+      "/tenants/no-existe/flow",
+      { headers: { Authorization: "Bearer test-admin-key" } },
+      mockEnv(),
+    );
+    expect(res.status).toBe(404);
+  });
+
   it("PUT /tenants/:id/settings acepta con auth correcta", async () => {
     const res = await adminApp.request(
       "/tenants/vet-ch/settings",

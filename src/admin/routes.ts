@@ -11,9 +11,11 @@ import { hashPassword, verifyPassword } from "../passwords";
 import { runColdLeadSweep } from "../coldLeads";
 import { runDailyReportSweep } from "../dailyReport";
 import { runNoShowSweep } from "../noShowSweep";
-import { ingestKbDocs, type KbDocInput } from "../rag/kb";
+import { MIN_RELEVANCE_SCORE } from "../prompts";
+import { ingestKbDocs, listKbDocuments, type KbDocInput } from "../rag/kb";
 import { getTenantSettings, upsertTenantSettings } from "../tenants";
-import { listVerticalTemplates } from "../verticals/registry";
+import { getToolCallCounts30d } from "../toolCalls";
+import { getVerticalTemplate, listVerticalTemplates } from "../verticals/registry";
 import {
   addChannelBinding,
   createTenant,
@@ -163,6 +165,37 @@ adminApp.get("/tenants/:id", async (c) => {
   const detail = await getTenantDetail(c.env.DB, c.req.param("id"));
   if (!detail) return c.json({ error: "Tenant no encontrado" }, 404);
   return c.json({ tenant: detail });
+});
+
+// Agencia ("Flujo"): radiografía real del pipeline de ESTE tenant —
+// nunca datos inventados. Cada campo sale de una fuente real: el
+// Vertical Template (D6), la conexión de calendario real, el conteo real
+// de documentos de KB, y los conteos reales de tool_calls de los últimos
+// 30 días (0 significa "no se ha usado", no "no existe").
+adminApp.get("/tenants/:id/flow", async (c) => {
+  const tenantId = c.req.param("id");
+  const detail = await getTenantDetail(c.env.DB, tenantId);
+  if (!detail) return c.json({ error: "Tenant no encontrado" }, 404);
+
+  const template = getVerticalTemplate(detail.vertical_id);
+  const [calendarConnection, kbDocs, toolCallCounts30d] = await Promise.all([
+    getCalendarConnection(c.env.DB, tenantId),
+    template.toolsEnabled.includes("searchKb") ? listKbDocuments(c.env.DB, tenantId) : Promise.resolve([]),
+    getToolCallCounts30d(c.env.DB, tenantId),
+  ]);
+
+  return c.json({
+    channels: detail.channels.map((ch) => ({ channel: ch.channel })),
+    conversationCount: detail.metrics.conversations,
+    memory: { store: "D1", windowMessages: 20 },
+    model: { provider: "OpenAI", name: "gpt-4o-mini" },
+    rag: template.toolsEnabled.includes("searchKb")
+      ? { enabled: true, minRelevanceScore: MIN_RELEVANCE_SCORE, documentCount: kbDocs.length }
+      : { enabled: false, minRelevanceScore: null, documentCount: 0 },
+    calendarConnected: calendarConnection !== null,
+    toolsEnabled: template.toolsEnabled,
+    toolCallCounts30d,
+  });
 });
 
 adminApp.put("/tenants/:id/settings", async (c) => {

@@ -98,6 +98,15 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--accent); }
     50% { opacity: 0.45; box-shadow: 0 0 10px var(--accent); }
   }
+
+  .flow-section-label { font-family: "Fira Code", monospace; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin: 4px 0 8px; }
+  .flow-row { display: flex; gap: 18px; align-items: stretch; flex-wrap: wrap; }
+  .flow-node { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 160px; }
+  .flow-node-title { font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; gap: 6px; }
+  .flow-node-detail { font-size: 0.76rem; color: var(--text-muted); margin-top: 4px; line-height: 1.45; }
+  .flow-node.flow-node-off { opacity: 0.4; }
+  .flow-arrow { color: var(--text-muted); font-size: 1.4rem; align-self: center; flex-shrink: 0; padding: 0 2px; }
+
   @media (prefers-reduced-motion: reduce) {
     .status-dot.ok { animation: none; }
   }
@@ -213,6 +222,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       </button>
       <h3 style="margin:14px 0" id="detailTitle">Detalle</h3>
       <div class="metrics" id="detailMetrics"></div>
+
+      <h2 class="section-title">Flujo</h2>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Así está armado este bot ahora mismo — datos reales, no una maqueta. Los conteos son de los últimos 30 días.</p>
+      <div class="panel" id="flowDiagram" style="overflow-x:auto"></div>
 
       <h2 class="section-title">Canales</h2>
       <div class="panel" id="channelsList" style="background:transparent;border:none;padding:0"></div>
@@ -709,6 +722,97 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       document.getElementById("tenantDetail").style.display = "block";
       window.scrollTo(0, 0);
       loadCalendarStatus(tenantId);
+      loadFlow(tenantId);
+    });
+  }
+
+  var TOOL_LABELS = {
+    searchKb: "searchKb",
+    handoffHuman: "handoffHuman",
+    checkAvailability: "checkAvailability",
+    bookAppointment: "bookAppointment",
+    recordAppointmentFeedback: "recordAppointmentFeedback",
+  };
+
+  function flowNode(title, detailLines, enabled) {
+    var node = document.createElement("div");
+    node.className = "flow-node" + (enabled === false ? " flow-node-off" : "");
+    var titleEl = document.createElement("div");
+    titleEl.className = "flow-node-title";
+    titleEl.textContent = title;
+    node.appendChild(titleEl);
+    detailLines.forEach(function (line) {
+      var d = document.createElement("div");
+      d.className = "flow-node-detail";
+      d.textContent = line;
+      node.appendChild(d);
+    });
+    return node;
+  }
+
+  function flowArrow() {
+    var span = document.createElement("span");
+    span.className = "flow-arrow";
+    span.textContent = "→";
+    return span;
+  }
+
+  // Agencia ("Flujo"): diagrama con los nodos REALES de Radamantis (nunca
+  // los de Forja) — cada dato viene de GET /tenants/:id/flow, nada
+  // decorativo ni inventado. 0 llamadas significa "no se ha usado todavía",
+  // no "no existe".
+  function loadFlow(tenantId) {
+    var container = document.getElementById("flowDiagram");
+    container.innerHTML = "<p class='empty'>Cargando...</p>";
+    api("/tenants/" + tenantId + "/flow").then(function (f) {
+      container.innerHTML = "";
+
+      var mainRow = document.createElement("div");
+      mainRow.className = "flow-row";
+      var channelLabel = f.channels.length ? f.channels.map(function (c) { return c.channel; }).join(", ") : "sin canal";
+      mainRow.appendChild(flowNode("Canal", [channelLabel, f.conversationCount + " conversaciones"], f.channels.length > 0));
+      mainRow.appendChild(flowArrow());
+      mainRow.appendChild(flowNode("Memoria", [f.memory.store, "últimos " + f.memory.windowMessages + " mensajes"]));
+      mainRow.appendChild(flowArrow());
+      mainRow.appendChild(flowNode("Agente", ["Durable Object · 1 por conversación"]));
+      mainRow.appendChild(flowArrow());
+      mainRow.appendChild(flowNode("Modelo", [f.model.provider, f.model.name]));
+      mainRow.appendChild(flowArrow());
+      mainRow.appendChild(flowNode("Respuesta", ["se envía por el canal de origen"]));
+      container.appendChild(mainRow);
+
+      var capLabel = document.createElement("div");
+      capLabel.className = "flow-section-label";
+      capLabel.textContent = "Capacidades del agente — llamadas en los últimos 30 días";
+      container.appendChild(capLabel);
+
+      var capRow = document.createElement("div");
+      capRow.className = "flow-row";
+
+      if (f.rag.enabled) {
+        capRow.appendChild(flowNode("RAG / Conocimiento", [
+          "umbral de relevancia " + f.rag.minRelevanceScore,
+          f.rag.documentCount + " documento(s) indexado(s)",
+          (f.toolCallCounts30d.searchKb || 0) + " llamadas/30d",
+        ]));
+      }
+
+      f.toolsEnabled.forEach(function (toolName) {
+        if (toolName === "searchKb") return; // ya mostrado arriba como RAG/Conocimiento
+        var isCalendarTool = toolName === "checkAvailability" || toolName === "bookAppointment";
+        var enabled = toolName === "handoffHuman" ? true : (isCalendarTool || toolName === "recordAppointmentFeedback") ? f.calendarConnected : true;
+        var detail = [(f.toolCallCounts30d[toolName] || 0) + " llamadas/30d"];
+        if (isCalendarTool && !f.calendarConnected) detail.push("calendario no conectado");
+        capRow.appendChild(flowNode(TOOL_LABELS[toolName] || toolName, detail, enabled));
+      });
+
+      container.appendChild(capRow);
+    }).catch(function (err) {
+      container.innerHTML = "";
+      var errEl = document.createElement("p");
+      errEl.className = "error";
+      errEl.textContent = err.message;
+      container.appendChild(errEl);
     });
   }
 

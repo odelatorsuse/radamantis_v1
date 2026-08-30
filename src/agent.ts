@@ -12,6 +12,7 @@ import { embedText } from "./rag/embeddings";
 import { recordKbGap } from "./rag/gaps";
 import { searchKb, type KbMatch } from "./rag/search";
 import { getTenantSettings } from "./tenants";
+import { logToolCall } from "./toolCalls";
 import { logUsage } from "./usage";
 import { getVerticalTemplate } from "./verticals/registry";
 import { notifyBusinessOwner } from "./vigilante";
@@ -57,6 +58,7 @@ export class ConversationAgent {
       await appendMessage(this.env.DB, ref, { role: "user", content: userText });
       await createHandoff(this.env.DB, ref, userText);
       await appendMessage(this.env.DB, ref, { role: "assistant", content: HANDOFF_REPLY_MESSAGE });
+      await logToolCall(this.env.DB, tenantId, "handoffHuman");
       // Etapa 10 (superpower "Vigilante"): avisa al dueño en tiempo real —
       // antes de esto, un handoff pasaba en silencio hasta que alguien
       // revisara /admin o /console.
@@ -74,6 +76,7 @@ export class ConversationAgent {
     if (template.toolsEnabled.includes("searchKb")) {
       const queryEmbedding = await embedText(this.env.OPENAI_API_KEY, userText);
       kbMatches = await searchKb(this.env.VECTORIZE, queryEmbedding, tenantId);
+      await logToolCall(this.env.DB, tenantId, "searchKb");
       // Etapa 10 (superpower "Mejoras"): ninguna respuesta con confianza en
       // la KB — se registra para que el dueño sepa qué le falta agregar. El
       // bot nunca "aprende solo" de esto, la decisión de qué agregar es
@@ -128,6 +131,7 @@ export class ConversationAgent {
         // Log de auditoría — sin esto, depurar "por qué dijo tal horario"
         // significa adivinar (ya nos pasó). Visible con `wrangler tail`.
         console.log("calendar tool call", tenantId, toolCall.name, toolCall.arguments);
+        await logToolCall(this.env.DB, tenantId, toolCall.name);
         const result =
           toolCall.name === "recordAppointmentFeedback"
             ? await executeFeedbackTool(this.env.DB, ref, toolCall.arguments)

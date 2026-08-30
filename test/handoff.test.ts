@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createHandoff, detectsHandoffRequest, detectsUrgentSentiment, isPaused, resolveHandoffByRef } from "../src/handoff";
+import { createHandoff, detectsHandoffRequest, detectsUrgentSentiment, isPaused, parseCustomHandoffKeywords, resolveHandoffByRef } from "../src/handoff";
 
 const ref = { tenantId: "vet-ch", channel: "telegram", chatId: "42" };
 
@@ -13,6 +13,34 @@ describe("detectsHandoffRequest", () => {
   it("no dispara con preguntas normales del consultorio", () => {
     expect(detectsHandoffRequest("¿Cuál es el horario de atención?")).toBe(false);
     expect(detectsHandoffRequest("¿Cuánto cuesta la consulta?")).toBe(false);
+  });
+
+  it("las palabras del tenant se SUMAN a la lista base, no la reemplazan", () => {
+    const custom = ["quiero hablar con el doctor garcía"];
+    expect(detectsHandoffRequest("quiero hablar con el doctor garcía", custom)).toBe(true);
+    expect(detectsHandoffRequest("es una emergencia", custom)).toBe(true); // base sigue activa
+    expect(detectsHandoffRequest("¿cuánto cuesta?", custom)).toBe(false);
+  });
+
+  it("ignora palabras vacías o solo espacios en la lista del tenant", () => {
+    expect(detectsHandoffRequest("hola", ["", "   "])).toBe(false);
+  });
+});
+
+describe("parseCustomHandoffKeywords", () => {
+  it("parsea un array JSON válido", () => {
+    expect(parseCustomHandoffKeywords('["a", "b"]')).toEqual(["a", "b"]);
+  });
+
+  it("devuelve [] si es null/undefined/JSON inválido/no es array", () => {
+    expect(parseCustomHandoffKeywords(null)).toEqual([]);
+    expect(parseCustomHandoffKeywords(undefined)).toEqual([]);
+    expect(parseCustomHandoffKeywords("no es json")).toEqual([]);
+    expect(parseCustomHandoffKeywords('{"a":1}')).toEqual([]);
+  });
+
+  it("filtra elementos que no son strings", () => {
+    expect(parseCustomHandoffKeywords('["ok", 5, null]')).toEqual(["ok"]);
   });
 });
 

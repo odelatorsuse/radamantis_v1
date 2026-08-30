@@ -19,6 +19,7 @@ import {
   getWeeklyActivity,
   listConversations,
   setAutoResumeHandoffEnabled,
+  setCustomHandoffKeywords,
   setLeadReengagementEnabled,
   setReviewLink,
 } from "./repository";
@@ -252,5 +253,20 @@ clientApp.get("/auto-resume-handoff", async (c) => {
 clientApp.put("/auto-resume-handoff", async (c) => {
   const body = await c.req.json<{ enabled?: boolean }>();
   await setAutoResumeHandoffEnabled(c.env.DB, c.get("tenantId"), body.enabled === true);
+  return c.json({ ok: true });
+});
+
+// Agencia ("palabras de handoff editables por tenant"): SE SUMAN a la
+// lista base (nunca la reemplazan) — un tenant que deja esto vacío no
+// pierde el blindaje de handoff de siempre.
+clientApp.get("/handoff-keywords", async (c) => {
+  const settings = await getTenantSettings(c.env.DB, c.get("tenantId"));
+  return c.json({ keywords: settings.customHandoffKeywords });
+});
+
+clientApp.put("/handoff-keywords", async (c) => {
+  const body = await c.req.json<{ keywords?: string[] }>();
+  const keywords = Array.isArray(body.keywords) ? body.keywords.map((k) => k.trim()).filter(Boolean) : [];
+  await setCustomHandoffKeywords(c.env.DB, c.get("tenantId"), keywords);
   return c.json({ ok: true });
 });

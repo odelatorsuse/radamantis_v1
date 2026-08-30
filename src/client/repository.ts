@@ -312,3 +312,10 @@ export async function setAutoResumeHandoffEnabled(db: D1Database, tenantId: stri
   const current = await getTenantSettings(db, tenantId);
   await upsertTenantSettings(db, tenantId, { ...current, autoResumeHandoffEnabled: enabled });
 }
+
+// Agencia ("palabras de handoff editables por tenant"): se SUMAN a la
+// lista base (src/handoff.ts), nunca la reemplazan.
+export async function setCustomHandoffKeywords(db: D1Database, tenantId: string, keywords: string[]): Promise<void> {
+  const current = await getTenantSettings(db, tenantId);
+  await upsertTenantSettings(db, tenantId, { ...current, customHandoffKeywords: keywords });
+}

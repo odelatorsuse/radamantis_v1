@@ -316,6 +316,16 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
         </label>
         <div class="error" id="autoResumeMsg"></div>
       </div>
+
+      <div class="panel">
+        <h3>Palabras que piden un humano</h3>
+        <p class="page-sub" style="margin-bottom:14px;">Si el cliente escribe alguna de estas frases, el bot pausa la conversación y te avisa. Ya reconoce frases comunes ("hablar con una persona", "es una emergencia", etc.) — esto es SOLO para agregar frases propias de tu negocio, no reemplaza las de siempre. Sepáralas con comas.</p>
+        <form id="handoffKeywordsForm">
+          <textarea id="handoffKeywordsInput" placeholder="ej. quiero hablar con el doctor, cirugía urgente" style="width:100%;min-height:70px;"></textarea>
+          <div style="margin-top:10px;"><button class="btn-primary" type="submit">Guardar</button></div>
+          <div class="error" id="handoffKeywordsMsg"></div>
+        </form>
+      </div>
     </section>
 
     <section class="tab-view" id="tab-mejoras">
@@ -735,6 +745,21 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       });
   });
 
+  function loadHandoffKeywords() {
+    api("/handoff-keywords").then(function (data) {
+      document.getElementById("handoffKeywordsInput").value = (data.keywords || []).join(", ");
+    });
+  }
+
+  document.getElementById("handoffKeywordsForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msgEl = document.getElementById("handoffKeywordsMsg");
+    var keywords = document.getElementById("handoffKeywordsInput").value.split(",").map(function (k) { return k.trim(); }).filter(Boolean);
+    api("/handoff-keywords", { method: "PUT", body: JSON.stringify({ keywords: keywords }) })
+      .then(function () { msgEl.className = "success-msg"; msgEl.textContent = "Guardado."; })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
   function renderConversationList(conversations) {
     var list = document.getElementById("conversationList");
     list.innerHTML = "";
@@ -838,6 +863,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     loadReviewLink();
     loadLeadReengagement();
     loadAutoResume();
+    loadHandoffKeywords();
     loadKbGaps();
     loadKbDocs();
     loadConversations();

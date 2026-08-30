@@ -50,6 +50,7 @@ describe("getTenantSettings", () => {
       review_link: "https://g.page/r/tu-negocio/review",
       lead_reengagement_enabled: 1,
       auto_resume_handoff_enabled: 0,
+      custom_handoff_keywords: '["quiero hablar con el doctor"]',
     });
     const bind = vi.fn().mockReturnValue({ first });
     const prepare = vi.fn().mockReturnValue({ bind });
@@ -67,6 +68,7 @@ describe("getTenantSettings", () => {
       reviewLink: "https://g.page/r/tu-negocio/review",
       leadReengagementEnabled: true,
       autoResumeHandoffEnabled: false,
+      customHandoffKeywords: ["quiero hablar con el doctor"],
     });
   });
 });
@@ -91,6 +93,7 @@ describe("upsertTenantSettings", () => {
       reviewLink: "https://g.page/r/tu-negocio/review",
       leadReengagementEnabled: true,
       autoResumeHandoffEnabled: false,
+      customHandoffKeywords: ["quiero hablar con el doctor"],
     });
 
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("ON CONFLICT (tenant_id) DO UPDATE"));
@@ -107,6 +110,7 @@ describe("upsertTenantSettings", () => {
       "https://g.page/r/tu-negocio/review",
       1,
       0,
+      JSON.stringify(["quiero hablar con el doctor"]),
     );
   });
 });

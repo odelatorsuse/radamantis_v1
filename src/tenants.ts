@@ -1,4 +1,5 @@
 import { DEFAULT_BUSINESS_HOURS, parseBusinessHours, type WeeklyBusinessHours } from "./calendar/businessHours";
+import { parseCustomHandoffKeywords } from "./handoff";
 
 export interface ResolvedTenant {
   tenantId: string;
@@ -41,6 +42,10 @@ export interface TenantSettings {
   // personal), el bot no debe "despertar" solo a menos que el dueño lo
   // decida explícitamente. Duración fija de 3h por ahora (src/handoffAutoResume.ts).
   autoResumeHandoffEnabled: boolean;
+  // Agencia ("palabras de handoff editables por tenant"): SE SUMAN a
+  // HANDOFF_KEYWORDS (src/handoff.ts), nunca las reemplazan — un tenant
+  // mal configurado no pierde el blindaje base.
+  customHandoffKeywords: string[];
 }
 
 export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
@@ -55,6 +60,7 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
   reviewLink: null,
   leadReengagementEnabled: false,
   autoResumeHandoffEnabled: false,
+  customHandoffKeywords: [],
 };
 
 // D2/D6: el router resuelve tenant Y vertical antes de instanciar el DO,
@@ -103,7 +109,7 @@ export async function getVerticalIdForTenant(db: D1Database, tenantId: string): 
 export async function getTenantSettings(db: D1Database, tenantId: string): Promise<TenantSettings> {
   const row = await db
     .prepare(
-      "SELECT tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled FROM tenant_settings WHERE tenant_id = ?",
+      "SELECT tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, custom_handoff_keywords FROM tenant_settings WHERE tenant_id = ?",
     )
     .bind(tenantId)
     .first<{
@@ -118,6 +124,7 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
       review_link: string | null;
       lead_reengagement_enabled: number;
       auto_resume_handoff_enabled: number;
+      custom_handoff_keywords: string;
     }>();
 
   if (!row) return DEFAULT_TENANT_SETTINGS;
@@ -133,6 +140,7 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
     reviewLink: row.review_link,
     leadReengagementEnabled: row.lead_reengagement_enabled === 1,
     autoResumeHandoffEnabled: row.auto_resume_handoff_enabled === 1,
+    customHandoffKeywords: parseCustomHandoffKeywords(row.custom_handoff_keywords),
   };
 }
 
@@ -144,8 +152,8 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
 export async function upsertTenantSettings(db: D1Database, tenantId: string, settings: TenantSettings): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, custom_handoff_keywords, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT (tenant_id) DO UPDATE SET
          tone = excluded.tone,
          language = excluded.language,
@@ -158,6 +166,7 @@ export async function upsertTenantSettings(db: D1Database, tenantId: string, set
          review_link = excluded.review_link,
          lead_reengagement_enabled = excluded.lead_reengagement_enabled,
          auto_resume_handoff_enabled = excluded.auto_resume_handoff_enabled,
+         custom_handoff_keywords = excluded.custom_handoff_keywords,
          updated_at = excluded.updated_at`,
     )
     .bind(
@@ -173,6 +182,7 @@ export async function upsertTenantSettings(db: D1Database, tenantId: string, set
       settings.reviewLink,
       settings.leadReengagementEnabled ? 1 : 0,
       settings.autoResumeHandoffEnabled ? 1 : 0,
+      JSON.stringify(settings.customHandoffKeywords),
     )
     .run();
 }

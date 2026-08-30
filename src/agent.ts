@@ -69,7 +69,17 @@ export class ConversationAgent {
       return Response.json({ replyText: null });
     }
 
-    if (template.toolsEnabled.includes("handoffHuman") && (detectsHandoffRequest(userText) || detectsUrgentSentiment(userText))) {
+    // Agencia ("palabras de handoff editables por tenant"): solo se lee
+    // tenantSettings aquí si el vertical realmente tiene handoffHuman
+    // habilitado — un vertical sin esa tool no gasta esta lectura extra.
+    const customHandoffKeywords = template.toolsEnabled.includes("handoffHuman")
+      ? (await getTenantSettings(this.env.DB, tenantId)).customHandoffKeywords
+      : [];
+
+    if (
+      template.toolsEnabled.includes("handoffHuman") &&
+      (detectsHandoffRequest(userText, customHandoffKeywords) || detectsUrgentSentiment(userText))
+    ) {
       await appendMessage(this.env.DB, ref, { role: "user", content: userText });
       await createHandoff(this.env.DB, ref, userText);
       await appendMessage(this.env.DB, ref, { role: "assistant", content: HANDOFF_REPLY_MESSAGE });

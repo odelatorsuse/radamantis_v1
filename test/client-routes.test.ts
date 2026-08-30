@@ -447,3 +447,43 @@ describe("GET/PUT /auto-resume-handoff (auto-reanudar tras pausa)", () => {
     expect(lastBind).toContain(1);
   });
 });
+
+describe("GET/PUT /handoff-keywords (palabras de handoff editables por tenant)", () => {
+  it("GET devuelve [] por default", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/handoff-keywords", { headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(200);
+    const body = await res.json<{ keywords: string[] }>();
+    expect(body.keywords).toEqual([]);
+  });
+
+  it("PUT guarda las palabras, recortadas y sin vacías", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/handoff-keywords",
+      {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ keywords: ["  quiero hablar con el doctor  ", "", "cirugía urgente"] }),
+      },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const lastBind = (env.__bind as ReturnType<typeof vi.fn>).mock.calls[(env.__bind as ReturnType<typeof vi.fn>).mock.calls.length - 1];
+    expect(lastBind).toContain(JSON.stringify(["quiero hablar con el doctor", "cirugía urgente"]));
+  });
+
+  it("PUT sin keywords (o no-array) guarda una lista vacía", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/handoff-keywords",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({}) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const lastBind = (env.__bind as ReturnType<typeof vi.fn>).mock.calls[(env.__bind as ReturnType<typeof vi.fn>).mock.calls.length - 1];
+    expect(lastBind).toContain(JSON.stringify([]));
+  });
+});

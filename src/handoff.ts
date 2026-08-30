@@ -17,9 +17,22 @@ const HANDOFF_KEYWORDS = [
   "emergencia",
 ];
 
-export function detectsHandoffRequest(text: string): boolean {
+// Agencia ("palabras de handoff editables por tenant"): extraKeywords se
+// SUMA a la lista base, nunca la reemplaza — un tenant mal configurado (o
+// que deja esto vacío) no pierde el blindaje base de handoff.
+export function detectsHandoffRequest(text: string, extraKeywords: string[] = []): boolean {
   const normalized = text.toLowerCase();
-  return HANDOFF_KEYWORDS.some((keyword) => normalized.includes(keyword));
+  return [...HANDOFF_KEYWORDS, ...extraKeywords].some((keyword) => keyword.trim() && normalized.includes(keyword.toLowerCase()));
+}
+
+export function parseCustomHandoffKeywords(json: string | null | undefined): string[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.filter((k): k is string => typeof k === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 // Etapa 10 (superpower "Vigilante"): mismo principio que arriba — detección

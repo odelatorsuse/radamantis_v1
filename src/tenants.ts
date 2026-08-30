@@ -84,6 +84,16 @@ export async function getChannelExternalId(db: D1Database, tenantId: string, cha
   return row?.external_id ?? null;
 }
 
+// Widget de sitio web: el visitante ya trae el tenantId en la URL (viene
+// del <script data-tenant="...">, público a propósito, no es un secreto)
+// — solo falta saber si existe y qué vertical usa, sin toda la carga de
+// getTenantDetail (métricas, settings, etc. que este endpoint público no
+// necesita).
+export async function getVerticalIdForTenant(db: D1Database, tenantId: string): Promise<string | null> {
+  const row = await db.prepare("SELECT vertical_id FROM tenants WHERE id = ?").bind(tenantId).first<{ vertical_id: string }>();
+  return row?.vertical_id ?? null;
+}
+
 export async function getTenantSettings(db: D1Database, tenantId: string): Promise<TenantSettings> {
   const row = await db
     .prepare(

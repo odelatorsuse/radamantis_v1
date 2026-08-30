@@ -1,4 +1,5 @@
 import { telegramChannelProvider } from "./telegram";
+import { webChannelProvider } from "./web";
 import type { ChannelProvider } from "./provider";
 
 // Registro de canales soportados — agregar un canal nuevo (WhatsApp,
@@ -7,6 +8,7 @@ import type { ChannelProvider } from "./provider";
 // noShowSweep.ts, client/routes.ts ni admin/routes.ts necesita cambiar.
 const PROVIDERS: Record<string, ChannelProvider> = {
   [telegramChannelProvider.channel]: telegramChannelProvider,
+  [webChannelProvider.channel]: webChannelProvider,
 };
 
 export function getChannelProvider(channel: string): ChannelProvider | null {

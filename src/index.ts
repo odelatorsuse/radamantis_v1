@@ -12,6 +12,7 @@ import { describeImage, transcribeVoice } from "./media";
 import { runNoShowSweep } from "./noShowSweep";
 import { downloadTelegramFile, extractIncomingMessage, sendTelegramMessage } from "./telegram";
 import { getTenantSettings, resolveTenant } from "./tenants";
+import { WIDGET_JS, widgetApp } from "./widget";
 
 interface Env {
   DB: D1Database;
@@ -40,6 +41,13 @@ app.get("/admin", (c) => c.html(DASHBOARD_HTML));
 // ADMIN_API_KEY compartido.
 app.route("/api/client", clientApp);
 app.get("/console", (c) => c.html(CONSOLE_HTML));
+
+// Agencia (widget de sitio web, v1): público a propósito — lo llama la
+// página del NEGOCIO, nunca nuestro panel. La protección real está en
+// src/widget.ts (chequeo de Origin contra el dominio configurado al
+// vincular el canal), no en estas rutas.
+app.route("/api/widget", widgetApp);
+app.get("/widget.js", (c) => c.body(WIDGET_JS, 200, { "Content-Type": "application/javascript; charset=utf-8" }));
 
 // Etapa 10 (Fase A): callback público de OAuth de Google — Google redirige
 // el navegador aquí directo (sin nuestro Bearer token), con ?state=tenantId.

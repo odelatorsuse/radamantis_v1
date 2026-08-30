@@ -185,7 +185,12 @@ describe("adminApp channels/supported (Etapa 10 — multi-canal)", () => {
     const res = await adminApp.request("/channels/supported", { headers: { Authorization: "Bearer test-admin-key" } }, mockEnv());
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ channels: [{ channel: "telegram", displayName: "Telegram" }] });
+    expect(body).toEqual({
+      channels: [
+        { channel: "telegram", displayName: "Telegram" },
+        { channel: "web", displayName: "Sitio web" },
+      ],
+    });
   });
 });
 

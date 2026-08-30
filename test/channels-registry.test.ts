@@ -8,6 +8,12 @@ describe("getChannelProvider", () => {
     expect(provider?.displayName).toBe("Telegram");
   });
 
+  it("devuelve el adaptador de sitio web", () => {
+    const provider = getChannelProvider("web");
+    expect(provider?.channel).toBe("web");
+    expect(provider?.displayName).toBe("Sitio web");
+  });
+
   it("devuelve null para un canal sin adaptador todavía (ej. whatsapp)", () => {
     expect(getChannelProvider("whatsapp")).toBeNull();
     expect(getChannelProvider("messenger")).toBeNull();
@@ -16,8 +22,9 @@ describe("getChannelProvider", () => {
 });
 
 describe("listSupportedChannels", () => {
-  it("incluye telegram", () => {
+  it("incluye telegram y sitio web", () => {
     const channels = listSupportedChannels().map((p) => p.channel);
     expect(channels).toContain("telegram");
+    expect(channels).toContain("web");
   });
 });

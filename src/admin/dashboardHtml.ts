@@ -330,6 +330,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           <select id="channelTenant"></select>
           <select id="channelType">
             <option value="telegram">Telegram</option>
+            <option value="web">Sitio web (widget)</option>
             <option value="whatsapp" disabled>WhatsApp (próximamente)</option>
             <option value="instagram" disabled>Instagram (próximamente)</option>
             <option value="messenger" disabled>Messenger (próximamente)</option>
@@ -337,6 +338,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           <input id="channelExternalId" placeholder="token del bot / id externo" required style="flex:1" />
           <button type="submit">Vincular canal</button>
         </form>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0" id="channelExternalIdHint">Para Telegram: el bot token de BotFather.</p>
         <p class="error" id="channelError"></p>
       </div>
     </div>
@@ -737,6 +739,20 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
             })
             .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
         });
+        if (ch.channel === "web") {
+          var snippetBtn = document.createElement("button");
+          snippetBtn.type = "button";
+          snippetBtn.className = "secondary";
+          snippetBtn.textContent = "Copiar snippet";
+          snippetBtn.onclick = function () {
+            var snippet = '<script src="' + window.location.origin + '/widget.js" data-tenant="' + tenantId + '"><\\/script>';
+            navigator.clipboard.writeText(snippet).then(function () {
+              snippetBtn.textContent = "¡Copiado!";
+              setTimeout(function () { snippetBtn.textContent = "Copiar snippet"; }, 1500);
+            });
+          };
+          row.appendChild(snippetBtn);
+        }
         channelsList.appendChild(row);
       });
 
@@ -1071,19 +1087,36 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       .catch(function (err) { document.getElementById("tenantError").textContent = err.message; });
   });
 
+  var CHANNEL_HINTS = {
+    telegram: { hint: "Para Telegram: el bot token de BotFather.", placeholder: "token del bot / id externo" },
+    web: { hint: "Para Sitio web: el dominio exacto donde vas a poner el widget (ej. https://minegocio.com) — es lo único que autoriza las peticiones del widget, así que debe coincidir exacto.", placeholder: "https://minegocio.com" },
+  };
+
+  document.getElementById("channelType").addEventListener("change", function () {
+    var cfg = CHANNEL_HINTS[this.value] || CHANNEL_HINTS.telegram;
+    document.getElementById("channelExternalIdHint").textContent = cfg.hint;
+    document.getElementById("channelExternalId").placeholder = cfg.placeholder;
+  });
+
   document.getElementById("channelForm").addEventListener("submit", function (e) {
     e.preventDefault();
     var tenantId = document.getElementById("channelTenant").value;
-    var body = {
-      channel: document.getElementById("channelType").value,
-      externalId: document.getElementById("channelExternalId").value,
-    };
+    var channelType = document.getElementById("channelType").value;
+    var externalId = document.getElementById("channelExternalId").value;
+    var body = { channel: channelType, externalId: externalId };
     var msgEl = document.getElementById("channelError");
     api("/tenants/" + tenantId + "/channels", { method: "POST", body: JSON.stringify(body) })
       .then(function (data) {
         document.getElementById("channelForm").reset();
         document.getElementById("channelType").value = "telegram";
-        if (data.webhookRegistered) {
+        document.getElementById("channelExternalIdHint").textContent = CHANNEL_HINTS.telegram.hint;
+        document.getElementById("channelExternalId").placeholder = CHANNEL_HINTS.telegram.placeholder;
+        if (channelType === "web") {
+          var snippet = '<script src="' + window.location.origin + '/widget.js" data-tenant="' + tenantId + '"><\\/script>';
+          msgEl.className = "success-msg";
+          msgEl.innerHTML = "Canal vinculado. Pega esto antes de <code>&lt;/body&gt;</code> en el sitio del negocio:<br><code style='display:block;margin-top:6px;word-break:break-all;'></code>";
+          msgEl.querySelector("code:last-child").textContent = snippet;
+        } else if (data.webhookRegistered) {
           msgEl.className = "success-msg";
           msgEl.textContent = "Canal vinculado y webhook registrado en Telegram.";
         } else if (data.webhookError) {

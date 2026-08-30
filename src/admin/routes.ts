@@ -190,6 +190,7 @@ adminApp.get("/tenants/:id/flow", async (c) => {
     channels: detail.channels.map((ch) => ({ channel: ch.channel })),
     conversationCount: detail.metrics.conversations,
     recentActivity,
+    agentStatus: detail.metrics.status,
     memory: { store: "D1", windowMessages: 20 },
     model: { provider: "OpenAI", name: "gpt-4o-mini" },
     rag: template.toolsEnabled.includes("searchKb")

@@ -91,21 +91,36 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   .bot-endpoint { font-family: "Fira Code", monospace; font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bot-card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 10px; font-size: 0.78rem; }
   .status-line { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .status-dot.ok { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse-led 1.8s ease-in-out infinite; }
   .status-dot.necesita_atencion { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+  .status-dot.error { background: var(--danger); box-shadow: 0 0 6px var(--danger); animation: pulse-led-danger 1.4s ease-in-out infinite; }
+  .status-dot.idle { background: var(--accent); box-shadow: 0 0 4px var(--accent); }
   @keyframes pulse-led {
     0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--accent); }
     50% { opacity: 0.45; box-shadow: 0 0 10px var(--accent); }
   }
+  @keyframes pulse-led-danger {
+    0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--danger); }
+    50% { opacity: 0.45; box-shadow: 0 0 10px var(--danger); }
+  }
 
   .flow-canvas { position: relative; padding: 30px 10px 50px; min-width: max-content; }
   .flow-connectors { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible; }
+  .flow-line { fill: none; stroke: #3A4A6B; stroke-width: 2; }
+  .flow-line-solid { stroke-dasharray: 6 5; animation: flow-march 0.9s linear infinite; }
+  .flow-line-dashed { stroke-dasharray: 3 6; opacity: 0.8; animation: flow-march 1.4s linear infinite; }
+  @keyframes flow-march { to { stroke-dashoffset: -22; } }
+  @media (prefers-reduced-motion: reduce) {
+    .flow-line-solid, .flow-line-dashed { animation: none; }
+  }
   .flow-main-row { display: flex; gap: 70px; align-items: center; position: relative; z-index: 2; }
   .flow-resource-row { display: flex; gap: 22px; flex-wrap: nowrap; margin-top: 90px; position: relative; z-index: 2; }
-  .flow-node { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 160px; flex-shrink: 0; }
+  .flow-node { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 168px; flex-shrink: 0; }
   .flow-node.flow-node-main { border-color: var(--primary); }
-  .flow-node-title { font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; gap: 6px; }
+  .flow-node-title { font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; gap: 7px; }
+  .flow-node-icon { width: 17px; height: 17px; flex-shrink: 0; color: var(--primary); }
+  .flow-node-title .status-dot { margin-left: auto; }
   .flow-node-detail { font-size: 0.76rem; color: var(--text-muted); margin-top: 4px; line-height: 1.45; }
   .flow-node.flow-node-off { opacity: 0.4; }
   .flow-legend { display: flex; gap: 22px; font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; align-items: center; flex-wrap: wrap; }
@@ -750,16 +765,43 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     recordAppointmentFeedback: "recordAppointmentFeedback",
   };
 
-  function flowNode(title, detailLines, opts) {
+  // Un ícono por tipo de nodo (mismo estilo de línea que el resto del
+  // panel: stroke, sin relleno) — nunca los íconos/logos de Forja, son
+  // glifos genéricos (avión de papel, chip, base de datos, libro, lupa,
+  // persona, calendario, estrella) para cada concepto real de Radamantis.
+  var FLOW_ICONS = {
+    canal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>',
+    agente: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.1" fill="currentColor" stroke="none"/><circle cx="9" cy="13.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="13.5" r="1.2" fill="currentColor" stroke="none"/></svg>',
+    respuesta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4V5z"/></svg>',
+    modelo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M6 10H3M6 14H3M18 10h3M18 14h3M10 6V3M14 6V3M10 18v3M14 18v3"/></svg>',
+    memoria: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg>',
+    conocimiento: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+    searchKb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>',
+    handoffHuman: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>',
+    checkAvailability: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+    bookAppointment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M12 14v4M10 16h4"/></svg>',
+    recordAppointmentFeedback: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"/></svg>',
+  };
+
+  // status: "ok" (verde, pulsa) | "necesita_atencion" (ámbar) | "error"
+  // (rojo, pulsa) | null (sin LED — no hay una condición real que medir
+  // para ese nodo, ej. Modelo/Memoria son configuración fija).
+  function flowNode(iconKey, title, detailLines, opts) {
     opts = opts || {};
     var node = document.createElement("div");
     node.className = "flow-node" + (opts.main ? " flow-node-main" : "") + (opts.off ? " flow-node-off" : "");
     var titleEl = document.createElement("div");
     titleEl.className = "flow-node-title";
-    titleEl.textContent = title;
-    if (opts.recentActivity) {
+    var iconWrap = document.createElement("span");
+    iconWrap.className = "flow-node-icon";
+    iconWrap.innerHTML = FLOW_ICONS[iconKey] || "";
+    titleEl.appendChild(iconWrap);
+    var titleText = document.createElement("span");
+    titleText.textContent = title;
+    titleEl.appendChild(titleText);
+    if (opts.status) {
       var dot = document.createElement("span");
-      dot.className = "status-dot ok";
+      dot.className = "status-dot " + opts.status;
       titleEl.appendChild(dot);
     }
     node.appendChild(titleEl);
@@ -772,10 +814,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     return node;
   }
 
-  // Dibuja las líneas del canvas (estilo n8n) DESPUÉS de que los nodos ya
-  // están en el DOM — mide posiciones reales con getBoundingClientRect en
-  // vez de coordenadas fijas, así se acomoda solo sin importar cuántas
-  // tools tenga habilitadas cada tenant.
+  // Dibuja las líneas del canvas (estilo n8n, animadas) DESPUÉS de que los
+  // nodos ya están en el DOM — mide posiciones reales con
+  // getBoundingClientRect en vez de coordenadas fijas, así se acomoda
+  // solo sin importar cuántas tools tenga habilitadas cada tenant.
   function drawFlowConnectors(canvasEl, svgEl, connections) {
     var canvasRect = canvasEl.getBoundingClientRect();
     svgEl.setAttribute("width", canvasEl.scrollWidth);
@@ -801,10 +843,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       }
       var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", d);
-      path.setAttribute("fill", "none");
-      path.setAttribute("stroke", "#3A4A6B");
-      path.setAttribute("stroke-width", "1.5");
-      if (conn.style === "dashed") path.setAttribute("stroke-dasharray", "5,4");
+      path.setAttribute("class", "flow-line " + (conn.style === "dashed" ? "flow-line-dashed" : "flow-line-solid"));
       svgEl.appendChild(path);
     });
   }
@@ -812,7 +851,9 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   // Agencia ("Flujo"): canvas tipo n8n con los nodos REALES de Radamantis
   // (nunca los de Forja) — cada dato viene de GET /tenants/:id/flow, nada
   // decorativo ni inventado. 0 llamadas significa "no se ha usado todavía",
-  // no "no existe".
+  // no "no existe". El LED de cada nodo refleja una condición real
+  // verificable (canal conectado, KB con documentos, calendario
+  // conectado) — nunca un estado inventado o siempre-verde.
   function loadFlow(tenantId) {
     var canvas = document.getElementById("flowCanvas");
     var svg = document.getElementById("flowConnectors");
@@ -824,32 +865,36 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
     api("/tenants/" + tenantId + "/flow").then(function (f) {
       var channelLabel = f.channels.length ? f.channels.map(function (c) { return c.channel; }).join(", ") : "sin canal";
-      var canalNode = flowNode("Canal", [channelLabel, f.conversationCount + " conversaciones"], { off: f.channels.length === 0, recentActivity: f.recentActivity });
-      var agenteNode = flowNode("Agente", ["Durable Object", "1 por conversación"], { main: true });
-      var respuestaNode = flowNode("Respuesta", ["se envía por el canal de origen"]);
+      var canalNode = flowNode("canal", "Canal", [channelLabel, f.conversationCount + " conversaciones"], {
+        off: f.channels.length === 0,
+        status: f.channels.length === 0 ? "error" : f.recentActivity ? "ok" : "idle",
+      });
+      var agenteNode = flowNode("agente", "Agente", ["Durable Object", "1 por conversación"], { main: true, status: f.agentStatus === "necesita_atencion" ? "necesita_atencion" : "ok" });
+      var respuestaNode = flowNode("respuesta", "Respuesta", ["se envía por el canal de origen"], { status: "ok" });
       mainRow.appendChild(canalNode);
       mainRow.appendChild(agenteNode);
       mainRow.appendChild(respuestaNode);
 
       var resourceNodes = [];
-      resourceNodes.push(flowNode("Modelo", [f.model.provider, f.model.name]));
-      resourceNodes.push(flowNode("Memoria", [f.memory.store, "últimos " + f.memory.windowMessages + " mensajes"]));
+      resourceNodes.push(flowNode("modelo", "Modelo", [f.model.provider, f.model.name], { status: "ok" }));
+      resourceNodes.push(flowNode("memoria", "Memoria", [f.memory.store, "últimos " + f.memory.windowMessages + " mensajes"], { status: "ok" }));
 
       if (f.rag.enabled) {
-        resourceNodes.push(flowNode("RAG / Conocimiento", [
+        var ragOff = f.rag.documentCount === 0;
+        resourceNodes.push(flowNode("conocimiento", "RAG / Conocimiento", [
           "umbral de relevancia " + f.rag.minRelevanceScore,
           f.rag.documentCount + " documento(s) indexado(s)",
           (f.toolCallCounts30d.searchKb || 0) + " llamadas/30d",
-        ]));
+        ], { off: ragOff, status: ragOff ? "error" : "ok" }));
       }
 
       f.toolsEnabled.forEach(function (toolName) {
         if (toolName === "searchKb") return; // ya mostrado arriba como RAG/Conocimiento
-        var isCalendarTool = toolName === "checkAvailability" || toolName === "bookAppointment";
-        var off = (isCalendarTool || toolName === "recordAppointmentFeedback") && !f.calendarConnected;
+        var isCalendarTool = toolName === "checkAvailability" || toolName === "bookAppointment" || toolName === "recordAppointmentFeedback";
+        var off = isCalendarTool && !f.calendarConnected;
         var detail = [(f.toolCallCounts30d[toolName] || 0) + " llamadas/30d"];
         if (off) detail.push("calendario no conectado");
-        resourceNodes.push(flowNode(TOOL_LABELS[toolName] || toolName, detail, { off: off }));
+        resourceNodes.push(flowNode(toolName, TOOL_LABELS[toolName] || toolName, detail, { off: off, status: off ? "error" : "ok" }));
       });
 
       resourceNodes.forEach(function (n) { resourceRow.appendChild(n); });

@@ -28,6 +28,12 @@ interface Env {
 
 const app = new Hono<{ Bindings: Env }>();
 
+// Agencia ("velocidad de respuesta"): valor fijo por ahora, no configurable
+// por tenant todavía — si se necesita distinto por tenant, es un solo
+// cambio (leer de tenantSettings en vez de esta constante), sin tocar
+// nada del mecanismo de buffer en sí (src/agent.ts).
+const TELEGRAM_BUFFER_SECONDS = 12;
+
 app.get("/health", (c) => c.json({ status: "ok", stage: "etapa-10" }));
 
 // Etapa 8 (D9): toda gestión de tenants/verticales vive primero como API;
@@ -159,12 +165,18 @@ app.post("/webhook/telegram/:botToken", async (c) => {
   const agentRes = await stub.fetch("https://agent/reply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tenantId, channel: "telegram", chatId, userText, verticalId }),
+    // Agencia ("velocidad de respuesta"): Telegram sí puede recibir la
+    // respuesta después por su cuenta (push, sendTelegramMessage), así que
+    // agrupa mensajes seguidos del mismo cliente en vez de contestar cada
+    // uno por separado — a diferencia del widget de sitio web, que necesita
+    // la respuesta en la misma petición y nunca manda este campo.
+    body: JSON.stringify({ tenantId, channel: "telegram", chatId, userText, verticalId, bufferSeconds: TELEGRAM_BUFFER_SECONDS }),
   });
   const { replyText } = await agentRes.json<{ replyText: string | null }>();
 
-  // Etapa 6: replyText es null mientras la conversación está en handoff —
-  // el bot se calla a propósito, un humano se hace cargo.
+  // Etapa 6: replyText es null mientras la conversación está en handoff, o
+  // mientras el mensaje quedó encolado esperando el resto del lote — en
+  // ambos casos el bot se calla a propósito.
   if (replyText) {
     await sendTelegramMessage(botToken, incoming.chatId, replyText);
   }

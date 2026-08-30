@@ -95,7 +95,7 @@ Clasificación de lo visto en las 5 páginas:
 | Conexiones → WhatsApp (Twilio/Meta), Instagram+Messenger, ManyChat | Ya clasificado, sin cambios | Bloqueado hasta que Oscar consiga credenciales reales de Meta/Twilio. ManyChat: sin caso de uso confirmado, mismo criterio que Composio (`docs/06-roadmap-agencia.md`, primera ronda). |
 | Configuración → tono/idioma/moneda | Ya cubierto | Sin cambios, ya existe en `/admin`. |
 | Configuración → multi-LLM / BYO API key / selector de modelo | **Sigue diferido** | Decisión explícita de Oscar ya tomada (primera ronda): key compartida por ahora. No se re-abre a menos que Oscar lo pida explícitamente. |
-| Configuración → velocidad de respuesta (agrupar mensajes seguidos antes de responder) | **Nuevo, roadmap — no construido** | Cambio de arquitectura real: hoy cada mensaje entrante dispara al agente de inmediato, sin agrupar mensajes seguidos del mismo cliente. Valorar si vale la pena antes de construir (¿ha sido un problema real para algún tenant?). |
+| Configuración → velocidad de respuesta (agrupar mensajes seguidos antes de responder) | **Completa (2026-08-30)** | Solo Telegram, 12s fijos (Durable Object Alarms) — ver `CLAUDE.md`. |
 | Configuración → auto-reanudar el bot tras N horas de pausa | **Nuevo, roadmap — no construido** | Hoy la pausa por handoff es indefinida hasta reanudar a mano. |
 | Configuración → palabras que activan handoff, editables por tenant | **Nuevo, roadmap — no construido** | Hoy `detectsHandoffRequest` es una lista fija en código (`src/handoff.ts`), igual para todos los tenants. |
 

@@ -3,6 +3,7 @@ import { executeFeedbackTool, RECORD_FEEDBACK_TOOL } from "./calendar/feedbackTo
 import { GoogleCalendarProvider } from "./calendar/google";
 import { getValidAccessToken } from "./calendar/oauth";
 import { CALENDAR_TOOLS, executeCalendarTool } from "./calendar/tools";
+import { getChannelProvider } from "./channels/registry";
 import { createHandoff, detectsHandoffRequest, detectsUrgentSentiment, HANDOFF_REPLY_MESSAGE, isPaused } from "./handoff";
 import { OpenAIProvider } from "./llm/openai";
 import { buildMessages, type LLMMessage, type LLMUsage } from "./llm/provider";
@@ -11,7 +12,7 @@ import { buildSystemPrompt, hasRelevantMatch } from "./prompts";
 import { embedText } from "./rag/embeddings";
 import { recordKbGap } from "./rag/gaps";
 import { searchKb, type KbMatch } from "./rag/search";
-import { getTenantSettings } from "./tenants";
+import { getChannelExternalId, getTenantSettings } from "./tenants";
 import { logToolCall } from "./toolCalls";
 import { logUsage } from "./usage";
 import { getVerticalTemplate } from "./verticals/registry";
@@ -28,7 +29,21 @@ interface Env {
 interface ReplyRequest extends ConversationRef {
   userText: string;
   verticalId: string;
+  // Agencia ("velocidad de respuesta"): si se manda (>0), este mensaje se
+  // encola junto con los que lleguen en los próximos `bufferSeconds` y se
+  // procesan juntos como un solo turno, en vez de responder de inmediato
+  // — para no contestarle por partes a alguien que está escribiendo
+  // varios mensajes seguidos (común en apps de mensajería tipo Telegram).
+  // El agente NUNCA decide esto mirando el nombre del canal — es el
+  // llamador quien sabe si puede recibir la respuesta después por su
+  // cuenta (push, ej. Telegram) o necesita la respuesta en la misma
+  // petición (ej. el widget de sitio web, que por eso nunca manda esto).
+  bufferSeconds?: number;
 }
+
+const PENDING_TEXTS_KEY = "pendingTexts";
+const PENDING_REF_KEY = "pendingRef";
+const PENDING_VERTICAL_KEY = "pendingVerticalId";
 
 function sumUsage(a: LLMUsage, b: LLMUsage): LLMUsage {
   return { promptTokens: a.promptTokens + b.promptTokens, completionTokens: a.completionTokens + b.completionTokens };
@@ -43,7 +58,7 @@ export class ConversationAgent {
   ) {}
 
   async fetch(request: Request): Promise<Response> {
-    const { tenantId, channel, chatId, userText, verticalId } = (await request.json()) as ReplyRequest;
+    const { tenantId, channel, chatId, userText, verticalId, bufferSeconds } = (await request.json()) as ReplyRequest;
     const ref: ConversationRef = { tenantId, channel, chatId };
     const template = getVerticalTemplate(verticalId);
 
@@ -66,6 +81,63 @@ export class ConversationAgent {
       return Response.json({ replyText: HANDOFF_REPLY_MESSAGE });
     }
 
+    if (bufferSeconds && bufferSeconds > 0) {
+      const pending = (await this.state.storage.get<string[]>(PENDING_TEXTS_KEY)) ?? [];
+      pending.push(userText);
+      await this.state.storage.put(PENDING_TEXTS_KEY, pending);
+      await this.state.storage.put(PENDING_REF_KEY, ref);
+      await this.state.storage.put(PENDING_VERTICAL_KEY, verticalId);
+      await this.state.storage.setAlarm(Date.now() + bufferSeconds * 1000);
+      return Response.json({ replyText: null });
+    }
+
+    const replyText = await this.runAgentTurn(ref, verticalId, userText);
+    return Response.json({ replyText });
+  }
+
+  // Dispara cuando se cumple la ventana de espera de un mensaje encolado.
+  // La respuesta ya no tiene a quién devolvérsela por HTTP (esa petición
+  // terminó hace rato) — se empuja por el ChannelProvider real del canal.
+  async alarm(): Promise<void> {
+    const pending = await this.state.storage.get<string[]>(PENDING_TEXTS_KEY);
+    const ref = await this.state.storage.get<ConversationRef>(PENDING_REF_KEY);
+    const verticalId = await this.state.storage.get<string>(PENDING_VERTICAL_KEY);
+    await this.state.storage.delete(PENDING_TEXTS_KEY);
+    await this.state.storage.delete(PENDING_REF_KEY);
+    await this.state.storage.delete(PENDING_VERTICAL_KEY);
+    if (!pending || pending.length === 0 || !ref || !verticalId) return;
+
+    // Pudo pausarse mientras esperábamos (ej. un mensaje posterior en el
+    // mismo lote pidió un humano, o alguien respondió manual desde /console).
+    if (await isPaused(this.env.DB, ref)) return;
+
+    const combinedText = pending.join("\n");
+    const replyText = await this.runAgentTurn(ref, verticalId, combinedText);
+    if (!replyText) return;
+
+    // best-effort: para cuando dispara el alarm ya se borró el estado
+    // pendiente (a propósito, para no reintentar un LLM/tool-call real si
+    // Cloudflare reintenta la alarm) — si el push falla, la respuesta ya
+    // quedó guardada en `messages`, solo no le llegó al cliente por Telegram.
+    try {
+      const provider = getChannelProvider(ref.channel);
+      const externalId = provider ? await getChannelExternalId(this.env.DB, ref.tenantId, ref.channel) : null;
+      if (provider && externalId) {
+        await provider.sendMessage(externalId, ref.chatId, replyText);
+      }
+    } catch {
+      // best-effort — ver comentario arriba.
+    }
+  }
+
+  // Núcleo del agente (RAG, calendario, LLM, tools) — el mismo para una
+  // respuesta inmediata que para una encolada, `userText` ya viene
+  // combinado si hubo buffer. Extraído a método propio para que fetch()
+  // y alarm() lo compartan sin duplicar lógica.
+  private async runAgentTurn(ref: ConversationRef, verticalId: string, userText: string): Promise<string> {
+    const { tenantId, channel } = ref;
+    const template = getVerticalTemplate(verticalId);
+
     const history = await getHistory(this.env.DB, ref);
     const historyMessages: LLMMessage[] = history.map((m) => ({ role: m.role, content: m.content }));
 
@@ -76,7 +148,6 @@ export class ConversationAgent {
     if (template.toolsEnabled.includes("searchKb")) {
       const queryEmbedding = await embedText(this.env.OPENAI_API_KEY, userText);
       kbMatches = await searchKb(this.env.VECTORIZE, queryEmbedding, tenantId);
-      await logToolCall(this.env.DB, tenantId, "searchKb");
       // Etapa 10 (superpower "Mejoras"): ninguna respuesta con confianza en
       // la KB — se registra para que el dueño sepa qué le falta agregar. El
       // bot nunca "aprende solo" de esto, la decisión de qué agregar es
@@ -147,7 +218,7 @@ export class ConversationAgent {
 
         // Etapa 10 (superpower "Recupera no-shows"): guarda un rastro local
         // de la cita agendada — Google Calendar no nos da de vuelta el
-        // chat_id/canal para poder recontactar al cliente después.
+        // chat_id/canal necesario para recontactar al cliente después.
         if (toolCall.name === "bookAppointment") {
           await recordAppointmentFromToolCall(this.env.DB, ref, toolCall.arguments, result, tenantSettings.timezone);
         }
@@ -167,6 +238,6 @@ export class ConversationAgent {
     await appendMessage(this.env.DB, ref, { role: "assistant", content: completion.text });
     await logUsage(this.env.DB, { tenantId, channel, model: llm.model, usage });
 
-    return Response.json({ replyText: completion.text });
+    return completion.text;
   }
 }

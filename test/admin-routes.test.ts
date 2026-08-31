@@ -140,41 +140,78 @@ describe("adminApp PUT /tenants/:id/staff-members (Agencia — preguntas mínima
   });
 });
 
-describe("adminApp DELETE /tenants/:id ('Borrar cliente')", () => {
-  function mockDeletableTenantEnv() {
-    const batch = vi.fn().mockResolvedValue([]);
-    const db = {
-      prepare: vi.fn((sql: string) => {
-        if (sql.includes("FROM tenants")) {
-          return { bind: () => ({ first: async () => ({ id: "vet-ch", name: "Dr. Vet CH", vertical_id: "veterinaria", created_at: "2026-01-01" }) }) };
-        }
-        if (sql.includes("FROM kb_documents")) {
-          return { bind: () => ({ all: async () => ({ results: [] }) }) };
-        }
-        if (sql.includes("FROM tenant_settings")) {
-          return { bind: () => ({ first: async () => null }) };
-        }
-        if (sql.includes("FROM channel_bindings")) {
-          return { bind: () => ({ all: async () => ({ results: [] }) }) };
-        }
-        if (sql.includes("INSERT INTO admin_actions")) {
-          return { bind: () => ({ run: async () => ({ success: true }) }) };
-        }
-        return { bind: () => ({ first: async () => ({ messages_in: 0, messages_out: 0, conversations: 0, open_handoffs: 0 }) }) };
-      }),
-      batch,
-    } as unknown as D1Database;
-    return {
-      DB: db,
-      ADMIN_API_KEY: "test-admin-key",
-      ADMIN_SESSION_SECRET: SESSION_SECRET,
-      OPENAI_API_KEY: "fake-openai-key",
-      TELEGRAM_WEBHOOK_SECRET: "webhook-secret",
-      VECTORIZE: { deleteByIds: vi.fn().mockResolvedValue({}) } as unknown as VectorizeIndex,
-      __batch: batch,
-    };
-  }
+// Compartido por "Borrar cliente" y "Ver consola" — ambos dependen de
+// getTenantDetail, que hace varias consultas encadenadas (tenant, settings,
+// canales, contadores).
+function mockDeletableTenantEnv() {
+  const batch = vi.fn().mockResolvedValue([]);
+  const db = {
+    prepare: vi.fn((sql: string) => {
+      if (sql.includes("FROM tenants")) {
+        return { bind: () => ({ first: async () => ({ id: "vet-ch", name: "Dr. Vet CH", vertical_id: "veterinaria", created_at: "2026-01-01" }) }) };
+      }
+      if (sql.includes("FROM kb_documents")) {
+        return { bind: () => ({ all: async () => ({ results: [] }) }) };
+      }
+      if (sql.includes("FROM tenant_settings")) {
+        return { bind: () => ({ first: async () => null }) };
+      }
+      if (sql.includes("FROM channel_bindings")) {
+        return { bind: () => ({ all: async () => ({ results: [] }) }) };
+      }
+      if (sql.includes("INSERT INTO admin_actions")) {
+        return { bind: () => ({ run: async () => ({ success: true }) }) };
+      }
+      return { bind: () => ({ first: async () => ({ messages_in: 0, messages_out: 0, conversations: 0, open_handoffs: 0 }) }) };
+    }),
+    batch,
+  } as unknown as D1Database;
+  return {
+    DB: db,
+    ADMIN_API_KEY: "test-admin-key",
+    ADMIN_SESSION_SECRET: SESSION_SECRET,
+    CLIENT_SESSION_SECRET: "test-client-session-secret",
+    OPENAI_API_KEY: "fake-openai-key",
+    TELEGRAM_WEBHOOK_SECRET: "webhook-secret",
+    VECTORIZE: { deleteByIds: vi.fn().mockResolvedValue({}) } as unknown as VectorizeIndex,
+    __batch: batch,
+  };
+}
 
+describe("adminApp POST /tenants/:id/console-preview-token (Agencia — ver consola sin cambiar de ventana)", () => {
+  it("devuelve 404 si el tenant no existe", async () => {
+    const res = await adminApp.request(
+      "/tenants/no-existe/console-preview-token",
+      { method: "POST", headers: { Authorization: "Bearer test-admin-key" } },
+      mockEnv(),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("rechaza sin auth (401)", async () => {
+    const res = await adminApp.request(
+      "/tenants/vet-ch/console-preview-token",
+      { method: "POST" },
+      mockDeletableTenantEnv(),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("devuelve un token de impersonación y el tenantId (200, solo rol admin)", async () => {
+    const res = await adminApp.request(
+      "/tenants/vet-ch/console-preview-token",
+      { method: "POST", headers: { Authorization: "Bearer test-admin-key" } },
+      mockDeletableTenantEnv(),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.tenantId).toBe("vet-ch");
+    expect(typeof body.token).toBe("string");
+    expect(body.token.split(".")).toHaveLength(2); // formato de session.ts: body.firma
+  });
+});
+
+describe("adminApp DELETE /tenants/:id ('Borrar cliente')", () => {
   it("rechaza si confirmId no coincide exactamente con el id del tenant (400)", async () => {
     const res = await adminApp.request(
       "/tenants/vet-ch",

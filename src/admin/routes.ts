@@ -11,6 +11,7 @@ import { getPlatformSettings, upsertPlatformSettings } from "../platformSettings
 import { fetchCloudflareUsageThisMonth } from "../cloudflareAnalytics";
 import { estimateCloudflareCostUsd } from "../cloudflareCosts";
 import { createTenantUser, getTenantUserByEmail, listTenantUsers, setStaffMembers, setTenantUserPassword } from "../client/repository";
+import { createImpersonationToken } from "../client/session";
 import { hashPassword, verifyPassword } from "../passwords";
 import { runColdLeadSweep } from "../coldLeads";
 import { runAutoResumeSweep } from "../handoffAutoResume";
@@ -42,6 +43,7 @@ interface Env {
   AGENT: DurableObjectNamespace;
   ADMIN_API_KEY: string;
   ADMIN_SESSION_SECRET: string;
+  CLIENT_SESSION_SECRET: string;
   OPENAI_API_KEY: string;
   TELEGRAM_WEBHOOK_SECRET: string;
   GOOGLE_OAUTH_CLIENT_ID: string;
@@ -531,6 +533,21 @@ adminApp.put("/tenants/:id/staff-members", async (c) => {
   await setStaffMembers(c.env.DB, tenantId, body.staffMembers || []);
   await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "update_staff_members", details: { staffMembers: body.staffMembers || [] } });
   return c.json({ ok: true });
+});
+
+// Agencia ("ver consola sin cambiar de ventana"): un admin puede abrir la
+// consola de cualquier tenant embebida en /admin, sin pedirle su
+// contraseña. Solo rol admin (mismo nivel que crear tenant/ver uso) y
+// SIEMPRE auditado — el token da el mismo alcance que un login real de
+// ese tenant, aunque dura solo 15 minutos (createImpersonationToken).
+adminApp.post("/tenants/:id/console-preview-token", requireAdmin, async (c) => {
+  const tenantId = c.req.param("id");
+  const tenant = await getTenantDetail(c.env.DB, tenantId);
+  if (!tenant) return c.json({ error: "Tenant no encontrado" }, 404);
+
+  const token = await createImpersonationToken(c.env.CLIENT_SESSION_SECRET, tenantId);
+  await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "view_client_console" });
+  return c.json({ token, tenantId });
 });
 
 // Etapa Agencia (Equipo/roles): gestión del equipo interno que usa el

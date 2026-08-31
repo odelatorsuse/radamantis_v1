@@ -195,3 +195,16 @@ Oscar pidió que el alta de un cliente nuevo pregunte lo básico según su tipo 
 | Skill `radamantis-admin` actualizado | **Completa (2026-08-31)** | Documenta el mismo criterio para alta por chat — misma fuente de datos que el wizard. |
 
 Verificado end-to-end en producción con un tenant desechable (`qa-onboarding-flow`, barbería): zona horaria y staff quedaron guardados sin perder el resto de la config, confirmado por `GET /tenants/:id`, luego borrado — ver `CLAUDE.md` y memoria `project_onboarding_questions`.
+
+## Décima primera ronda: "ver consola sin cambiar de ventana" (2026-08-31)
+
+Oscar pidió entrar a la consola de cualquier cliente desde `/admin` sin cambiar de pestaña — una vista interna de lo que se ve en `/console`.
+
+| Ítem | Estado | Nota |
+|---|---|---|
+| Token de impersonación de 15 min (`createImpersonationToken`) | **Completa (2026-08-31)** | Mismo formato que un login real, `userId` sentinel — solo `tenantId` importa en `/api/client/*`. |
+| `POST /tenants/:id/console-preview-token` (solo rol admin, auditado) | **Completa (2026-08-31)** | Mismo alcance que un login real de ese tenant — acción sensible, siempre queda en `admin_actions`. |
+| Overlay con `<iframe src="/console">` en `/admin` | **Completa (2026-08-31)** | Funciona porque `/admin` y `/console` son el mismo origen — sin tocar `consoleHtml.ts`. |
+| Protección de sesión real en otra pestaña | **Completa (2026-08-31)** | Snapshot/restauración de `localStorage` al abrir/cerrar el overlay, para no pisar una sesión real de Oscar abierta en paralelo. |
+
+Verificado end-to-end en producción con una cuenta admin temporal: el token autenticó correctamente contra `/api/client/branding` (scope real a `vet-ch`), auditoría confirmada en D1 — ver `CLAUDE.md` y memoria `project_console_impersonation`.

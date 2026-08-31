@@ -305,7 +305,9 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         <div style="display:flex;gap:8px;margin-bottom:14px">
           <input type="text" id="consoleUrlDisplay" readonly style="flex:1;font-family:'Fira Code',monospace;font-size:0.8rem" />
           <button type="button" class="secondary" id="copyConsoleUrlBtn">Copiar URL</button>
+          <button type="button" id="viewConsoleBtn">Ver consola (sin salir de aquí)</button>
         </div>
+        <p class="error" id="viewConsoleError"></p>
 
         <table id="tenantUsersTable">
           <thead><tr><th>Email</th><th>Desde</th><th></th></tr></thead>
@@ -581,6 +583,20 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   </section>
 
 </main>
+
+<!-- Agencia ("ver consola sin cambiar de ventana"): vista embebida de
+     /console para un tenant, sin salir de /admin. El token es de
+     impersonación de 15 min (createImpersonationToken) — se guarda en
+     localStorage bajo las MISMAS llaves que usa /console (mismo origen),
+     y se restaura el valor anterior al cerrar para no pisar una sesión
+     real que Oscar pudiera tener abierta en otra pestaña. -->
+<div id="consolePreviewOverlay" style="display:none;position:fixed;inset:0;z-index:100;background:var(--bg);flex-direction:column">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface)">
+    <span style="font-size:0.88rem;color:var(--text-muted)">Viendo la consola de <strong id="consolePreviewTenantLabel"></strong> — es la sesión real de este cliente: cualquier acción aquí (responder un mensaje, cambiar config) es real, no una simulación.</span>
+    <button type="button" class="secondary" id="closeConsolePreviewBtn">Cerrar</button>
+  </div>
+  <iframe id="consolePreviewFrame" style="flex:1;border:none;width:100%"></iframe>
+</div>
 
 <script>
 (function () {
@@ -949,6 +965,13 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   }
 
   var currentDetailTenantId = null;
+  // Agencia ("ver consola sin cambiar de ventana"): snapshot de lo que
+  // había en las llaves de /console ANTES de abrir la vista embebida, para
+  // restaurarlo al cerrar — /admin y /console comparten localStorage por
+  // ser el mismo origen, así que sin esto una sesión real de Oscar en otra
+  // pestaña de /console se perdería silenciosamente.
+  var consolePreviewPrevToken = null;
+  var consolePreviewPrevTenant = null;
   var DETAIL_STATUS_LABELS = { ok: "OK", necesita_atencion: "Necesita atención" };
   var DAY_ROWS = [["mon", "Lunes"], ["tue", "Martes"], ["wed", "Miércoles"], ["thu", "Jueves"], ["fri", "Viernes"], ["sat", "Sábado"], ["sun", "Domingo"]];
 
@@ -1148,6 +1171,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       document.getElementById("deleteTenantConfirmInput").value = "";
       document.getElementById("deleteTenantError").textContent = "";
       document.getElementById("consoleUrlDisplay").value = window.location.origin + "/console";
+      document.getElementById("viewConsoleError").textContent = "";
       document.getElementById("resetPasswordPanel").style.display = "none";
       document.getElementById("newTenantUserForm").reset();
       document.getElementById("newTenantUserMsg").textContent = "";
@@ -1431,6 +1455,36 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
   document.getElementById("copyConsoleUrlBtn").addEventListener("click", function () {
     copyToClipboard(document.getElementById("consoleUrlDisplay").value, this, "Copiar URL");
+  });
+
+  var CLIENT_STORAGE_KEY = "radamantisClientToken";
+  var CLIENT_STORAGE_TENANT = "radamantisClientTenant";
+
+  document.getElementById("viewConsoleBtn").addEventListener("click", function () {
+    var errEl = document.getElementById("viewConsoleError");
+    errEl.textContent = "";
+    api("/tenants/" + currentDetailTenantId + "/console-preview-token", { method: "POST" })
+      .then(function (data) {
+        consolePreviewPrevToken = localStorage.getItem(CLIENT_STORAGE_KEY);
+        consolePreviewPrevTenant = localStorage.getItem(CLIENT_STORAGE_TENANT);
+        localStorage.setItem(CLIENT_STORAGE_KEY, data.token);
+        localStorage.setItem(CLIENT_STORAGE_TENANT, data.tenantId);
+        document.getElementById("consolePreviewTenantLabel").textContent = data.tenantId;
+        document.getElementById("consolePreviewFrame").src = "/console";
+        document.getElementById("consolePreviewOverlay").style.display = "flex";
+      })
+      .catch(function (err) { errEl.textContent = err.message; });
+  });
+
+  document.getElementById("closeConsolePreviewBtn").addEventListener("click", function () {
+    document.getElementById("consolePreviewOverlay").style.display = "none";
+    document.getElementById("consolePreviewFrame").src = "about:blank";
+    // Restaura lo que había antes de abrir la vista embebida — si Oscar
+    // tenía una sesión real de /console abierta en otra pestaña, esto
+    // evita que un refresh ahí la reemplace silenciosamente por el
+    // tenant que acaba de ver aquí.
+    if (consolePreviewPrevToken) { localStorage.setItem(CLIENT_STORAGE_KEY, consolePreviewPrevToken); } else { localStorage.removeItem(CLIENT_STORAGE_KEY); }
+    if (consolePreviewPrevTenant) { localStorage.setItem(CLIENT_STORAGE_TENANT, consolePreviewPrevTenant); } else { localStorage.removeItem(CLIENT_STORAGE_TENANT); }
   });
 
   document.getElementById("generateNewUserPasswordBtn").addEventListener("click", function () {

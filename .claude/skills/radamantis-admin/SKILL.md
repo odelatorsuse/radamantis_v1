@@ -66,7 +66,39 @@ Devuelve `{tenant: {id, name, vertical_id, created_at, settings, channels: [{cha
 ```bash
 curl -s "$RADAMANTIS_BASE_URL/api/admin/verticals" -H "Authorization: Bearer $RADAMANTIS_ADMIN_API_KEY"
 ```
-Devuelve `{verticals: [{verticalId, displayName, toolsEnabled}]}` — `verticalId` es lo que necesitas para el alta.
+Devuelve `{verticals: [{verticalId, displayName, toolsEnabled, kbSchema}]}` —
+`verticalId` es lo que necesitas para el alta; `toolsEnabled` te dice
+qué preguntar además (ver abajo); `kbSchema` son los documentos de KB
+sugeridos para ese giro (menciónalos, no los inventes de más).
+
+**Preguntas mínimas de alta (Agencia, antes de crear el tenant) —
+mismo criterio que el wizard de `/admin`, misma fuente de datos
+(`/verticals`), para que preguntar por chat o por el dashboard termine
+en el mismo resultado:**
+
+1. **Siempre**, sin importar el giro:
+   - Nombre del negocio y un `id` slug único (o propón uno a partir del nombre).
+   - Giro (`verticalId`, de la lista de arriba).
+   - Zona horaria del negocio (ej. `America/Bogota`) — es la única forma
+     de que las citas se calculen bien; NO asumas `America/Mexico_City`
+     solo porque es el default del sistema, pregúntalo siempre.
+   - Canal inicial: Telegram (pide el token del bot de BotFather),
+     Sitio web (pide el dominio permitido), o "decidir después" — si el
+     usuario no lo tiene a la mano en este momento, es una respuesta
+     válida, no insistas.
+2. **Solo si `toolsEnabled` del giro incluye `"bookAppointment"`**:
+   pregunta si el negocio agenda con más de una persona por separado
+   (ej. varios estilistas/doctores) — si sí, pide los nombres para
+   `staff-members` (ver abajo). Si el negocio agenda "con el negocio en
+   general", no hace falta nada aquí, déjalo vacío.
+3. **Solo si `toolsEnabled` del giro incluye `"searchCatalog"`**: avisa
+   que ese giro usa catálogo con fotos y que se carga después desde
+   `/console` (pestaña Catálogo) — es un aviso, no una pregunta; el
+   catálogo lo llena el dueño del negocio, no tú.
+
+No preguntes nada de esto si el usuario ya te lo dio todo en su mensaje
+original — el objetivo es no dejar pasar algo importante, no interrogar
+por interrogar.
 
 **Alta de tenant nuevo (solo rol admin):**
 ```bash
@@ -75,10 +107,22 @@ curl -s -X POST "$RADAMANTIS_BASE_URL/api/admin/tenants" \
   -d '{"id":"<slug-unico>","name":"<Nombre del negocio>","verticalId":"<de /verticals>"}'
 ```
 `id` es el identificador único elegido a mano (slug legible, ej.
-`vet-ch`), no un UUID autogenerado — pídeselo al usuario o propón uno a
-partir del nombre del negocio. Esto SOLO crea la fila del tenant —
-todavía no tiene canal ni KB ni login de consola; sigue con las
-secciones de abajo para completar el alta.
+`vet-ch`), no un UUID autogenerado. Esto SOLO crea la fila del tenant
+con sus defaults — nada de lo que preguntaste arriba se guarda solo,
+tienes que aplicarlo con las llamadas de las secciones de abajo
+(`settings` para zona horaria, `channels` para el canal, y
+`staff-members` más abajo si aplica) antes de dar el alta por
+concluida.
+
+**Guardar el staff (solo si preguntaste por él arriba):**
+```bash
+curl -s -X PUT "$RADAMANTIS_BASE_URL/api/admin/tenants/<id>/staff-members" \
+  -H "Authorization: Bearer $RADAMANTIS_ADMIN_API_KEY" -H "Content-Type: application/json" \
+  -d '{"staffMembers":["Ana","Carlos"]}'
+```
+Es el mismo campo que el dueño del negocio puede editar después desde
+`/console` (Salud → Personal) — esto solo lo siembra al momento del
+alta si ya sabes los nombres.
 
 ## Canales
 

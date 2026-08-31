@@ -107,6 +107,39 @@ describe("adminApp GET /tenants/:id/users (Agencia — UI de 'Acceso a consola')
   });
 });
 
+describe("adminApp PUT /tenants/:id/staff-members (Agencia — preguntas mínimas de alta)", () => {
+  it("guarda el staff vía setStaffMembers, preservando el resto de settings", async () => {
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const first = vi.fn().mockResolvedValue(null); // getTenantSettings -> defaults (sin fila)
+    const bind = vi.fn().mockReturnValue({ first, run });
+    const env = mockEnv({ DB: { prepare: vi.fn().mockReturnValue({ bind }) } as unknown as D1Database });
+
+    const res = await adminApp.request(
+      "/tenants/vet-ch/staff-members",
+      {
+        method: "PUT",
+        headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" },
+        body: JSON.stringify({ staffMembers: ["Ana", "Carlos"] }),
+      },
+      env,
+    );
+    expect(res.status).toBe(200);
+    // 2 escrituras: upsertTenantSettings (staff) + logAdminAction (auditoría).
+    expect(run).toHaveBeenCalledTimes(2);
+    const staffCall = bind.mock.calls.find((call) => call.includes(JSON.stringify(["Ana", "Carlos"])));
+    expect(staffCall).toBeDefined();
+  });
+
+  it("rechaza sin auth (401)", async () => {
+    const res = await adminApp.request(
+      "/tenants/vet-ch/staff-members",
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ staffMembers: [] }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("adminApp DELETE /tenants/:id ('Borrar cliente')", () => {
   function mockDeletableTenantEnv() {
     const batch = vi.fn().mockResolvedValue([]);

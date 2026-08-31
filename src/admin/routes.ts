@@ -10,7 +10,7 @@ import { buildFacebookAuthUrl } from "../channels/metaOauth";
 import { getPlatformSettings, upsertPlatformSettings } from "../platformSettings";
 import { fetchCloudflareUsageThisMonth } from "../cloudflareAnalytics";
 import { estimateCloudflareCostUsd } from "../cloudflareCosts";
-import { createTenantUser, getTenantUserByEmail, listTenantUsers, setTenantUserPassword } from "../client/repository";
+import { createTenantUser, getTenantUserByEmail, listTenantUsers, setStaffMembers, setTenantUserPassword } from "../client/repository";
 import { hashPassword, verifyPassword } from "../passwords";
 import { runColdLeadSweep } from "../coldLeads";
 import { runAutoResumeSweep } from "../handoffAutoResume";
@@ -518,6 +518,18 @@ adminApp.put("/tenants/:id/users/password", async (c) => {
   }
   await setTenantUserPassword(c.env.DB, user.id, await hashPassword(body.newPassword));
   await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "reset_client_user_password", details: { email: body.email } });
+  return c.json({ ok: true });
+});
+
+// Agencia (preguntas mínimas de alta): setStaffMembers ya existía para
+// /console (el propio negocio lo edita después) — este endpoint es el
+// mismo dato, escrito desde /admin durante el onboarding cuando el giro
+// agenda citas y el operador ya sabe que hay más de una persona.
+adminApp.put("/tenants/:id/staff-members", async (c) => {
+  const tenantId = c.req.param("id");
+  const body = await c.req.json<{ staffMembers?: string[] }>();
+  await setStaffMembers(c.env.DB, tenantId, body.staffMembers || []);
+  await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "update_staff_members", details: { staffMembers: body.staffMembers || [] } });
   return c.json({ ok: true });
 });
 

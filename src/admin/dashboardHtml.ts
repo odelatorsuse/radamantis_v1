@@ -406,9 +406,39 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           <div class="connector-grid" id="verticalGrid"></div>
 
           <form id="tenantForm" style="margin-top:16px">
-            <input id="tenantId" placeholder="id (ej. vet-norte)" required />
-            <input id="tenantName" placeholder="Nombre del negocio" required />
-            <button type="submit">Crear cliente</button>
+            <input id="tenantId" placeholder="id (ej. vet-norte)" required style="width:100%;display:block" />
+            <input id="tenantName" placeholder="Nombre del negocio" required style="width:100%;display:block;margin-top:8px" />
+
+            <label style="display:block;font-size:0.8rem;color:var(--text-muted);margin-top:14px;margin-bottom:4px">Zona horaria del negocio</label>
+            <input id="tenantTimezone" list="tzList" value="America/Mexico_City" style="width:100%;display:block" />
+            <datalist id="tzList">
+              <option value="America/Mexico_City"></option>
+              <option value="America/Tijuana"></option>
+              <option value="America/Cancun"></option>
+              <option value="America/Bogota"></option>
+              <option value="America/Lima"></option>
+              <option value="America/Santiago"></option>
+              <option value="America/Argentina/Buenos_Aires"></option>
+              <option value="America/New_York"></option>
+              <option value="America/Los_Angeles"></option>
+            </datalist>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">Importante para que las citas se calculen bien — no se puede adivinar del giro.</p>
+
+            <label style="display:block;font-size:0.8rem;color:var(--text-muted);margin-top:14px;margin-bottom:4px">Canal inicial</label>
+            <select id="tenantChannelChoice" style="width:100%;display:block">
+              <option value="">Decidir después (lo vinculas en Conectores)</option>
+              <option value="telegram">Telegram</option>
+              <option value="web">Sitio web (widget)</option>
+            </select>
+            <input id="tenantChannelValue" style="width:100%;display:none;margin-top:8px" />
+
+            <div id="tenantStaffGroup" style="display:none;margin-top:14px">
+              <label style="display:block;font-size:0.8rem;color:var(--text-muted);margin-bottom:4px">Personal a agendar por separado (opcional)</label>
+              <input id="tenantStaffInput" placeholder="ej. Ana, Carlos — vacío si agenda con el negocio en general" style="width:100%;display:block" />
+            </div>
+            <p id="tenantCatalogHint" style="display:none;font-size:0.78rem;color:var(--text-muted);margin-top:10px"></p>
+
+            <button type="submit" style="margin-top:16px">Crear cliente</button>
           </form>
           <div id="verticalKbHint" style="font-size:0.8rem;color:var(--text-muted);margin-top:8px"></div>
           <p class="error" id="tenantError"></p>
@@ -688,11 +718,28 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
   var selectedVerticalId = null;
   var VERTICAL_KB_SCHEMAS = {};
+  // Agencia (preguntas mínimas de alta): qué preguntar además de KB/canal se
+  // deriva de toolsEnabled, NO de un campo nuevo por giro — así agregar un
+  // giro nuevo no requiere tocar esta lógica (D6, cero cambios al core).
+  var VERTICAL_TOOLS = {};
 
   function updateVerticalKbHint() {
     var hint = document.getElementById("verticalKbHint");
     var kb = VERTICAL_KB_SCHEMAS[selectedVerticalId] || [];
     hint.textContent = kb.length ? ("Documentos de KB sugeridos para subir después: " + kb.join(", ") + ".") : "";
+  }
+
+  function updateOnboardingExtras() {
+    var tools = VERTICAL_TOOLS[selectedVerticalId] || [];
+    var staffGroup = document.getElementById("tenantStaffGroup");
+    staffGroup.style.display = tools.indexOf("bookAppointment") !== -1 ? "block" : "none";
+    var catalogHint = document.getElementById("tenantCatalogHint");
+    if (tools.indexOf("searchCatalog") !== -1) {
+      catalogHint.style.display = "block";
+      catalogHint.textContent = "Este giro usa catálogo con fotos — se carga después desde la consola del cliente (pestaña Catálogo).";
+    } else {
+      catalogHint.style.display = "none";
+    }
   }
 
   function renderVerticalGrid(verticals) {
@@ -701,6 +748,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     verticals.forEach(function (v) {
       if (v.verticalId === "sandbox") return; // interno, no es un giro real para onboarding
       VERTICAL_KB_SCHEMAS[v.verticalId] = v.kbSchema || [];
+      VERTICAL_TOOLS[v.verticalId] = v.toolsEnabled || [];
       var card = document.createElement("div");
       card.className = "connector-card" + (v.verticalId === selectedVerticalId ? " selected" : "");
       var icon = document.createElement("div");
@@ -719,6 +767,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         selectedVerticalId = v.verticalId;
         renderVerticalGrid(verticals);
         updateVerticalKbHint();
+        updateOnboardingExtras();
       });
       grid.appendChild(card);
     });
@@ -731,6 +780,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       }
       renderVerticalGrid(data.verticals);
       updateVerticalKbHint();
+      updateOnboardingExtras();
     });
   }
 
@@ -1538,6 +1588,26 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
   });
 
+  document.getElementById("tenantChannelChoice").addEventListener("change", function () {
+    var valueInput = document.getElementById("tenantChannelValue");
+    var choice = this.value;
+    if (choice === "telegram") {
+      valueInput.style.display = "block";
+      valueInput.placeholder = "Token del bot (de BotFather)";
+    } else if (choice === "web") {
+      valueInput.style.display = "block";
+      valueInput.placeholder = "Dominio permitido (ej. misitio.com)";
+    } else {
+      valueInput.style.display = "none";
+      valueInput.value = "";
+    }
+  });
+
+  // Agencia (preguntas mínimas de alta): en vez de un endpoint nuevo que
+  // duplique lógica, el wizard solo ENCADENA llamadas a endpoints que ya
+  // existían y ya están probados (crear tenant, guardar settings, vincular
+  // canal, guardar staff) — D9, cero lógica nueva del lado del servidor
+  // salvo el endpoint de staff que sí faltaba para /admin.
   document.getElementById("tenantForm").addEventListener("submit", function (e) {
     e.preventDefault();
     var errEl = document.getElementById("tenantError");
@@ -1549,9 +1619,49 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       verticalId: selectedVerticalId,
     };
     var kbSuggestion = (VERTICAL_KB_SCHEMAS[selectedVerticalId] || []).join(", ");
+    var timezone = document.getElementById("tenantTimezone").value.trim() || "America/Mexico_City";
+    var channelChoice = document.getElementById("tenantChannelChoice").value;
+    var channelValue = document.getElementById("tenantChannelValue").value.trim();
+    var staffMembers = document.getElementById("tenantStaffInput").value
+      .split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+
     api("/tenants", { method: "POST", body: JSON.stringify(body) })
       .then(function () {
+        var notes = [];
+        var steps = [];
+
+        if (timezone !== "America/Mexico_City") {
+          steps.push(
+            api("/tenants/" + newTenantId + "/settings", { method: "PUT", body: JSON.stringify({ timezone: timezone }) })
+              .then(function () { notes.push("Zona horaria: " + timezone + " ✓"); })
+              .catch(function () { notes.push("No se pudo guardar la zona horaria, ajústala en Config."); })
+          );
+        }
+
+        if (channelChoice && channelValue) {
+          steps.push(
+            api("/tenants/" + newTenantId + "/channels", { method: "POST", body: JSON.stringify({ channel: channelChoice, externalId: channelValue }) })
+              .then(function () { notes.push("Canal " + channelChoice + " vinculado ✓"); })
+              .catch(function (err) { notes.push("Canal no vinculado (" + err.message + ") — hazlo en Conectores."); })
+          );
+        } else {
+          notes.push("Canal: pendiente, vincúlalo aquí abajo.");
+        }
+
+        if (staffMembers.length > 0) {
+          steps.push(
+            api("/tenants/" + newTenantId + "/staff-members", { method: "PUT", body: JSON.stringify({ staffMembers: staffMembers }) })
+              .then(function () { notes.push("Personal (" + staffMembers.join(", ") + ") ✓"); })
+              .catch(function () { notes.push("No se pudo guardar el personal, ajústalo desde su consola (Salud)."); })
+          );
+        }
+
+        return Promise.all(steps).then(function () { return notes; });
+      })
+      .then(function (notes) {
         document.getElementById("tenantForm").reset();
+        document.getElementById("tenantChannelValue").style.display = "none";
+        updateOnboardingExtras();
         errEl.textContent = "";
         loadTenants();
         // Onboarding: aterriza directo en el detalle del cliente nuevo —
@@ -1560,8 +1670,8 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           var channelMsg = document.getElementById("channelError");
           if (channelMsg) {
             channelMsg.className = "success-msg";
-            channelMsg.textContent = "Cliente creado. Siguiente: vincula un canal aquí abajo" +
-              (kbSuggestion ? " y sube su KB (sugerido: " + kbSuggestion + ")." : ".");
+            channelMsg.textContent = "Cliente creado. " + notes.join(" · ") +
+              (kbSuggestion ? " · KB sugerido: " + kbSuggestion + "." : ".");
           }
         });
       })

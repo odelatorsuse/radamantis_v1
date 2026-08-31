@@ -174,3 +174,24 @@ Oscar usó el onboarding él mismo para dar de alta dos clientes reales nuevos (
 | Listar usuarios de consola por tenant | **Completa (2026-08-31)** | Nuevo `GET /tenants/:id/users` (`listTenantUsers`) — único endpoint que faltaba. |
 
 Verificado con un tenant desechable (`qa-console-access`), sin tocar `dr_simi`/`Comedor` — ver `CLAUDE.md` y memoria `project_console_access_ui`.
+
+## Fix: logout de `/console` inalcanzable en pestañas largas (2026-08-31)
+
+Oscar reportó no poder cerrar sesión para probar con otro usuario. El botón ya existía; el sidebar no era `position: sticky`, así que se estiraba con el contenido de la pestaña activa y el botón quedaba fuera del viewport sin scrollear hasta el final — ver `CLAUDE.md` y memoria `project_console_post_launch_bugs` (Bug 3).
+
+## Décima ronda: "preguntas mínimas de alta" por tipo de cliente (2026-08-31)
+
+Oscar pidió que el alta de un cliente nuevo pregunte lo básico según su tipo de negocio (ej. canal — Telegram/WhatsApp — o decidirlo después), y explícitamente que se revisara primero cómo lo maneja Forja.
+
+**Investigación de Forja** (repo público `github.com/santmun/forja`, nunca su backend propietario): su propio onboarding recomendado es conversacional vía Claude Code ("verifica lo que necesitas y despliega todo"), no un wizard web — con `npx forjabot init` como alternativa CLI. El contenido de sus 14 giros sigue siendo inalcanzable (Forja+). Esto valida la idea de Oscar de resolverlo también vía un Skill de Claude; el CLI tipo `forjabot` ya estaba rechazado en este roadmap y no se reabre.
+
+| Ítem | Estado | Nota |
+|---|---|---|
+| Superficie: portal + Skill, mismo esquema | **Decidido con Oscar (pregunta directa)** | No un Skill nuevo — se extendió el Skill `radamantis-admin` ya existente. |
+| Preguntas universales: zona horaria + canal inicial | **Completa (2026-08-31)** | Hallazgo real: hoy la zona horaria queda siempre en `America/Mexico_City` sin preguntar — riesgo real de citas mal calculadas para un cliente fuera de esa zona. |
+| Preguntas por giro (staff / aviso de catálogo) | **Completa (2026-08-31)** | Derivadas de `toolsEnabled` (ya expuesto en `/verticals`), NO de un campo nuevo por vertical — cero cambios a los 12 archivos de `src/verticals/`. |
+| Endpoint nuevo: `PUT /tenants/:id/staff-members` (admin) | **Completa (2026-08-31)** | Mismo `setStaffMembers` que ya usaba `/console`, solo le faltaba una vía desde `/admin`. |
+| Wizard en `/admin` | **Completa (2026-08-31)** | Encadena `POST /tenants` → `PUT .../settings` → `POST .../channels` → `PUT .../staff-members` (endpoints ya existentes, cero lógica de servidor duplicada) con un resumen de qué quedó hecho/pendiente. |
+| Skill `radamantis-admin` actualizado | **Completa (2026-08-31)** | Documenta el mismo criterio para alta por chat — misma fuente de datos que el wizard. |
+
+Verificado end-to-end en producción con un tenant desechable (`qa-onboarding-flow`, barbería): zona horaria y staff quedaron guardados sin perder el resto de la config, confirmado por `GET /tenants/:id`, luego borrado — ver `CLAUDE.md` y memoria `project_onboarding_questions`.

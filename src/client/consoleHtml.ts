@@ -55,7 +55,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
   .success-msg { color: var(--ok); font-size: 0.85rem; margin-top: 10px; min-height: 1.2em; }
 
   .shell { display: none; grid-template-columns: 220px 1fr; min-height: 100vh; }
-  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 20px 14px; display: flex; flex-direction: column; }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 20px 14px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
   .sidebar .brand { justify-content: flex-start; margin-bottom: 28px; padding-left: 4px; }
   .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: none; background: none; color: var(--text-muted); font-size: 0.92rem; font-weight: 500; text-align: left; width: 100%; margin-bottom: 2px; transition: background 0.15s, color 0.15s; }
   .nav-item:hover { background: #F0F7F4; color: var(--text); }
@@ -127,7 +127,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
 
   @media (max-width: 800px) {
     .shell { grid-template-columns: 1fr; }
-    .sidebar { flex-direction: row; align-items: center; overflow-x: auto; gap: 10px; padding: 12px 14px; border-right: none; border-bottom: 1px solid var(--border); }
+    .sidebar { flex-direction: row; align-items: center; overflow-x: auto; overflow-y: visible; height: auto; top: 0; z-index: 10; gap: 10px; padding: 12px 14px; border-right: none; border-bottom: 1px solid var(--border); }
     .sidebar .brand, .sidebar .tenant-name { display: none; }
     .nav-item { width: auto; white-space: nowrap; margin-bottom: 0; }
     .sidebar-footer { margin-top: 0; margin-left: auto; border-top: none; padding-top: 0; flex-shrink: 0; }

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getChannelProvider } from "../channels/registry";
+import { createCatalogItem, deleteCatalogItem, listCatalogItems, updateCatalogItem } from "../catalog";
 import { createHandoff, isPaused, resolveHandoffByRef } from "../handoff";
 import { appendMessage, getHistory } from "../messages";
 import { dismissKbGap, listKbGaps } from "../rag/gaps";
@@ -215,6 +216,52 @@ clientApp.delete("/kb/:docId", async (c) => {
 clientApp.post("/kb/reindex", async (c) => {
   const count = await reindexAllKbDocuments(c.env.DB, c.env.VECTORIZE, c.env.OPENAI_API_KEY, c.get("tenantId"));
   return c.json({ ok: true, count });
+});
+
+// Agencia (Fase 2b: catálogo con fotos) — mismo patrón CRUD que /kb, sin
+// Vectorize (un catálogo de negocio es chico, LIKE alcanza). price/photoUrl
+// son opcionales: string vacío se guarda como null.
+clientApp.get("/catalog", async (c) => {
+  const items = await listCatalogItems(c.env.DB, c.get("tenantId"));
+  return c.json({ items });
+});
+
+clientApp.post("/catalog", async (c) => {
+  const body = await c.req.json<{ title?: string; description?: string; price?: string; photoUrl?: string }>();
+  if (!body.title?.trim() || !body.description?.trim()) {
+    return c.json({ error: "title y description son requeridos" }, 400);
+  }
+  const itemId = await createCatalogItem(
+    c.env.DB,
+    c.get("tenantId"),
+    body.title,
+    body.description,
+    body.price?.trim() || null,
+    body.photoUrl?.trim() || null,
+  );
+  return c.json({ ok: true, itemId }, 201);
+});
+
+clientApp.put("/catalog/:itemId", async (c) => {
+  const body = await c.req.json<{ title?: string; description?: string; price?: string; photoUrl?: string }>();
+  if (!body.title?.trim() || !body.description?.trim()) {
+    return c.json({ error: "title y description son requeridos" }, 400);
+  }
+  await updateCatalogItem(
+    c.env.DB,
+    c.get("tenantId"),
+    c.req.param("itemId"),
+    body.title,
+    body.description,
+    body.price?.trim() || null,
+    body.photoUrl?.trim() || null,
+  );
+  return c.json({ ok: true });
+});
+
+clientApp.delete("/catalog/:itemId", async (c) => {
+  await deleteCatalogItem(c.env.DB, c.get("tenantId"), c.req.param("itemId"));
+  return c.json({ ok: true });
 });
 
 // Etapa 10 (unifica no-shows + encuesta + reseñas): link de reseñas (ej.

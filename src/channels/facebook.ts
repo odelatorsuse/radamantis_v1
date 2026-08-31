@@ -1,4 +1,4 @@
-import { sendMetaMessage, subscribePageToApp } from "./meta";
+import { sendMetaMessage, sendMetaPhoto, subscribePageToApp } from "./meta";
 import type { ChannelProvider } from "./provider";
 
 // Agencia (conectores): Facebook Messenger vía la Graph API de Meta.
@@ -11,6 +11,9 @@ export const facebookChannelProvider: ChannelProvider = {
   displayName: "Facebook Messenger",
   async sendMessage(externalId, chatId, text) {
     await sendMetaMessage(externalId, chatId, text);
+  },
+  async sendPhoto(externalId, chatId, photoUrl) {
+    await sendMetaPhoto(externalId, chatId, photoUrl);
   },
   async registerWebhook(_origin, externalId) {
     return subscribePageToApp(externalId);

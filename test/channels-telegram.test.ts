@@ -104,4 +104,16 @@ describe("telegramChannelProvider", () => {
     expect(telegramChannelProvider.channel).toBe("telegram");
     expect(telegramChannelProvider.displayName).toBe("Telegram");
   });
+
+  it("implementa ChannelProvider: sendPhoto manda por sendPhoto real de Telegram (Agencia, Fase 2b)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => "" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await telegramChannelProvider.sendPhoto!("bot-token-123", "555", "https://x.com/a.jpg", "Depa en Polanco");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.telegram.org/botbot-token-123/sendPhoto",
+      expect.objectContaining({ body: JSON.stringify({ chat_id: 555, photo: "https://x.com/a.jpg", caption: "Depa en Polanco" }) }),
+    );
+  });
 });

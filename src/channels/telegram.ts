@@ -1,4 +1,4 @@
-import { sendTelegramMessage } from "../telegram";
+import { sendTelegramMessage, sendTelegramPhoto } from "../telegram";
 import type { ChannelProvider, WebhookRegistrationResult } from "./provider";
 
 // Etapa 9 (D8): registrar el webhook de Telegram es parte de la transacción
@@ -47,6 +47,9 @@ export const telegramChannelProvider: ChannelProvider = {
   displayName: "Telegram",
   async sendMessage(externalId, chatId, text) {
     await sendTelegramMessage(externalId, Number(chatId), text);
+  },
+  async sendPhoto(externalId, chatId, photoUrl, caption) {
+    await sendTelegramPhoto(externalId, Number(chatId), photoUrl, caption);
   },
   registerWebhook: registerTelegramWebhook,
 };

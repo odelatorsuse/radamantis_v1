@@ -16,6 +16,11 @@ export interface ChannelProvider {
   readonly channel: string;
   readonly displayName: string;
   sendMessage(externalId: string, chatId: string, text: string): Promise<void>;
+  // Opcional (Agencia, Fase 2b: catálogo con fotos): no todos los canales
+  // pueden mandar una imagen por URL de la misma forma — el widget de
+  // sitio web (síncrono, sin push) no lo implementa por ahora, mismo
+  // criterio que sendMessage siendo no-op ahí.
+  sendPhoto?(externalId: string, chatId: string, photoUrl: string, caption?: string): Promise<void>;
   // Opcional: no todos los canales necesariamente registran un webhook de la
   // misma forma (Telegram usa un secret_token simple; Meta — WhatsApp/
   // Messenger/Instagram comparten su Graph API — verifica webhooks distinto,

@@ -3,6 +3,7 @@ import { executeFeedbackTool, RECORD_FEEDBACK_TOOL } from "./calendar/feedbackTo
 import { GoogleCalendarProvider } from "./calendar/google";
 import { getValidAccessToken } from "./calendar/oauth";
 import { buildCalendarTools, executeCalendarTool } from "./calendar/tools";
+import { executeSearchCatalogTool, SEARCH_CATALOG_TOOL } from "./catalogTool";
 import { getChannelProvider } from "./channels/registry";
 import { createHandoff, detectsHandoffRequest, detectsUrgentSentiment, HANDOFF_REPLY_MESSAGE, isPaused } from "./handoff";
 import { OpenAIProvider } from "./llm/openai";
@@ -201,36 +202,52 @@ export class ConversationAgent {
       userText,
     );
 
+    // Agencia (Fase 2b: catálogo con fotos) — capacidad independiente del
+    // calendario: tienda/cafetería no tienen agenda pero sí pueden tener
+    // catálogo, e inmobiliaria/restaurante pueden tener ambas cosas a la
+    // vez. channelProvider/externalId solo se resuelven si hace falta (un
+    // tenant sin catálogo no paga esa lectura extra de D1).
+    const wantsCatalog = template.toolsEnabled.includes("searchCatalog");
+    const catalogChannelProvider = wantsCatalog ? getChannelProvider(channel) : null;
+    const catalogExternalId = wantsCatalog ? await getChannelExternalId(this.env.DB, tenantId, channel) : null;
+
     const llm = new OpenAIProvider(this.env.OPENAI_API_KEY);
     const messages = buildMessages(systemPrompt, historyMessages, userText);
-    const tools = calendarProvider ? [...buildCalendarTools(tenantSettings.staffMembers), RECORD_FEEDBACK_TOOL] : undefined;
+    const tools = [
+      ...(calendarProvider ? [...buildCalendarTools(tenantSettings.staffMembers), RECORD_FEEDBACK_TOOL] : []),
+      ...(wantsCatalog ? [SEARCH_CATALOG_TOOL] : []),
+    ];
 
-    let completion = await llm.complete(messages, tools);
+    let completion = await llm.complete(messages, tools.length > 0 ? tools : undefined);
     let usage = completion.usage;
 
     // Una sola vuelta de tool-calling: si el modelo pidió herramientas, las
-    // ejecutamos contra el calendario real y le devolvemos los resultados
-    // para que dé la respuesta final en texto. No se persisten los pasos
-    // intermedios en `messages`, solo el mensaje final.
-    if (completion.toolCalls.length > 0 && calendarProvider) {
+    // ejecutamos contra el proveedor real (calendario y/o catálogo) y le
+    // devolvemos los resultados para que dé la respuesta final en texto. No
+    // se persisten los pasos intermedios en `messages`, solo el mensaje final.
+    if (completion.toolCalls.length > 0 && (calendarProvider || wantsCatalog)) {
       const toolResultMessages: LLMMessage[] = [];
       for (const toolCall of completion.toolCalls) {
         // Log de auditoría — sin esto, depurar "por qué dijo tal horario"
         // significa adivinar (ya nos pasó). Visible con `wrangler tail`.
-        console.log("calendar tool call", tenantId, toolCall.name, toolCall.arguments);
+        console.log("tool call", tenantId, toolCall.name, toolCall.arguments);
         await logToolCall(this.env.DB, tenantId, toolCall.name);
         const result =
           toolCall.name === "recordAppointmentFeedback"
             ? await executeFeedbackTool(this.env.DB, ref, toolCall.arguments)
-            : await executeCalendarTool(
-                toolCall.name,
-                toolCall.arguments,
-                calendarProvider,
-                tenantSettings.timezone,
-                tenantSettings.businessHours,
-                tenantSettings.staffMembers,
-              );
-        console.log("calendar tool result", tenantId, toolCall.name, result);
+            : toolCall.name === "searchCatalog"
+              ? await executeSearchCatalogTool(this.env.DB, tenantId, toolCall.arguments, catalogChannelProvider, catalogExternalId, ref.chatId)
+              : calendarProvider
+                ? await executeCalendarTool(
+                    toolCall.name,
+                    toolCall.arguments,
+                    calendarProvider,
+                    tenantSettings.timezone,
+                    tenantSettings.businessHours,
+                    tenantSettings.staffMembers,
+                  )
+                : JSON.stringify({ error: `Tool desconocida: ${toolCall.name}` });
+        console.log("tool result", tenantId, toolCall.name, result);
         toolResultMessages.push({ role: "tool", content: result, toolCallId: toolCall.id });
 
         // Etapa 10 (superpower "Recupera no-shows"): guarda un rastro local

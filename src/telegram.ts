@@ -46,6 +46,20 @@ export async function sendTelegramMessage(botToken: string, chatId: number, text
   }
 }
 
+// Agencia (Fase 2b: catálogo con fotos) — Telegram acepta una URL
+// directamente en "photo" (él mismo la descarga), no hace falta subir
+// bytes desde nuestro Worker.
+export async function sendTelegramPhoto(botToken: string, chatId: number, photoUrl: string, caption?: string): Promise<void> {
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption }),
+  });
+  if (!res.ok) {
+    throw new Error(`Telegram sendPhoto falló: ${res.status} ${await res.text()}`);
+  }
+}
+
 interface TelegramGetFileResponse {
   ok: boolean;
   result?: { file_path: string };

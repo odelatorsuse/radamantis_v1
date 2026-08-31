@@ -148,6 +148,6 @@ Oscar pidió una lista de 12 giros para el onboarding de clientes nuevos, notand
 | UI de onboarding en `/admin` | **Completa (2026-08-30)** | "Alta de tenant" → "Onboarding de cliente nuevo": grid de íconos por giro + sugerencia de KB + aterriza en el detalle del cliente al crearlo. |
 | `crm_ventas` | **Eliminado (2026-08-30)** | Oscar pidió quitarlo explícitamente — no llegó a confirmar la interpretación de scoping antes de eso. |
 | Fase 2a: agendar con persona específica (salón/barbería) | **Completa (2026-08-30)** | Staff como etiqueta sobre el mismo Google Calendar (`extendedProperties`), configurable por tenant desde `/console` — ver `CLAUDE.md` y memoria `project_staff_booking`. |
-| Fase 2b: catálogo con fotos (inmobiliaria/restaurante/panadería/tienda) | **Sin empezar** | Capacidad nueva del core — nueva tool + envío de fotos por Telegram. Orden confirmado con Oscar: después de agendar-con-persona. |
+| Fase 2b: catálogo con fotos (inmobiliaria/restaurante/panadería/tienda) | **Completa (2026-08-30)** | `catalog_items` (D1, sin Vectorize) + tool `searchCatalog` + `ChannelProvider.sendPhoto` (Telegram real, Meta sin verificar) — ver `CLAUDE.md` y memoria `project_catalog_photos`. Cierra la Fase 2 completa. |
 
 No se prioriza el resto del backlog general sin pedido explícito de Oscar.

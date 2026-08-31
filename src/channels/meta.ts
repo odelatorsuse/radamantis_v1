@@ -21,6 +21,24 @@ export async function sendMetaMessage(pageAccessToken: string, recipientId: stri
   }
 }
 
+// Agencia (Fase 2b: catálogo con fotos) — mismo Send API, un adjunto tipo
+// "image" con una URL en vez de subir bytes (is_reusable evita que Meta
+// vuelva a descargar la misma imagen si se manda varias veces).
+export async function sendMetaPhoto(pageAccessToken: string, recipientId: string, photoUrl: string): Promise<void> {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      message: { attachment: { type: "image", payload: { url: photoUrl, is_reusable: true } } },
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Meta Send API (foto) falló: ${res.status} ${await res.text()}`);
+  }
+}
+
 // Suscribe la Página al App de Meta para que sus eventos lleguen al webhook
 // compartido — equivalente al setWebhook de Telegram, pero por Página en
 // vez de por bot. subscribed_fields "messages" cubre tanto Messenger como

@@ -1,5 +1,6 @@
 import { embedText } from "./embeddings";
 import { logUsage } from "../usage";
+import { slugify } from "../slug";
 
 // Etapa Agencia ("Conocimiento" en /console, autoservicio del dueño del
 // negocio): Vectorize solo soporta búsqueda por similitud, no "listar
@@ -73,16 +74,6 @@ export async function deleteKbDocument(db: D1Database, vectorize: VectorizeIndex
   await db.prepare(`DELETE FROM kb_documents WHERE tenant_id = ? AND doc_id = ?`).bind(tenantId, docId).run();
 }
 
-function slugify(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug || "documento";
-}
-
 async function docIdExists(db: D1Database, tenantId: string, docId: string): Promise<boolean> {
   const row = await db.prepare(`SELECT 1 FROM kb_documents WHERE tenant_id = ? AND doc_id = ?`).bind(tenantId, docId).first();
   return row !== null;
@@ -99,7 +90,7 @@ export async function createKbDocument(
   title: string,
   content: string,
 ): Promise<string> {
-  const base = slugify(title);
+  const base = slugify(title, "documento");
   let docId = base;
   let n = 2;
   while (await docIdExists(db, tenantId, docId)) {

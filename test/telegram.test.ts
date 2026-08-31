@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { downloadTelegramFile, extractIncomingMessage } from "../src/telegram";
+import { downloadTelegramFile, extractIncomingMessage, sendTelegramPhoto } from "../src/telegram";
 
 describe("extractIncomingMessage", () => {
   it("extrae chatId y texto de un update válido", () => {
@@ -79,5 +79,32 @@ describe("downloadTelegramFile", () => {
     );
 
     await expect(downloadTelegramFile("bot-token", "file-id")).rejects.toThrow(/getFile falló/);
+  });
+});
+
+describe("sendTelegramPhoto (Agencia, Fase 2b: catálogo con fotos)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("manda la foto por URL directa, sin descargarla primero", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendTelegramPhoto("bot-token", 42, "https://ejemplo.com/foto.jpg", "Depa en Polanco — $2,500,000");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.telegram.org/botbot-token/sendPhoto",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body as string)).toEqual({
+      chat_id: 42,
+      photo: "https://ejemplo.com/foto.jpg",
+      caption: "Depa en Polanco — $2,500,000",
+    });
+  });
+
+  it("lanza un error claro si Telegram falla", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 400, text: async () => "bad url" }));
+    await expect(sendTelegramPhoto("bot-token", 42, "no-es-una-url")).rejects.toThrow(/sendPhoto falló/);
   });
 });

@@ -178,6 +178,10 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       Conocimiento
     </button>
+    <button class="nav-item" data-tab="catalogo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
+      Catálogo
+    </button>
     <button class="nav-item" data-tab="salud">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h4l2-7 4 14 2-7h4"/></svg>
       Salud
@@ -277,6 +281,34 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
             <button class="btn-secondary" type="button" id="kbFormCancel">Cancelar</button>
           </div>
           <div class="error" id="kbFormMsg"></div>
+        </form>
+      </div>
+    </section>
+
+    <section class="tab-view" id="tab-catalogo">
+      <div class="topbar" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div>
+          <h1 class="page-title">Catálogo</h1>
+          <p class="page-sub">Productos, propiedades o platillos que tu bot puede buscar y mostrar con foto cuando un cliente pregunte. Solo aplica si tu negocio lo usa (ej. inmobiliaria, restaurante, panadería, tienda) — si no, puedes ignorar esta pestaña.</p>
+        </div>
+        <button class="btn-primary" id="catalogNewBtn" style="flex-shrink:0;">+ Nuevo item</button>
+      </div>
+
+      <div class="panel" id="catalogPanel"></div>
+      <p class="empty" id="catalogEmpty" style="display:none;">Todavía no tienes items en tu catálogo. Agrega el primero con "Nuevo item".</p>
+
+      <div class="panel" id="catalogFormPanel" style="display:none;">
+        <h3 id="catalogFormTitle">Nuevo item</h3>
+        <form id="catalogForm">
+          <input type="text" id="catalogTitleInput" placeholder="Nombre (ej. Departamento en Polanco)" style="width:100%;" required />
+          <textarea id="catalogDescriptionInput" placeholder="Descripción — lo que el bot debe decir sobre esto..." style="width:100%;min-height:100px;margin-top:10px;"></textarea>
+          <input type="text" id="catalogPriceInput" placeholder="Precio (opcional, ej. $2,500,000 MXN)" style="width:100%;margin-top:10px;" />
+          <input type="text" id="catalogPhotoUrlInput" placeholder="URL de una foto (opcional)" style="width:100%;margin-top:10px;" />
+          <div style="margin-top:10px;display:flex;gap:8px;">
+            <button class="btn-primary" type="submit">Guardar</button>
+            <button class="btn-secondary" type="button" id="catalogFormCancel">Cancelar</button>
+          </div>
+          <div class="error" id="catalogFormMsg"></div>
         </form>
       </div>
     </section>
@@ -739,6 +771,94 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
   });
 
+  // Agencia (Fase 2b: catálogo con fotos) — mismo patrón exacto que
+  // Conocimiento (crear/editar/borrar), sin reindexar (no hay Vectorize).
+  var currentCatalogItemId = null; // null = creando uno nuevo; string = editando ese itemId
+
+  function renderCatalogItem(item) {
+    var card = document.createElement("div");
+    card.style.cssText = "border-bottom:1px solid var(--border);padding:14px 0;display:flex;justify-content:space-between;gap:14px;align-items:flex-start;";
+    var info = document.createElement("div");
+    info.style.minWidth = "0";
+    var title = document.createElement("div");
+    title.style.fontWeight = "600";
+    title.textContent = item.title + (item.price ? " — " + item.price : "");
+    var preview = document.createElement("div");
+    preview.style.cssText = "font-size:0.85rem;color:var(--text-muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px;";
+    preview.textContent = item.description;
+    var meta = document.createElement("div");
+    meta.style.cssText = "font-size:0.78rem;color:var(--text-muted);margin-top:4px;";
+    meta.textContent = item.photoUrl ? "Con foto · actualizado " + formatDateTime(item.updatedAt) : "Sin foto · actualizado " + formatDateTime(item.updatedAt);
+    info.appendChild(title);
+    info.appendChild(preview);
+    info.appendChild(meta);
+
+    var actions = document.createElement("div");
+    actions.style.cssText = "display:flex;gap:8px;flex-shrink:0;";
+    var editBtn = document.createElement("button");
+    editBtn.className = "btn-secondary";
+    editBtn.textContent = "Editar";
+    editBtn.addEventListener("click", function () { openCatalogForm(item); });
+    var delBtn = document.createElement("button");
+    delBtn.className = "btn-secondary";
+    delBtn.textContent = "Borrar";
+    delBtn.addEventListener("click", function () {
+      if (!confirm('¿Borrar "' + item.title + '"? El bot dejará de mostrarlo de inmediato.')) return;
+      api("/catalog/" + item.itemId, { method: "DELETE" }).then(loadCatalogItems);
+    });
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+
+    card.appendChild(info);
+    card.appendChild(actions);
+    return card;
+  }
+
+  function loadCatalogItems() {
+    api("/catalog").then(function (data) {
+      var panel = document.getElementById("catalogPanel");
+      panel.innerHTML = "";
+      data.items.forEach(function (item) { panel.appendChild(renderCatalogItem(item)); });
+      document.getElementById("catalogEmpty").style.display = data.items.length ? "none" : "block";
+    });
+  }
+
+  function openCatalogForm(item) {
+    currentCatalogItemId = item ? item.itemId : null;
+    document.getElementById("catalogFormTitle").textContent = item ? "Editar item" : "Nuevo item";
+    document.getElementById("catalogTitleInput").value = item ? item.title : "";
+    document.getElementById("catalogDescriptionInput").value = item ? item.description : "";
+    document.getElementById("catalogPriceInput").value = item ? (item.price || "") : "";
+    document.getElementById("catalogPhotoUrlInput").value = item ? (item.photoUrl || "") : "";
+    document.getElementById("catalogFormMsg").textContent = "";
+    document.getElementById("catalogFormPanel").style.display = "block";
+  }
+
+  function closeCatalogForm() {
+    document.getElementById("catalogFormPanel").style.display = "none";
+    currentCatalogItemId = null;
+  }
+
+  document.getElementById("catalogNewBtn").addEventListener("click", function () { openCatalogForm(null); });
+  document.getElementById("catalogFormCancel").addEventListener("click", closeCatalogForm);
+
+  document.getElementById("catalogForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msgEl = document.getElementById("catalogFormMsg");
+    var body = {
+      title: document.getElementById("catalogTitleInput").value,
+      description: document.getElementById("catalogDescriptionInput").value,
+      price: document.getElementById("catalogPriceInput").value,
+      photoUrl: document.getElementById("catalogPhotoUrlInput").value,
+    };
+    var request = currentCatalogItemId
+      ? api("/catalog/" + currentCatalogItemId, { method: "PUT", body: JSON.stringify(body) })
+      : api("/catalog", { method: "POST", body: JSON.stringify(body) });
+    request
+      .then(function () { closeCatalogForm(); loadCatalogItems(); })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
   function loadReviewLink() {
     api("/review-link").then(function (data) {
       document.getElementById("reviewLinkInput").value = data.reviewLink || "";
@@ -1005,6 +1125,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     loadStaffMembers();
     loadKbGaps();
     loadKbDocs();
+    loadCatalogItems();
     loadConversations();
     loadBranding();
   }

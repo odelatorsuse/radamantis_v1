@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseMetaWebhookMessages, sendMetaMessage, subscribePageToApp, verifyMetaSignature } from "../src/channels/meta";
+import { parseMetaWebhookMessages, sendMetaMessage, sendMetaPhoto, subscribePageToApp, verifyMetaSignature } from "../src/channels/meta";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -20,6 +20,26 @@ describe("sendMetaMessage", () => {
   it("lanza un error claro si Meta falla", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => "boom" }));
     await expect(sendMetaMessage("page-token", "psid-1", "hola")).rejects.toThrow(/Send API falló/);
+  });
+});
+
+describe("sendMetaPhoto (Agencia, Fase 2b: catálogo con fotos)", () => {
+  it("manda un attachment tipo image con la URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendMetaPhoto("page-token", "psid-1", "https://x.com/a.jpg");
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body as string)).toEqual({
+      recipient: { id: "psid-1" },
+      message: { attachment: { type: "image", payload: { url: "https://x.com/a.jpg", is_reusable: true } } },
+    });
+  });
+
+  it("lanza un error claro si Meta falla", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => "boom" }));
+    await expect(sendMetaPhoto("page-token", "psid-1", "https://x.com/a.jpg")).rejects.toThrow(/Send API \(foto\) falló/);
   });
 });
 

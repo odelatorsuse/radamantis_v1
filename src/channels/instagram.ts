@@ -1,4 +1,4 @@
-import { sendMetaMessage, subscribePageToApp } from "./meta";
+import { sendMetaMessage, sendMetaPhoto, subscribePageToApp } from "./meta";
 import type { ChannelProvider } from "./provider";
 
 // Agencia (conectores): Instagram en modo clásico (cuenta profesional
@@ -12,6 +12,9 @@ export const instagramChannelProvider: ChannelProvider = {
   displayName: "Instagram",
   async sendMessage(externalId, chatId, text) {
     await sendMetaMessage(externalId, chatId, text);
+  },
+  async sendPhoto(externalId, chatId, photoUrl) {
+    await sendMetaPhoto(externalId, chatId, photoUrl);
   },
   async registerWebhook(_origin, externalId) {
     return subscribePageToApp(externalId);

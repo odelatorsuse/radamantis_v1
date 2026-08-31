@@ -573,3 +573,56 @@ describe("GET/PUT /staff-members (Agencia, Fase 2 — agendar con persona espec�
     expect(lastBind).toContain(JSON.stringify([]));
   });
 });
+
+describe("GET/POST/PUT/DELETE /catalog (Agencia, Fase 2b — catálogo con fotos)", () => {
+  it("GET devuelve la lista (vacía por default)", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/catalog", { headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ items: [] });
+  });
+
+  it("POST rechaza sin title o description", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/catalog",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ title: "Pizza" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST crea un item con slug generado del título", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/catalog",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: "Pizza Margarita", description: "Con queso y albahaca", price: "$150", photoUrl: "https://x.com/a.jpg" }),
+      },
+      mockEnv(),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json<{ itemId: string }>();
+    expect(body.itemId).toBe("pizza-margarita");
+  });
+
+  it("PUT actualiza un item existente", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/catalog/pizza-margarita",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ title: "Pizza Margarita", description: "Actualizada" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("DELETE borra un item", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request("/catalog/pizza-margarita", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }, env);
+    expect(res.status).toBe(200);
+    expect((env.__run as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+  });
+});

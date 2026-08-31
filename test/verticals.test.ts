@@ -32,3 +32,36 @@ describe("getVerticalTemplate", () => {
     expect(sandboxPrompt).not.toContain("veterinaria");
   });
 });
+
+// Agencia (onboarding de clientes, 12 giros): cada vertical nuevo resuelve
+// a su propio template real (no cae de vuelta a sandbox por un typo de id).
+describe("verticales nuevos de onboarding", () => {
+  const bookingVerticals = ["dentista", "gimnasio", "restaurante", "barberia", "clinica", "spa", "inmobiliaria", "coach"];
+  const kbOnlyVerticals = ["cafeteria_panaderia", "tienda", "crm_ventas"];
+
+  it.each(bookingVerticals)("%s tiene checkAvailability/bookAppointment habilitados", (verticalId) => {
+    const template = getVerticalTemplate(verticalId);
+    expect(template.verticalId).toBe(verticalId);
+    expect(template.toolsEnabled).toContain("checkAvailability");
+    expect(template.toolsEnabled).toContain("bookAppointment");
+    expect(template.toolsEnabled).toContain("searchKb");
+    expect(template.toolsEnabled).toContain("handoffHuman");
+  });
+
+  it.each(kbOnlyVerticals)("%s es solo KB+handoff, sin agenda (sin catálogo todavía)", (verticalId) => {
+    const template = getVerticalTemplate(verticalId);
+    expect(template.verticalId).toBe(verticalId);
+    expect(template.toolsEnabled).not.toContain("checkAvailability");
+    expect(template.toolsEnabled).not.toContain("bookAppointment");
+    expect(template.toolsEnabled).toContain("searchKb");
+    expect(template.toolsEnabled).toContain("handoffHuman");
+  });
+
+  it("cada vertical nuevo tiene un displayName y kbSchema propios (no vacíos)", () => {
+    for (const verticalId of [...bookingVerticals, ...kbOnlyVerticals]) {
+      const template = getVerticalTemplate(verticalId);
+      expect(template.displayName.length).toBeGreaterThan(0);
+      expect(template.kbSchema.length).toBeGreaterThan(0);
+    }
+  });
+});

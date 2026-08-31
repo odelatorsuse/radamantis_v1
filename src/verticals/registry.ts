@@ -1,11 +1,33 @@
+import { barberiaTemplate } from "./barberia";
+import { cafeteriaPanaderiaTemplate } from "./cafeteriaPanaderia";
+import { clinicaTemplate } from "./clinica";
+import { coachTemplate } from "./coach";
+import { crmVentasTemplate } from "./crmVentas";
+import { dentistaTemplate } from "./dentista";
 import { esteticaTemplate } from "./estetica";
+import { gimnasioTemplate } from "./gimnasio";
+import { inmobiliariaTemplate } from "./inmobiliaria";
+import { restauranteTemplate } from "./restaurante";
 import { sandboxTemplate } from "./sandbox";
+import { spaTemplate } from "./spa";
+import { tiendaTemplate } from "./tienda";
 import type { VerticalTemplate } from "./types";
 import { veterinariaTemplate } from "./veterinaria";
 
 const TEMPLATES: Record<string, VerticalTemplate> = {
   veterinaria: veterinariaTemplate,
   estetica: esteticaTemplate,
+  dentista: dentistaTemplate,
+  gimnasio: gimnasioTemplate,
+  restaurante: restauranteTemplate,
+  barberia: barberiaTemplate,
+  clinica: clinicaTemplate,
+  cafeteria_panaderia: cafeteriaPanaderiaTemplate,
+  tienda: tiendaTemplate,
+  spa: spaTemplate,
+  inmobiliaria: inmobiliariaTemplate,
+  coach: coachTemplate,
+  crm_ventas: crmVentasTemplate,
   sandbox: sandboxTemplate,
 };
 

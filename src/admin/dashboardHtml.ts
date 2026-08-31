@@ -345,15 +345,18 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       <div id="tenantCreateSection">
         <h2 class="section-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-          Alta de tenant
+          Onboarding de cliente nuevo
         </h2>
         <div class="panel">
-          <form id="tenantForm">
+          <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Elige el giro del negocio — define el tono del bot, qué puede hacer (agenda de citas o solo preguntas) y qué documentos de KB conviene subir después.</p>
+          <div class="connector-grid" id="verticalGrid"></div>
+
+          <form id="tenantForm" style="margin-top:16px">
             <input id="tenantId" placeholder="id (ej. vet-norte)" required />
-            <input id="tenantName" placeholder="Nombre" required />
-            <select id="tenantVertical"></select>
-            <button type="submit">Crear tenant</button>
+            <input id="tenantName" placeholder="Nombre del negocio" required />
+            <button type="submit">Crear cliente</button>
           </form>
+          <div id="verticalKbHint" style="font-size:0.8rem;color:var(--text-muted);margin-top:8px"></div>
           <p class="error" id="tenantError"></p>
         </div>
       </div>
@@ -551,16 +554,6 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     document.getElementById("tenantCreateSection").style.display = admin ? "" : "none";
   }
 
-  function fillSelect(select, options, valueKey, labelKey) {
-    select.innerHTML = "";
-    options.forEach(function (opt) {
-      var el = document.createElement("option");
-      el.value = opt[valueKey];
-      el.textContent = opt[labelKey];
-      select.appendChild(el);
-    });
-  }
-
   document.querySelectorAll(".nav-item").forEach(function (btn) {
     btn.addEventListener("click", function () {
       document.querySelectorAll(".nav-item").forEach(function (b) { b.classList.remove("active"); });
@@ -602,9 +595,89 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     });
   }
 
+  // Agencia (onboarding de clientes, 12 giros): íconos genéricos propios
+  // (no marcas — a diferencia de Conectores, aquí no hay un "producto real"
+  // que representar) por tipo de negocio, mismo criterio de "SVG real, no
+  // emoji" del resto del panel.
+  var VERTICAL_ICONS = {
+    veterinaria: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="10" r="1.8"/><circle cx="16" cy="10" r="1.8"/><circle cx="10.5" cy="5.5" r="1.4"/><circle cx="13.5" cy="5.5" r="1.4"/><path d="M12 13c-3 0-5 1.8-5 4 0 2 1.8 3 5 3s5-1 5-3c0-2.2-2-4-5-4z"/></svg>',
+    estetica: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg>',
+    dentista: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3C9.5 3 7.5 4.8 7.5 7.2c0 1 .3 1.7.6 2.9.4 1.5.9 3.5.9 6.4 0 1 .4 1.5.9 1.5s.8-.5.9-1.4c.2-1 .6-1.5 1.2-1.5s1 .5 1.2 1.5c.1.9.5 1.4.9 1.4s.9-.5.9-1.5c0-2.9.5-4.9.9-6.4.3-1.2.6-1.9.6-2.9C16.5 4.8 14.5 3 12 3z"/></svg>',
+    gimnasio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="3.5" height="4" rx="1"/><rect x="18.5" y="10" width="3.5" height="4" rx="1"/><rect x="7.5" y="8" width="2" height="8" rx="1"/><rect x="14.5" y="8" width="2" height="8" rx="1"/><path d="M9.5 12h5"/></svg>',
+    restaurante: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2v7a2 2 0 0 0 4 0V2M9 2v20"/><path d="M17 2c-1.4 0-2.5 1.8-2.5 4.5S15.6 11 17 11v11"/></svg>',
+    barberia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.5 8.5L19 19M8.5 15.5L19 5"/></svg>',
+    clinica: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>',
+    cafeteria_panaderia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8z"/><path d="M17 9h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 2c0 1-1 1-1 2s1 1 1 2M12 2c0 1-1 1-1 2s1 1 1 2"/></svg>',
+    tienda: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
+    spa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c4 3.2 7 7.5 7 11.2A7 7 0 0 1 5 13.2C5 9.5 8 5.2 12 2z"/></svg>',
+    inmobiliaria: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
+    coach: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>',
+    crm_ventas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg>',
+    sandbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>'
+  };
+
+  var VERTICAL_BLURBS = {
+    veterinaria: "Citas y consultas para mascotas.",
+    estetica: "Estética y salón de belleza — citas de servicio.",
+    dentista: "Citas dentales, tratamientos y seguros.",
+    gimnasio: "Membresías, clases y horarios.",
+    restaurante: "Reservación de mesa y menú.",
+    barberia: "Citas de corte y barba.",
+    clinica: "Citas médicas, especialidades y doctores.",
+    cafeteria_panaderia: "Menú y pedidos — sin agenda.",
+    tienda: "Productos, precios y políticas — sin agenda.",
+    spa: "Tratamientos, paquetes y citas.",
+    inmobiliaria: "Zonas, tipos de propiedad y visitas.",
+    coach: "Sesiones, metodología y precios.",
+    crm_ventas: "Califica prospectos y avisa al dueño.",
+    sandbox: "Genérico, sin KB ni handoff (pruebas)."
+  };
+
+  var selectedVerticalId = null;
+  var VERTICAL_KB_SCHEMAS = {};
+
+  function updateVerticalKbHint() {
+    var hint = document.getElementById("verticalKbHint");
+    var kb = VERTICAL_KB_SCHEMAS[selectedVerticalId] || [];
+    hint.textContent = kb.length ? ("Documentos de KB sugeridos para subir después: " + kb.join(", ") + ".") : "";
+  }
+
+  function renderVerticalGrid(verticals) {
+    var grid = document.getElementById("verticalGrid");
+    grid.innerHTML = "";
+    verticals.forEach(function (v) {
+      if (v.verticalId === "sandbox") return; // interno, no es un giro real para onboarding
+      VERTICAL_KB_SCHEMAS[v.verticalId] = v.kbSchema || [];
+      var card = document.createElement("div");
+      card.className = "connector-card" + (v.verticalId === selectedVerticalId ? " selected" : "");
+      var icon = document.createElement("div");
+      icon.className = "connector-icon";
+      icon.innerHTML = VERTICAL_ICONS[v.verticalId] || VERTICAL_ICONS.sandbox;
+      var name = document.createElement("div");
+      name.className = "connector-name";
+      name.textContent = v.displayName;
+      var blurb = document.createElement("div");
+      blurb.className = "connector-status";
+      blurb.textContent = VERTICAL_BLURBS[v.verticalId] || "";
+      card.appendChild(icon);
+      card.appendChild(name);
+      card.appendChild(blurb);
+      card.addEventListener("click", function () {
+        selectedVerticalId = v.verticalId;
+        renderVerticalGrid(verticals);
+        updateVerticalKbHint();
+      });
+      grid.appendChild(card);
+    });
+  }
+
   function loadVerticals() {
     return api("/verticals").then(function (data) {
-      fillSelect(document.getElementById("tenantVertical"), data.verticals, "verticalId", "displayName");
+      if (!selectedVerticalId && data.verticals.some(function (v) { return v.verticalId !== "sandbox"; })) {
+        selectedVerticalId = data.verticals.filter(function (v) { return v.verticalId !== "sandbox"; })[0].verticalId;
+      }
+      renderVerticalGrid(data.verticals);
+      updateVerticalKbHint();
     });
   }
 
@@ -837,7 +910,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
   function openTenantDetail(tenantId) {
     currentDetailTenantId = tenantId;
-    api("/tenants/" + tenantId).then(function (data) {
+    return api("/tenants/" + tenantId).then(function (data) {
       var t = data.tenant;
       document.getElementById("detailTitle").textContent = t.name + " · " + t.id;
 
@@ -1270,18 +1343,32 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
   document.getElementById("tenantForm").addEventListener("submit", function (e) {
     e.preventDefault();
+    var errEl = document.getElementById("tenantError");
+    if (!selectedVerticalId) { errEl.textContent = "Elige un giro primero."; return; }
+    var newTenantId = document.getElementById("tenantId").value;
     var body = {
-      id: document.getElementById("tenantId").value,
+      id: newTenantId,
       name: document.getElementById("tenantName").value,
-      verticalId: document.getElementById("tenantVertical").value,
+      verticalId: selectedVerticalId,
     };
+    var kbSuggestion = (VERTICAL_KB_SCHEMAS[selectedVerticalId] || []).join(", ");
     api("/tenants", { method: "POST", body: JSON.stringify(body) })
       .then(function () {
         document.getElementById("tenantForm").reset();
-        document.getElementById("tenantError").textContent = "";
+        errEl.textContent = "";
         loadTenants();
+        // Onboarding: aterriza directo en el detalle del cliente nuevo —
+        // los siguientes pasos (Conectores, KB) viven ahí, no en esta vista.
+        openTenantDetail(newTenantId).then(function () {
+          var channelMsg = document.getElementById("channelError");
+          if (channelMsg) {
+            channelMsg.className = "success-msg";
+            channelMsg.textContent = "Cliente creado. Siguiente: vincula un canal aquí abajo" +
+              (kbSuggestion ? " y sube su KB (sugerido: " + kbSuggestion + ")." : ".");
+          }
+        });
       })
-      .catch(function (err) { document.getElementById("tenantError").textContent = err.message; });
+      .catch(function (err) { errEl.textContent = err.message; });
   });
 
   // Agencia (conectores Facebook/Instagram): íconos REALES de cada

@@ -325,6 +325,7 @@ adminApp.get("/verticals", (c) => {
     verticalId: v.verticalId,
     displayName: v.displayName,
     toolsEnabled: v.toolsEnabled,
+    kbSchema: v.kbSchema,
   }));
   return c.json({ verticals });
 });

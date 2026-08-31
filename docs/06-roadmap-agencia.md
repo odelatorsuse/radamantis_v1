@@ -138,4 +138,16 @@ Oscar pidió avanzar "White-label" (backlog aceptado desde la Segunda ronda, per
 
 Marketplace sigue **DESCONOCIDO**, sin pedido explícito de Oscar.
 
+## Séptima ronda: onboarding de clientes con 12 giros (2026-08-30)
+
+Oscar pidió una lista de 12 giros para el onboarding de clientes nuevos, notando que varios necesitan capacidades reales distintas (agendar con una persona específica, catálogo con fotos). Confirmado con Oscar: fase 1 = onboarding + las 12 plantillas con las tools que ya existen; fase 2 (agenda por persona, catálogo con fotos) queda aparte.
+
+| Ítem | Estado | Nota |
+|---|---|---|
+| 11 giros nuevos (`src/verticals/`) | **Completa (2026-08-30)** | Dentista, gimnasio, restaurante, barbería, clínica, cafetería/panadería, tienda, spa, inmobiliaria, coach, CRM/ventas. "Salón de belleza" ya existía como `estetica`. |
+| UI de onboarding en `/admin` | **Completa (2026-08-30)** | "Alta de tenant" → "Onboarding de cliente nuevo": grid de íconos por giro + sugerencia de KB + aterriza en el detalle del cliente al crearlo. |
+| Confirmar interpretación de `crm_ventas` | **Pendiente** | Se construyó como bot calificador de leads (no agenda citas) — Oscar no llegó a confirmarlo explícitamente, la pregunta de scoping no tenía dos opciones reales. |
+| Fase 2: agendar con persona específica (salón/barbería) | **Sin empezar** | Capacidad nueva del core — calendario por miembro del staff. |
+| Fase 2: catálogo con fotos (inmobiliaria/restaurante/panadería/tienda) | **Sin empezar** | Capacidad nueva del core — nueva tool + envío de fotos por Telegram. |
+
 No se prioriza el resto del backlog general sin pedido explícito de Oscar.

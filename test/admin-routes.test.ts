@@ -97,6 +97,16 @@ describe("adminApp tenant detail + settings", () => {
   });
 });
 
+describe("adminApp GET /tenants/:id/users (Agencia — UI de 'Acceso a consola')", () => {
+  it("devuelve la lista de usuarios del tenant", async () => {
+    const all = vi.fn().mockResolvedValue({ results: [{ id: 1, email: "a@b.com", created_at: "2026-08-31" }] });
+    const env = mockEnv({ DB: { prepare: vi.fn().mockReturnValue({ bind: () => ({ all }) }) } as unknown as D1Database });
+    const res = await adminApp.request("/tenants/vet-ch/users", { headers: { Authorization: "Bearer test-admin-key" } }, env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ users: [{ id: 1, email: "a@b.com", createdAt: "2026-08-31" }] });
+  });
+});
+
 describe("adminApp DELETE /tenants/:id ('Borrar cliente')", () => {
   function mockDeletableTenantEnv() {
     const batch = vi.fn().mockResolvedValue([]);

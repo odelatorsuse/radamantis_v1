@@ -10,7 +10,7 @@ import { buildFacebookAuthUrl } from "../channels/metaOauth";
 import { getPlatformSettings, upsertPlatformSettings } from "../platformSettings";
 import { fetchCloudflareUsageThisMonth } from "../cloudflareAnalytics";
 import { estimateCloudflareCostUsd } from "../cloudflareCosts";
-import { createTenantUser, getTenantUserByEmail, setTenantUserPassword } from "../client/repository";
+import { createTenantUser, getTenantUserByEmail, listTenantUsers, setTenantUserPassword } from "../client/repository";
 import { hashPassword, verifyPassword } from "../passwords";
 import { runColdLeadSweep } from "../coldLeads";
 import { runAutoResumeSweep } from "../handoffAutoResume";
@@ -467,6 +467,14 @@ adminApp.post("/cold-lead-sweep", async (c) => {
 adminApp.post("/auto-resume-sweep", async (c) => {
   const result = await runAutoResumeSweep(c.env.DB);
   return c.json(result);
+});
+
+// Agencia (UI de "Acceso a consola"): lista los logins de /console que ya
+// existen para este tenant, para mostrarlos en el dashboard sin tener que
+// operar la API por curl.
+adminApp.get("/tenants/:id/users", async (c) => {
+  const users = await listTenantUsers(c.env.DB, c.req.param("id"));
+  return c.json({ users });
 });
 
 // Etapa 10 (consola del cliente, D10): Oscar crea el login del cliente al

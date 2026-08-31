@@ -299,6 +299,45 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       <div class="panel" id="channelsList" style="background:transparent;border:none;padding:0"></div>
       <p id="channelUpdateError"></p>
 
+      <h2 class="section-title">Acceso a consola del cliente</h2>
+      <div class="panel">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Comparte esta URL con tu cliente junto con su usuario y contraseña — ahí administra su propio negocio (citas, catálogo, KB, etc.).</p>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input type="text" id="consoleUrlDisplay" readonly style="flex:1;font-family:'Fira Code',monospace;font-size:0.8rem" />
+          <button type="button" class="secondary" id="copyConsoleUrlBtn">Copiar URL</button>
+        </div>
+
+        <table id="tenantUsersTable">
+          <thead><tr><th>Email</th><th>Desde</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p class="empty" id="tenantUsersEmpty" style="display:none">Sin usuarios de consola todavía.</p>
+
+        <div id="resetPasswordPanel" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <label style="font-size:0.8rem;color:var(--text-muted)">Nueva contraseña para <code id="resetPasswordEmail"></code> (mínimo 15 caracteres, generada al azar)</label>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <input type="text" id="resetPasswordValue" readonly style="flex:1;font-family:'Fira Code',monospace" />
+            <button type="button" class="secondary" id="regenerateResetPasswordBtn">Generar otra</button>
+            <button type="button" class="secondary" id="copyResetPasswordBtn">Copiar</button>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button id="confirmResetPasswordBtn">Guardar nueva contraseña</button>
+            <button class="secondary" id="cancelResetPasswordBtn">Cancelar</button>
+          </div>
+          <p class="error" id="resetPasswordMsg"></p>
+        </div>
+
+        <h3 style="margin-top:18px;font-size:0.95rem">Nuevo usuario</h3>
+        <form id="newTenantUserForm">
+          <input type="email" id="newTenantUserEmail" placeholder="email del dueño del negocio" required style="flex:1" />
+          <input type="text" id="newTenantUserPassword" placeholder="Contraseña (genera una abajo)" readonly required style="flex:1;font-family:'Fira Code',monospace" />
+          <button type="button" class="secondary" id="generateNewUserPasswordBtn">Generar contraseña</button>
+          <button type="button" class="secondary" id="copyNewUserPasswordBtn">Copiar</button>
+          <button type="submit">Crear usuario</button>
+        </form>
+        <p class="error" id="newTenantUserMsg"></p>
+      </div>
+
       <h2 class="section-title">Config en caliente</h2>
       <form id="settingsForm">
         <select id="settingsTone">
@@ -1058,6 +1097,11 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       document.getElementById("deleteTenantConfirm").style.display = "none";
       document.getElementById("deleteTenantConfirmInput").value = "";
       document.getElementById("deleteTenantError").textContent = "";
+      document.getElementById("consoleUrlDisplay").value = window.location.origin + "/console";
+      document.getElementById("resetPasswordPanel").style.display = "none";
+      document.getElementById("newTenantUserForm").reset();
+      document.getElementById("newTenantUserMsg").textContent = "";
+      loadTenantUsers(tenantId);
     });
   }
 
@@ -1296,6 +1340,109 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         loadTenants();
       })
       .catch(function (err) { errEl.textContent = err.message; });
+  });
+
+  // Agencia ("Acceso a consola del cliente"): antes esto se hacía por curl
+  // (POST /tenants/:id/users, PUT .../password ya existían, sin UI). La
+  // contraseña siempre se genera al azar (nunca la teclea el operador) —
+  // 20 caracteres hex, cómodamente por encima del mínimo de 15 pedido.
+  function generateRandomPassword() {
+    return Array.from(crypto.getRandomValues(new Uint8Array(10))).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+  }
+
+  function copyToClipboard(value, btn, label) {
+    navigator.clipboard.writeText(value).then(function () {
+      var original = btn.textContent;
+      btn.textContent = "¡Copiado!";
+      setTimeout(function () { btn.textContent = label || original; }, 1500);
+    });
+  }
+
+  function loadTenantUsers(tenantId) {
+    return api("/tenants/" + tenantId + "/users").then(function (data) {
+      var tbody = document.querySelector("#tenantUsersTable tbody");
+      tbody.innerHTML = "";
+      data.users.forEach(function (u) {
+        var tr = document.createElement("tr");
+        tr.innerHTML = "<td>" + u.email + "</td><td>" + u.createdAt + "</td>";
+        var actionsTd = document.createElement("td");
+        var resetBtn = document.createElement("button");
+        resetBtn.type = "button";
+        resetBtn.className = "secondary";
+        resetBtn.textContent = "Restablecer contraseña";
+        resetBtn.addEventListener("click", function () { openResetPassword(u.email); });
+        actionsTd.appendChild(resetBtn);
+        tr.appendChild(actionsTd);
+        tbody.appendChild(tr);
+      });
+      document.getElementById("tenantUsersEmpty").style.display = data.users.length ? "none" : "block";
+    });
+  }
+
+  document.getElementById("copyConsoleUrlBtn").addEventListener("click", function () {
+    copyToClipboard(document.getElementById("consoleUrlDisplay").value, this, "Copiar URL");
+  });
+
+  document.getElementById("generateNewUserPasswordBtn").addEventListener("click", function () {
+    document.getElementById("newTenantUserPassword").value = generateRandomPassword();
+  });
+
+  document.getElementById("copyNewUserPasswordBtn").addEventListener("click", function () {
+    var value = document.getElementById("newTenantUserPassword").value;
+    if (!value) { document.getElementById("newTenantUserMsg").textContent = "Genera una contraseña primero."; return; }
+    copyToClipboard(value, this, "Copiar");
+  });
+
+  document.getElementById("newTenantUserForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msgEl = document.getElementById("newTenantUserMsg");
+    var password = document.getElementById("newTenantUserPassword").value;
+    if (!password) { msgEl.className = "error"; msgEl.textContent = "Genera una contraseña primero."; return; }
+    var body = { email: document.getElementById("newTenantUserEmail").value, password: password };
+    api("/tenants/" + currentDetailTenantId + "/users", { method: "POST", body: JSON.stringify(body) })
+      .then(function () {
+        msgEl.className = "success-msg";
+        msgEl.textContent = "Usuario creado. Copia la contraseña de arriba antes de que se pierda — no se vuelve a mostrar.";
+        loadTenantUsers(currentDetailTenantId);
+      })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
+  var resetPasswordTargetEmail = null;
+
+  function openResetPassword(email) {
+    resetPasswordTargetEmail = email;
+    document.getElementById("resetPasswordEmail").textContent = email;
+    document.getElementById("resetPasswordValue").value = generateRandomPassword();
+    document.getElementById("resetPasswordMsg").textContent = "";
+    document.getElementById("resetPasswordPanel").style.display = "block";
+  }
+
+  document.getElementById("regenerateResetPasswordBtn").addEventListener("click", function () {
+    document.getElementById("resetPasswordValue").value = generateRandomPassword();
+  });
+
+  document.getElementById("copyResetPasswordBtn").addEventListener("click", function () {
+    copyToClipboard(document.getElementById("resetPasswordValue").value, this, "Copiar");
+  });
+
+  document.getElementById("cancelResetPasswordBtn").addEventListener("click", function () {
+    document.getElementById("resetPasswordPanel").style.display = "none";
+    resetPasswordTargetEmail = null;
+  });
+
+  document.getElementById("confirmResetPasswordBtn").addEventListener("click", function () {
+    var msgEl = document.getElementById("resetPasswordMsg");
+    var newPassword = document.getElementById("resetPasswordValue").value;
+    api("/tenants/" + currentDetailTenantId + "/users/password", {
+      method: "PUT",
+      body: JSON.stringify({ email: resetPasswordTargetEmail, newPassword: newPassword }),
+    })
+      .then(function () {
+        msgEl.className = "success-msg";
+        msgEl.textContent = "Contraseña actualizada. Cópiala y compártela con tu cliente — no se vuelve a mostrar.";
+      })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
   });
 
   document.getElementById("settingsForm").addEventListener("submit", function (e) {

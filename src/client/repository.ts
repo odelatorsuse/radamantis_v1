@@ -32,6 +32,24 @@ export async function setTenantUserPassword(db: D1Database, userId: number, pass
   await db.prepare("UPDATE tenant_users SET password_hash = ? WHERE id = ?").bind(passwordHash, userId).run();
 }
 
+export interface TenantUserSummary {
+  id: number;
+  email: string;
+  createdAt: string;
+}
+
+// Agencia (UI de "Acceso a consola" en /admin): antes solo existía la API
+// (POST /tenants/:id/users, PUT .../password) sin forma de ver quién ya
+// tiene login — Oscar operaba esto por curl. Necesaria para mostrar la
+// lista real de usuarios de un tenant y poder resetear uno específico.
+export async function listTenantUsers(db: D1Database, tenantId: string): Promise<TenantUserSummary[]> {
+  const { results } = await db
+    .prepare("SELECT id, email, created_at FROM tenant_users WHERE tenant_id = ? ORDER BY created_at ASC")
+    .bind(tenantId)
+    .all<{ id: number; email: string; created_at: string }>();
+  return results.map((r) => ({ id: r.id, email: r.email, createdAt: r.created_at }));
+}
+
 export interface TodayStats {
   messagesIn: number;
   messagesOut: number;

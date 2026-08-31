@@ -12,6 +12,7 @@ import {
   getUpcomingAppointments,
   getWeeklyActivity,
   listConversations,
+  listTenantUsers,
   setAlertChatId,
   setTenantUserPassword,
 } from "../src/client/repository";
@@ -50,6 +51,20 @@ describe("createTenantUser / setTenantUserPassword", () => {
     await setTenantUserPassword(db, 7, "nuevo-hash");
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tenant_users SET password_hash"));
     expect(bind).toHaveBeenCalledWith("nuevo-hash", 7);
+  });
+});
+
+describe("listTenantUsers (Agencia — UI de 'Acceso a consola')", () => {
+  it("mapea las filas a camelCase, filtradas por tenant_id", async () => {
+    const { db, bind } = mockDb(null, [{ id: 1, email: "a@b.com", created_at: "2026-08-31 10:00:00" }]);
+    const users = await listTenantUsers(db, "vet-ch");
+    expect(users).toEqual([{ id: 1, email: "a@b.com", createdAt: "2026-08-31 10:00:00" }]);
+    expect(bind).toHaveBeenCalledWith("vet-ch");
+  });
+
+  it("devuelve [] si el tenant no tiene usuarios todavía", async () => {
+    const { db } = mockDb(null, []);
+    expect(await listTenantUsers(db, "vet-ch")).toEqual([]);
   });
 });
 

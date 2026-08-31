@@ -161,3 +161,16 @@ Oscar pidió agregar la opción de borrar un cliente por completo (infra + infor
 | "Borrar cliente" (backend + UI, doble confirmación) | **Completa (2026-08-31)** | `deleteTenant` borra las 14 tablas tenant-scoped + vectores reales de Vectorize + la fila de `tenants`. `confirmId` exacto exigido en servidor, no solo en el dashboard — ver `CLAUDE.md` y memoria `project_delete_tenant_qa`. |
 | Ronda de pruebas funcionales (3 clientes nuevos, luego borrados) | **Completa (2026-08-31)** | KB, catálogo con fotos, disponibilidad por persona (probada en `vet-ch`, reversible), y la propia función de borrar — probadas contra producción real, no simuladas. |
 | Bug real encontrado y corregido: búsqueda de catálogo por frase completa | **Corregido (2026-08-31)** | `searchCatalogItems` ahora busca por palabra, no por la frase entera — ver `CLAUDE.md`. |
+
+## Novena ronda: "Acceso a consola del cliente" desde `/admin` (2026-08-31)
+
+Oscar usó el onboarding él mismo para dar de alta dos clientes reales nuevos (`dr_simi`/Dr. Simi, barbería; `Comedor`/Don Chef, restaurante) y pidió la URL de `/console` para dárselas, más la posibilidad de crear/resetear el login de consola de cada cliente con una contraseña generada al azar (mínimo 15 caracteres, confirmado explícitamente por Oscar).
+
+| Ítem | Estado | Nota |
+|---|---|---|
+| URL de acceso a `/console` visible en el detalle de cada tenant | **Completa (2026-08-31)** | Con botón de copiar. |
+| Crear usuario de consola con contraseña aleatoria | **Completa (2026-08-31)** | `POST /tenants/:id/users` ya existía sin UI; contraseña generada con `crypto.getRandomValues` (20 caracteres hex). |
+| Restablecer contraseña de un usuario existente | **Completa (2026-08-31)** | `PUT /tenants/:id/users/password` ya existía sin UI; mismo generador. |
+| Listar usuarios de consola por tenant | **Completa (2026-08-31)** | Nuevo `GET /tenants/:id/users` (`listTenantUsers`) — único endpoint que faltaba. |
+
+Verificado con un tenant desechable (`qa-console-access`), sin tocar `dr_simi`/`Comedor` — ver `CLAUDE.md` y memoria `project_console_access_ui`.

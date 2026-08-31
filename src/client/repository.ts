@@ -133,6 +133,7 @@ export interface AppointmentSummary {
   attendeeName: string;
   attendeeContact: string;
   attended: number | null;
+  staffMember: string | null;
 }
 
 type AppointmentRow = {
@@ -143,6 +144,7 @@ type AppointmentRow = {
   attendee_name: string;
   attendee_contact: string;
   attended: number | null;
+  staff_member: string | null;
 };
 
 function mapAppointmentRow(r: AppointmentRow): AppointmentSummary {
@@ -154,6 +156,7 @@ function mapAppointmentRow(r: AppointmentRow): AppointmentSummary {
     attendeeName: r.attendee_name,
     attendeeContact: r.attendee_contact,
     attended: r.attended,
+    staffMember: r.staff_member,
   };
 }
 
@@ -162,7 +165,7 @@ async function queryAppointments(db: D1Database, tenantId: string, when: "upcomi
   const order = when === "upcoming" ? "ASC" : "DESC";
   const { results } = await db
     .prepare(
-      `SELECT id, start_utc, end_utc, summary, attendee_name, attendee_contact, attended
+      `SELECT id, start_utc, end_utc, summary, attendee_name, attendee_contact, attended, staff_member
        FROM appointments
        WHERE tenant_id = ? AND end_utc ${comparison} datetime('now')
        ORDER BY start_utc ${order}
@@ -187,7 +190,7 @@ export const getPastAppointments = (db: D1Database, tenantId: string) => queryAp
 export async function getAppointmentsForCurrentMonth(db: D1Database, tenantId: string): Promise<AppointmentSummary[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, start_utc, end_utc, summary, attendee_name, attendee_contact, attended
+      `SELECT id, start_utc, end_utc, summary, attendee_name, attendee_contact, attended, staff_member
        FROM appointments
        WHERE tenant_id = ? AND strftime('%Y-%m', start_utc) = strftime('%Y-%m', 'now')
        ORDER BY start_utc ASC
@@ -332,4 +335,13 @@ export interface BrandingPatch {
 export async function setBranding(db: D1Database, tenantId: string, branding: BrandingPatch): Promise<void> {
   const current = await getTenantSettings(db, tenantId);
   await upsertTenantSettings(db, tenantId, { ...current, ...branding });
+}
+
+// Agencia (Fase 2, agendar con persona específica): quién trabaja ahí lo
+// mantiene el propio negocio, no Oscar — cambia con el tiempo (alguien
+// entra, alguien se va). Vacío = las tools de agenda vuelven a funcionar
+// sin distinguir por persona, sin ningún otro cambio.
+export async function setStaffMembers(db: D1Database, tenantId: string, staffMembers: string[]): Promise<void> {
+  const current = await getTenantSettings(db, tenantId);
+  await upsertTenantSettings(db, tenantId, { ...current, staffMembers });
 }

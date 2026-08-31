@@ -23,6 +23,7 @@ import {
   setCustomHandoffKeywords,
   setLeadReengagementEnabled,
   setReviewLink,
+  setStaffMembers,
 } from "./repository";
 import { createSessionToken, verifySessionToken } from "./session";
 
@@ -294,5 +295,20 @@ clientApp.put("/branding", async (c) => {
     brandLogoUrl: body.brandLogoUrl?.trim() || null,
     brandColor,
   });
+  return c.json({ ok: true });
+});
+
+// Agencia (Fase 2, agendar con persona específica): lista de staff, la
+// mantiene el propio negocio. Vacío = agenda sin distinguir por persona,
+// mismo comportamiento de siempre.
+clientApp.get("/staff-members", async (c) => {
+  const settings = await getTenantSettings(c.env.DB, c.get("tenantId"));
+  return c.json({ staffMembers: settings.staffMembers });
+});
+
+clientApp.put("/staff-members", async (c) => {
+  const body = await c.req.json<{ staffMembers?: string[] }>();
+  const staffMembers = Array.isArray(body.staffMembers) ? body.staffMembers.map((s) => s.trim()).filter(Boolean) : [];
+  await setStaffMembers(c.env.DB, c.get("tenantId"), staffMembers);
   return c.json({ ok: true });
 });

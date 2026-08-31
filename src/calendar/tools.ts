@@ -46,6 +46,52 @@ export const BOOK_APPOINTMENT_TOOL: ToolDefinition = {
 
 export const CALENDAR_TOOLS = [CHECK_AVAILABILITY_TOOL, BOOK_APPOINTMENT_TOOL];
 
+// Agencia (Fase 2, agendar con persona específica): las tools solo ganan el
+// campo staffMember cuando el negocio configuró staff desde /console — un
+// tenant sin staff nunca ve este campo, cero cambio de comportamiento. En
+// checkAvailability es opcional (el cliente puede preguntar "¿tienen algo
+// hoy?" sin especificar con quién); en bookAppointment es obligatorio en
+// cuanto hay staff configurado — agendar sin saber con quién no tiene
+// sentido si el negocio ya distingue por persona.
+export function buildCalendarTools(staffMembers: string[]): ToolDefinition[] {
+  if (staffMembers.length === 0) return CALENDAR_TOOLS;
+
+  const staffProperty = {
+    type: "string",
+    description: "Con quién es la cita — debe ser exactamente uno de los nombres disponibles.",
+    enum: staffMembers,
+  };
+
+  const checkAvailabilityWithStaff: ToolDefinition = {
+    ...CHECK_AVAILABILITY_TOOL,
+    parameters: {
+      type: "object",
+      properties: {
+        rangeStart: { type: "string", description: 'Inicio del rango a consultar, hora LOCAL del negocio, formato "YYYY-MM-DDTHH:MM:SS" (sin offset)' },
+        rangeEnd: { type: "string", description: "Fin del rango a consultar, hora LOCAL del negocio, mismo formato" },
+        staffMember: staffProperty,
+      },
+      required: ["rangeStart", "rangeEnd"],
+    },
+  };
+  const bookAppointmentWithStaff: ToolDefinition = {
+    ...BOOK_APPOINTMENT_TOOL,
+    parameters: {
+      type: "object",
+      properties: {
+        start: { type: "string", description: 'Inicio de la cita, hora LOCAL del negocio, formato "YYYY-MM-DDTHH:MM:SS" (sin offset)' },
+        end: { type: "string", description: "Fin de la cita, hora LOCAL del negocio, mismo formato" },
+        summary: { type: "string", description: "Motivo/tipo de cita, ej. 'Consulta general - Firulais'" },
+        attendeeName: { type: "string", description: "Nombre completo del cliente (obligatorio)" },
+        attendeeContact: { type: "string", description: "Teléfono o contacto del cliente para confirmar la cita (obligatorio)" },
+        staffMember: staffProperty,
+      },
+      required: ["start", "end", "summary", "attendeeName", "attendeeContact", "staffMember"],
+    },
+  };
+  return [checkAvailabilityWithStaff, bookAppointmentWithStaff];
+}
+
 interface ToolCallArgs {
   rangeStart?: string;
   rangeEnd?: string;
@@ -54,24 +100,33 @@ interface ToolCallArgs {
   summary?: string;
   attendeeName?: string;
   attendeeContact?: string;
+  staffMember?: string;
 }
 
 // Ejecuta una tool call de calendario contra el proveedor real y devuelve el
 // resultado ya serializado, listo para volver a mandarlo al LLM. timeZone y
 // businessHours vienen de tenantSettings — todas las fechas que entran/salen
 // de aquí hacia el modelo están en hora local del negocio, nunca en UTC.
+// staffMembers es la lista real configurada por el tenant — nunca se confía
+// ciegamente en lo que mande el modelo, aunque el enum del schema ya lo
+// restrinja (defensa en capas, mismo criterio que el resto del proyecto).
 export async function executeCalendarTool(
   toolName: string,
   rawArguments: string,
   provider: CalendarProvider,
   timeZone: string,
   businessHours: WeeklyBusinessHours,
+  staffMembers: string[] = [],
 ): Promise<string> {
   let args: ToolCallArgs;
   try {
     args = JSON.parse(rawArguments) as ToolCallArgs;
   } catch {
     return JSON.stringify({ error: "Argumentos inválidos" });
+  }
+
+  if (args.staffMember && !staffMembers.includes(args.staffMember)) {
+    return JSON.stringify({ error: `"${args.staffMember}" no está en la lista de personas disponibles: ${staffMembers.join(", ")}.` });
   }
 
   if (toolName === "checkAvailability" && args.rangeStart && args.rangeEnd) {
@@ -88,13 +143,13 @@ export async function executeCalendarTool(
     }
 
     try {
-      const freeSlots = await provider.checkAvailability(rangeStartUtc, rangeEndUtc);
+      const freeSlots = await provider.checkAvailability(rangeStartUtc, rangeEndUtc, args.staffMember);
       const freeSlotsLocal = freeSlots.map((slot) => ({
         start: utcToLocalDateTimeString(slot.start, timeZone),
         end: utcToLocalDateTimeString(slot.end, timeZone),
       }));
       const withinBusinessHours = freeSlotsLocal.flatMap((slot) => clipToBusinessHours(slot, businessHours));
-      return JSON.stringify({ freeSlots: withinBusinessHours, timezone: timeZone });
+      return JSON.stringify({ freeSlots: withinBusinessHours, timezone: timeZone, staffMember: args.staffMember ?? null });
     } catch (err) {
       // Cualquier falla real del proveedor (Google caído, token inválido,
       // etc.) se convierte en un resultado de tool que el modelo puede leer
@@ -104,6 +159,10 @@ export async function executeCalendarTool(
   }
 
   if (toolName === "bookAppointment" && args.start && args.end && args.summary && args.attendeeName && args.attendeeContact) {
+    if (staffMembers.length > 0 && !args.staffMember) {
+      return JSON.stringify({ error: "Falta staffMember — este negocio requiere saber con quién es la cita." });
+    }
+
     const startUtc = normalizeToUtcISOString(args.start, timeZone);
     const endUtc = normalizeToUtcISOString(args.end, timeZone);
 
@@ -132,6 +191,7 @@ export async function executeCalendarTool(
         summary: args.summary,
         attendeeName: args.attendeeName,
         attendeeContact: args.attendeeContact,
+        staffMember: args.staffMember,
       });
       return JSON.stringify(result);
     } catch (err) {

@@ -249,6 +249,7 @@ adminApp.put("/tenants/:id/settings", async (c) => {
     brandName: current.brandName,
     brandLogoUrl: current.brandLogoUrl,
     brandColor: current.brandColor,
+    staffMembers: current.staffMembers,
   };
   await upsertTenantSettings(c.env.DB, tenantId, settings);
   await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "update_tenant_settings", details: settings });

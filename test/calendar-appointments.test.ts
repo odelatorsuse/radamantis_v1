@@ -41,6 +41,30 @@ describe("recordAppointmentFromToolCall", () => {
       "Oscar",
       "555-0000",
       "evt-1",
+      null,
+    );
+  });
+
+  it("guarda staff_member cuando la tool call lo incluyó", async () => {
+    const { db, bind } = mockDb();
+    await recordAppointmentFromToolCall(
+      db,
+      ref,
+      JSON.stringify({ start: "2026-09-01T10:00:00", end: "2026-09-01T10:30:00", summary: "Corte", attendeeName: "Oscar", attendeeContact: "555-0000", staffMember: "Ana" }),
+      JSON.stringify({ ok: true, eventId: "evt-2" }),
+      "America/Mexico_City",
+    );
+    expect(bind).toHaveBeenCalledWith(
+      "vet-ch",
+      "telegram",
+      "555",
+      "2026-09-01T16:00:00.000Z",
+      "2026-09-01T16:30:00.000Z",
+      "Corte",
+      "Oscar",
+      "555-0000",
+      "evt-2",
+      "Ana",
     );
   });
 

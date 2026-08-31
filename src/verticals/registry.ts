@@ -2,7 +2,6 @@ import { barberiaTemplate } from "./barberia";
 import { cafeteriaPanaderiaTemplate } from "./cafeteriaPanaderia";
 import { clinicaTemplate } from "./clinica";
 import { coachTemplate } from "./coach";
-import { crmVentasTemplate } from "./crmVentas";
 import { dentistaTemplate } from "./dentista";
 import { esteticaTemplate } from "./estetica";
 import { gimnasioTemplate } from "./gimnasio";
@@ -27,7 +26,6 @@ const TEMPLATES: Record<string, VerticalTemplate> = {
   spa: spaTemplate,
   inmobiliaria: inmobiliariaTemplate,
   coach: coachTemplate,
-  crm_ventas: crmVentasTemplate,
   sandbox: sandboxTemplate,
 };
 

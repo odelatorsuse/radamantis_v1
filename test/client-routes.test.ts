@@ -535,6 +535,41 @@ describe("GET/PUT /branding (White-label por tenant)", () => {
     );
     expect(res.status).toBe(200);
     const lastBind = (env.__bind as ReturnType<typeof vi.fn>).mock.calls[(env.__bind as ReturnType<typeof vi.fn>).mock.calls.length - 1];
-    expect(lastBind.slice(-3)).toEqual([null, null, null]);
+    expect(lastBind.slice(-4, -1)).toEqual([null, null, null]);
+  });
+});
+
+describe("GET/PUT /staff-members (Agencia, Fase 2 — agendar con persona específica)", () => {
+  it("GET devuelve [] por default", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/staff-members", { headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ staffMembers: [] });
+  });
+
+  it("PUT guarda los nombres, recortados y sin vacíos", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/staff-members",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ staffMembers: ["  Ana  ", "", "Carlos"] }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const lastBind = (env.__bind as ReturnType<typeof vi.fn>).mock.calls[(env.__bind as ReturnType<typeof vi.fn>).mock.calls.length - 1];
+    expect(lastBind).toContain(JSON.stringify(["Ana", "Carlos"]));
+  });
+
+  it("PUT sin staffMembers (o no-array) guarda una lista vacía", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/staff-members",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({}) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const lastBind = (env.__bind as ReturnType<typeof vi.fn>).mock.calls[(env.__bind as ReturnType<typeof vi.fn>).mock.calls.length - 1];
+    expect(lastBind).toContain(JSON.stringify([]));
   });
 });

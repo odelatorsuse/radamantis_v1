@@ -216,17 +216,17 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       <p class="page-sub">Próximas citas y las más recientes ya pasadas.</p>
       <div class="panel">
         <h3 id="currentMonthTitle">Este mes</h3>
-        <table id="currentMonthTable"><thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Contacto</th><th>Motivo</th><th>Estado</th></tr></thead><tbody></tbody></table>
+        <table id="currentMonthTable"><thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Contacto</th><th>Motivo</th><th>Con</th><th>Estado</th></tr></thead><tbody></tbody></table>
         <p class="empty" id="currentMonthEmpty" style="display:none;">Sin citas este mes.</p>
       </div>
       <div class="panel">
         <h3>Próximas</h3>
-        <table id="upcomingTable"><thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Contacto</th><th>Motivo</th></tr></thead><tbody></tbody></table>
+        <table id="upcomingTable"><thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Contacto</th><th>Motivo</th><th>Con</th></tr></thead><tbody></tbody></table>
         <p class="empty" id="upcomingEmpty" style="display:none;">No hay citas próximas.</p>
       </div>
       <div class="panel">
         <h3>Recientes</h3>
-        <table id="pastTable"><thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Contacto</th><th>Motivo</th></tr></thead><tbody></tbody></table>
+        <table id="pastTable"><thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Contacto</th><th>Motivo</th><th>Con</th></tr></thead><tbody></tbody></table>
         <p class="empty" id="pastEmpty" style="display:none;">Sin historial todavía.</p>
       </div>
     </section>
@@ -329,6 +329,16 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
           <textarea id="handoffKeywordsInput" placeholder="ej. quiero hablar con el doctor, cirugía urgente" style="width:100%;min-height:70px;"></textarea>
           <div style="margin-top:10px;"><button class="btn-primary" type="submit">Guardar</button></div>
           <div class="error" id="handoffKeywordsMsg"></div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h3>Personal</h3>
+        <p class="page-sub" style="margin-bottom:14px;">Si tienes más de una persona atendiendo citas (estilistas, barberos, doctores), agrégalos aquí para que el bot pueda preguntar y agendar con quién específico. Déjalo vacío si no aplica — el bot sigue agendando normal, sin pedir con quién. Sepáralos con comas.</p>
+        <form id="staffMembersForm">
+          <textarea id="staffMembersInput" placeholder="ej. Ana, Carlos" style="width:100%;min-height:50px;"></textarea>
+          <div style="margin-top:10px;"><button class="btn-primary" type="submit">Guardar</button></div>
+          <div class="error" id="staffMembersMsg"></div>
         </form>
       </div>
     </section>
@@ -480,7 +490,8 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       "<td>" + esc(dt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })) + "</td>" +
       "<td>" + esc(a.attendeeName) + "</td>" +
       "<td class='mono'>" + esc(a.attendeeContact) + "</td>" +
-      "<td>" + esc(a.summary) + "</td>";
+      "<td>" + esc(a.summary) + "</td>" +
+      "<td>" + esc(a.staffMember || "—") + "</td>";
     return tr;
   }
 
@@ -792,6 +803,24 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
   });
 
+  // Agencia (Fase 2, agendar con persona específica): mismo patrón exacto
+  // que las palabras de handoff — comma-separated, se guarda vacío si no
+  // aplica.
+  function loadStaffMembers() {
+    api("/staff-members").then(function (data) {
+      document.getElementById("staffMembersInput").value = (data.staffMembers || []).join(", ");
+    });
+  }
+
+  document.getElementById("staffMembersForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msgEl = document.getElementById("staffMembersMsg");
+    var staffMembers = document.getElementById("staffMembersInput").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+    api("/staff-members", { method: "PUT", body: JSON.stringify({ staffMembers: staffMembers }) })
+      .then(function () { msgEl.className = "success-msg"; msgEl.textContent = "Guardado."; })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
   // Agencia (White-label, por tenant): reconstruye el bloque de marca del
   // sidebar cada vez (en vez de mutar el <img>/<span> existente) para que
   // llamarla de nuevo tras guardar sea seguro sin rastrear qué elemento
@@ -973,6 +1002,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     loadLeadReengagement();
     loadAutoResume();
     loadHandoffKeywords();
+    loadStaffMembers();
     loadKbGaps();
     loadKbDocs();
     loadConversations();

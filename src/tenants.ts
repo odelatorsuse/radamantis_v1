@@ -54,6 +54,12 @@ export interface TenantSettings {
   brandName: string | null;
   brandLogoUrl: string | null;
   brandColor: string | null;
+  // Agencia (Fase 2, agendar con persona específica): lista de nombres del
+  // staff, la mantiene el propio negocio desde /console. Vacío = las tools
+  // de calendario funcionan exactamente igual que antes, sin campo de
+  // staff — esto nunca es una capacidad de vertical, es una realidad de
+  // CADA negocio (un salón puede tener 1 o 5 estilistas).
+  staffMembers: string[];
 }
 
 export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
@@ -72,6 +78,7 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
   brandName: null,
   brandLogoUrl: null,
   brandColor: null,
+  staffMembers: [],
 };
 
 // D2/D6: el router resuelve tenant Y vertical antes de instanciar el DO,
@@ -144,7 +151,7 @@ export async function getVerticalIdForTenant(db: D1Database, tenantId: string): 
 export async function getTenantSettings(db: D1Database, tenantId: string): Promise<TenantSettings> {
   const row = await db
     .prepare(
-      "SELECT tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, custom_handoff_keywords, brand_name, brand_logo_url, brand_color FROM tenant_settings WHERE tenant_id = ?",
+      "SELECT tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, custom_handoff_keywords, brand_name, brand_logo_url, brand_color, staff_members FROM tenant_settings WHERE tenant_id = ?",
     )
     .bind(tenantId)
     .first<{
@@ -163,6 +170,7 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
       brand_name: string | null;
       brand_logo_url: string | null;
       brand_color: string | null;
+      staff_members: string;
     }>();
 
   if (!row) return DEFAULT_TENANT_SETTINGS;
@@ -178,10 +186,14 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
     reviewLink: row.review_link,
     leadReengagementEnabled: row.lead_reengagement_enabled === 1,
     autoResumeHandoffEnabled: row.auto_resume_handoff_enabled === 1,
+    // parseCustomHandoffKeywords es un parser genérico de "array de strings
+    // en JSON con fallback a []" pese a su nombre — se reutiliza aquí para
+    // no duplicar la misma lógica de 6 líneas.
     customHandoffKeywords: parseCustomHandoffKeywords(row.custom_handoff_keywords),
     brandName: row.brand_name,
     brandLogoUrl: row.brand_logo_url,
     brandColor: row.brand_color,
+    staffMembers: parseCustomHandoffKeywords(row.staff_members),
   };
 }
 
@@ -193,8 +205,8 @@ export async function getTenantSettings(db: D1Database, tenantId: string): Promi
 export async function upsertTenantSettings(db: D1Database, tenantId: string, settings: TenantSettings): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, custom_handoff_keywords, brand_name, brand_logo_url, brand_color, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO tenant_settings (tenant_id, tone, language, currency, prompt_override, timezone, business_hours, alert_chat_id, alert_activation_code, review_link, lead_reengagement_enabled, auto_resume_handoff_enabled, custom_handoff_keywords, brand_name, brand_logo_url, brand_color, staff_members, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT (tenant_id) DO UPDATE SET
          tone = excluded.tone,
          language = excluded.language,
@@ -211,6 +223,7 @@ export async function upsertTenantSettings(db: D1Database, tenantId: string, set
          brand_name = excluded.brand_name,
          brand_logo_url = excluded.brand_logo_url,
          brand_color = excluded.brand_color,
+         staff_members = excluded.staff_members,
          updated_at = excluded.updated_at`,
     )
     .bind(
@@ -230,6 +243,7 @@ export async function upsertTenantSettings(db: D1Database, tenantId: string, set
       settings.brandName,
       settings.brandLogoUrl,
       settings.brandColor,
+      JSON.stringify(settings.staffMembers),
     )
     .run();
 }

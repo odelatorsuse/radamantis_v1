@@ -37,7 +37,7 @@ describe("getVerticalTemplate", () => {
 // a su propio template real (no cae de vuelta a sandbox por un typo de id).
 describe("verticales nuevos de onboarding", () => {
   const bookingVerticals = ["dentista", "gimnasio", "restaurante", "barberia", "clinica", "spa", "inmobiliaria", "coach"];
-  const kbOnlyVerticals = ["cafeteria_panaderia", "tienda", "crm_ventas"];
+  const kbOnlyVerticals = ["cafeteria_panaderia", "tienda"];
 
   it.each(bookingVerticals)("%s tiene checkAvailability/bookAppointment habilitados", (verticalId) => {
     const template = getVerticalTemplate(verticalId);

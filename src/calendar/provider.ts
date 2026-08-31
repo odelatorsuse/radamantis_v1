@@ -13,6 +13,12 @@ export interface AppointmentDetails {
   description?: string;
   attendeeName?: string;
   attendeeContact?: string;
+  // Agencia (Fase 2, agendar con persona específica): opcional a propósito
+  // — un tenant sin staff configurado nunca manda esto, cero cambio de
+  // comportamiento. Cuando viene, se guarda como etiqueta del evento (no
+  // como un calendario aparte) para poder filtrar disponibilidad por
+  // persona más adelante.
+  staffMember?: string;
 }
 
 export interface BookAppointmentResult {
@@ -22,6 +28,12 @@ export interface BookAppointmentResult {
 }
 
 export interface CalendarProvider {
-  checkAvailability(rangeStart: string, rangeEnd: string): Promise<TimeSlot[]>;
+  // staffMember opcional: sin él, disponibilidad de TODO el calendario
+  // (comportamiento de siempre). Con él, disponibilidad de ESA persona
+  // específica únicamente (sus propios eventos etiquetados vs. horario de
+  // atención) — dos personas distintas pueden estar ocupadas al mismo
+  // tiempo sin bloquearse entre sí, como sillas independientes en una
+  // barbería.
+  checkAvailability(rangeStart: string, rangeEnd: string, staffMember?: string): Promise<TimeSlot[]>;
   bookAppointment(details: AppointmentDetails): Promise<BookAppointmentResult>;
 }

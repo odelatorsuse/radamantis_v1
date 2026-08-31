@@ -1,7 +1,29 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeCalendarTool } from "../src/calendar/tools";
+import { buildCalendarTools, CALENDAR_TOOLS, executeCalendarTool } from "../src/calendar/tools";
 import type { CalendarProvider } from "../src/calendar/provider";
 import type { WeeklyBusinessHours } from "../src/calendar/businessHours";
+
+describe("buildCalendarTools", () => {
+  it("sin staff, devuelve exactamente CALENDAR_TOOLS (cero cambio de comportamiento)", () => {
+    expect(buildCalendarTools([])).toBe(CALENDAR_TOOLS);
+  });
+
+  it("con staff, agrega staffMember opcional a checkAvailability y obligatorio a bookAppointment", () => {
+    const [checkAvailability, bookAppointment] = buildCalendarTools(["Ana", "Carlos"]);
+
+    const checkParams = checkAvailability.parameters as { properties: Record<string, unknown>; required: string[] };
+    expect(checkParams.properties.staffMember).toEqual({
+      type: "string",
+      description: expect.any(String),
+      enum: ["Ana", "Carlos"],
+    });
+    expect(checkParams.required).not.toContain("staffMember");
+
+    const bookParams = bookAppointment.parameters as { properties: Record<string, unknown>; required: string[] };
+    expect(bookParams.properties.staffMember).toBeDefined();
+    expect(bookParams.required).toContain("staffMember");
+  });
+});
 
 // Días de la semana verificados con getUTCDay() forzando UTC (¡Intl/toLocaleDateString
 // sin timeZone:'UTC' explícito da el día equivocado según la zona de la máquina —
@@ -45,7 +67,62 @@ describe("executeCalendarTool — checkAvailability", () => {
     expect(JSON.parse(result)).toEqual({
       freeSlots: [{ start: "2026-09-01T09:00:00", end: "2026-09-01T18:00:00" }],
       timezone: "UTC",
+      staffMember: null,
     });
+  });
+});
+
+describe("executeCalendarTool — staffMember (Agencia, Fase 2)", () => {
+  it("pasa staffMember al provider y lo refleja en el resultado", async () => {
+    const provider = mockProvider();
+    const result = await executeCalendarTool(
+      "checkAvailability",
+      JSON.stringify({ rangeStart: "2026-09-01T00:00:00", rangeEnd: "2026-09-01T23:59:59", staffMember: "Ana" }),
+      provider,
+      "UTC",
+      businessHours,
+      ["Ana", "Carlos"],
+    );
+    expect(provider.checkAvailability).toHaveBeenCalledWith(expect.any(String), expect.any(String), "Ana");
+    expect(JSON.parse(result).staffMember).toBe("Ana");
+  });
+
+  it("rechaza un staffMember que no está en la lista configurada del tenant", async () => {
+    const provider = mockProvider();
+    const result = await executeCalendarTool(
+      "checkAvailability",
+      JSON.stringify({ rangeStart: "2026-09-01T00:00:00", rangeEnd: "2026-09-01T23:59:59", staffMember: "Inventado" }),
+      provider,
+      "UTC",
+      businessHours,
+      ["Ana", "Carlos"],
+    );
+    expect(JSON.parse(result).error).toContain("Inventado");
+  });
+
+  it("bookAppointment exige staffMember si el tenant tiene staff configurado", async () => {
+    const provider = mockProvider();
+    const result = await executeCalendarTool(
+      "bookAppointment",
+      JSON.stringify({ start: "2026-09-01T13:30:00", end: "2026-09-01T14:00:00", summary: "Corte", ...clientArgs }),
+      provider,
+      "America/Mexico_City",
+      businessHours,
+      ["Ana", "Carlos"],
+    );
+    expect(JSON.parse(result)).toEqual({ error: "Falta staffMember — este negocio requiere saber con quién es la cita." });
+  });
+
+  it("bookAppointment funciona sin staffMember cuando el tenant no tiene staff configurado", async () => {
+    const provider = mockProvider();
+    await executeCalendarTool(
+      "bookAppointment",
+      JSON.stringify({ start: "2026-09-01T13:30:00", end: "2026-09-01T14:00:00", summary: "Corte", ...clientArgs }),
+      provider,
+      "America/Mexico_City",
+      businessHours,
+    );
+    expect(provider.bookAppointment).toHaveBeenCalled();
   });
 });
 

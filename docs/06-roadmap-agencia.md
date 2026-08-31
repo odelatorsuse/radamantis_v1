@@ -144,10 +144,10 @@ Oscar pidió una lista de 12 giros para el onboarding de clientes nuevos, notand
 
 | Ítem | Estado | Nota |
 |---|---|---|
-| 11 giros nuevos (`src/verticals/`) | **Completa (2026-08-30)** | Dentista, gimnasio, restaurante, barbería, clínica, cafetería/panadería, tienda, spa, inmobiliaria, coach, CRM/ventas. "Salón de belleza" ya existía como `estetica`. |
+| 10 giros nuevos (`src/verticals/`) | **Completa (2026-08-30)** | Dentista, gimnasio, restaurante, barbería, clínica, cafetería/panadería, tienda, spa, inmobiliaria, coach. "Salón de belleza" ya existía como `estetica`. |
 | UI de onboarding en `/admin` | **Completa (2026-08-30)** | "Alta de tenant" → "Onboarding de cliente nuevo": grid de íconos por giro + sugerencia de KB + aterriza en el detalle del cliente al crearlo. |
-| Confirmar interpretación de `crm_ventas` | **Pendiente** | Se construyó como bot calificador de leads (no agenda citas) — Oscar no llegó a confirmarlo explícitamente, la pregunta de scoping no tenía dos opciones reales. |
-| Fase 2: agendar con persona específica (salón/barbería) | **Sin empezar** | Capacidad nueva del core — calendario por miembro del staff. |
-| Fase 2: catálogo con fotos (inmobiliaria/restaurante/panadería/tienda) | **Sin empezar** | Capacidad nueva del core — nueva tool + envío de fotos por Telegram. |
+| `crm_ventas` | **Eliminado (2026-08-30)** | Oscar pidió quitarlo explícitamente — no llegó a confirmar la interpretación de scoping antes de eso. |
+| Fase 2a: agendar con persona específica (salón/barbería) | **Completa (2026-08-30)** | Staff como etiqueta sobre el mismo Google Calendar (`extendedProperties`), configurable por tenant desde `/console` — ver `CLAUDE.md` y memoria `project_staff_booking`. |
+| Fase 2b: catálogo con fotos (inmobiliaria/restaurante/panadería/tienda) | **Sin empezar** | Capacidad nueva del core — nueva tool + envío de fotos por Telegram. Orden confirmado con Oscar: después de agendar-con-persona. |
 
 No se prioriza el resto del backlog general sin pedido explícito de Oscar.

@@ -2,7 +2,7 @@ import { recordAppointmentFromToolCall } from "./calendar/appointments";
 import { executeFeedbackTool, RECORD_FEEDBACK_TOOL } from "./calendar/feedbackTool";
 import { GoogleCalendarProvider } from "./calendar/google";
 import { getValidAccessToken } from "./calendar/oauth";
-import { CALENDAR_TOOLS, executeCalendarTool } from "./calendar/tools";
+import { buildCalendarTools, executeCalendarTool } from "./calendar/tools";
 import { getChannelProvider } from "./channels/registry";
 import { createHandoff, detectsHandoffRequest, detectsUrgentSentiment, HANDOFF_REPLY_MESSAGE, isPaused } from "./handoff";
 import { OpenAIProvider } from "./llm/openai";
@@ -203,7 +203,7 @@ export class ConversationAgent {
 
     const llm = new OpenAIProvider(this.env.OPENAI_API_KEY);
     const messages = buildMessages(systemPrompt, historyMessages, userText);
-    const tools = calendarProvider ? [...CALENDAR_TOOLS, RECORD_FEEDBACK_TOOL] : undefined;
+    const tools = calendarProvider ? [...buildCalendarTools(tenantSettings.staffMembers), RECORD_FEEDBACK_TOOL] : undefined;
 
     let completion = await llm.complete(messages, tools);
     let usage = completion.usage;
@@ -228,6 +228,7 @@ export class ConversationAgent {
                 calendarProvider,
                 tenantSettings.timezone,
                 tenantSettings.businessHours,
+                tenantSettings.staffMembers,
               );
         console.log("calendar tool result", tenantId, toolCall.name, result);
         toolResultMessages.push({ role: "tool", content: result, toolCallId: toolCall.id });

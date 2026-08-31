@@ -31,6 +31,7 @@ interface BookAppointmentToolArgs {
   summary?: string;
   attendeeName?: string;
   attendeeContact?: string;
+  staffMember?: string;
 }
 
 interface BookAppointmentToolResult {
@@ -60,10 +61,21 @@ export async function recordAppointmentFromToolCall(
     await db
       .prepare(
         `INSERT INTO appointments
-           (tenant_id, channel, chat_id, start_utc, end_utc, summary, attendee_name, attendee_contact, event_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (tenant_id, channel, chat_id, start_utc, end_utc, summary, attendee_name, attendee_contact, event_id, staff_member)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(ref.tenantId, ref.channel, ref.chatId, startUtc, endUtc, args.summary, args.attendeeName, args.attendeeContact, result.eventId ?? null)
+      .bind(
+        ref.tenantId,
+        ref.channel,
+        ref.chatId,
+        startUtc,
+        endUtc,
+        args.summary,
+        args.attendeeName,
+        args.attendeeContact,
+        result.eventId ?? null,
+        args.staffMember ?? null,
+      )
       .run();
   } catch {
     // best-effort — nunca romper el flujo de la conversación por esto.

@@ -51,6 +51,10 @@ describe("getTenantSettings", () => {
       lead_reengagement_enabled: 1,
       auto_resume_handoff_enabled: 0,
       custom_handoff_keywords: '["quiero hablar con el doctor"]',
+      brand_name: "Dr. Vet CH",
+      brand_logo_url: "https://ejemplo.com/logo.png",
+      brand_color: "#0E9F6E",
+      staff_members: '["Ana","Carlos"]',
     });
     const bind = vi.fn().mockReturnValue({ first });
     const prepare = vi.fn().mockReturnValue({ bind });
@@ -69,6 +73,10 @@ describe("getTenantSettings", () => {
       leadReengagementEnabled: true,
       autoResumeHandoffEnabled: false,
       customHandoffKeywords: ["quiero hablar con el doctor"],
+      brandName: "Dr. Vet CH",
+      brandLogoUrl: "https://ejemplo.com/logo.png",
+      brandColor: "#0E9F6E",
+      staffMembers: ["Ana", "Carlos"],
     });
   });
 });
@@ -97,6 +105,7 @@ describe("upsertTenantSettings", () => {
       brandName: "Dr. Vet CH",
       brandLogoUrl: "https://ejemplo.com/logo.png",
       brandColor: "#0E9F6E",
+      staffMembers: ["Ana", "Carlos"],
     });
 
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("ON CONFLICT (tenant_id) DO UPDATE"));
@@ -117,6 +126,7 @@ describe("upsertTenantSettings", () => {
       "Dr. Vet CH",
       "https://ejemplo.com/logo.png",
       "#0E9F6E",
+      JSON.stringify(["Ana", "Carlos"]),
     );
   });
 });

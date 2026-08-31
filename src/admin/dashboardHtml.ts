@@ -1,25 +1,26 @@
 // Etapa 8.5: dashboard admin — sidebar + breadcrumb + grid de tarjetas por
-// bot. Segunda ronda de rediseño (2026-08-31, a pedido explícito de Oscar,
-// mismo día que el rediseño cyberpunk de /console): dark mode profundo
-// (#0a0a0f) con glassmorphism, glow y canvas de partículas — misma FAMILIA
-// visual que /console, pero paleta deliberadamente DISTINTA (Oscar: "no
-// quiero que utilices la misma paleta de colores que el de cliente...
-// para que se note visualmente que estoy en consolas diferentes") — azul
-// eléctrico (#4361EE) + dorado (#FFB020) en vez del cian/violeta de la
-// consola. --primary-deep/--accent-deep (color-mix 42%/black, mismo % que
-// consoleHtml.ts, contraste verificado: blanco/primary-deep=13.5:1,
-// blanco/accent-deep=8:1) existen por la misma razón que allá: texto blanco
-// sobre un fondo neón brillante falla contraste, así que los botones sólidos
-// usan la versión oscurecida. --ok se separó de --accent (antes el mismo
-// token hacía doble función: "verde de éxito" Y "accent decorativo" — con
-// accent ahora dorado, un LED de "todo bien" en dorado sería semánticamente
-// confuso, así que --ok es su propio token verde, nunca deja de significar
-// "funciona"). --danger se subió de tono (#F87171→#FF4D6D) para la misma
-// familia neón, con --danger-deep (mismo patrón) para el único botón sólido
-// de peligro (blanco/danger-deep=11.2:1). --warning NO se tocó — sigue
-// siendo la señal real de "necesita atención" en el grid de bots y en los
-// LEDs del diagrama de Flujo, nunca decorativo. Nunca la paleta de Forja.
-// Consume exclusivamente /api/admin/* (D9).
+// bot. Tercera ronda de paleta (2026-08-31): la primera pasada (azul
+// eléctrico + dorado) no le gustó a Oscar visualmente — pidió explorar
+// azules/verdes/negros/amarillos en su lugar, confirmó "azul domina" al
+// preguntarle. Paleta actual: azul eléctrico #2563EB (primario) + verde
+// esmeralda #10B981 (accent) — sigue siendo dark mode profundo (#0a0a0f) con
+// glassmorphism, glow y canvas de partículas, misma FAMILIA visual que
+// /console pero deliberadamente DISTINTA (Oscar: "no quiero que utilices la
+// misma paleta de colores que el de cliente... para que se note visualmente
+// que estoy en consolas diferentes") — nunca cian/violeta como la consola.
+// --primary-deep/--accent-deep (color-mix 42%/black, mismo % que
+// consoleHtml.ts) existen por la misma razón que allá: texto blanco sobre un
+// fondo neón brillante falla contraste, así que los botones sólidos usan la
+// versión oscurecida — recalcular estos números si se vuelve a cambiar la
+// paleta. --ok es su propio token (verde brillante #2CFCB4, distinto del
+// verde esmeralda de --accent) para que un LED de "todo bien" nunca dependa
+// de si --accent es o no verde ese día. --warning se volvió amarillo puro
+// (#FACC15, antes ámbar #F5A623) para sumar el amarillo que Oscar pidió sin
+// agregar un cuarto color decorativo — sigue siendo la señal real de
+// "necesita atención" en el grid de bots y en los LEDs del diagrama de
+// Flujo, nunca decorativo. --danger se queda igual (#FF4D6D, semántico,
+// ajeno a esta ronda de paleta). Nunca la paleta de Forja. Consume
+// exclusivamente /api/admin/* (D9).
 export const DASHBOARD_HTML = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -35,18 +36,18 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     --bg-sidebar: rgba(6,6,12,0.6);
     --glass: rgba(255,255,255,0.045);
     --surface-alt: rgba(255,255,255,0.065);
-    --primary: #4361EE;
+    --primary: #2563EB;
     --primary-2: color-mix(in srgb, var(--primary) 55%, white);
     --primary-deep: color-mix(in srgb, var(--primary) 42%, black);
     --primary-soft: color-mix(in srgb, var(--primary) 18%, transparent);
-    --accent: #FFB020;
+    --accent: #10B981;
     --accent-deep: color-mix(in srgb, var(--accent) 42%, black);
     --ok: #2CFCB4;
     --text: #F1F5FF;
     --text-muted: #9098C2;
     --panel: rgba(255,255,255,0.045);
     --border: rgba(255,255,255,0.12);
-    --warning: #F5A623;
+    --warning: #FACC15;
     --danger: #FF4D6D;
     --danger-deep: color-mix(in srgb, var(--danger) 42%, black);
     --radius: 16px;
@@ -76,7 +77,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   h1, h2, h3 { margin: 0; font-family: "Space Grotesk", sans-serif; font-weight: 700; letter-spacing: -0.01em; }
   svg { display: block; }
   ::placeholder { color: var(--text-muted); opacity: 0.65; }
-  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; box-shadow: 0 0 0 5px rgba(67,97,238,0.18); border-radius: 4px; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; box-shadow: 0 0 0 5px rgba(37,99,235,0.18); border-radius: 4px; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--surface-alt); border-radius: 8px; }
@@ -104,7 +105,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     z-index: 2;
   }
   .sidebar-logo { padding: 0 8px; }
-  .sidebar-logo .name { font-weight: 800; font-size: 1.05rem; font-family: "Space Grotesk", sans-serif; letter-spacing: 0.02em; text-shadow: 0 0 20px rgba(67,97,238,0.35); }
+  .sidebar-logo .name { font-weight: 800; font-size: 1.05rem; font-family: "Space Grotesk", sans-serif; letter-spacing: 0.02em; text-shadow: 0 0 20px rgba(37,99,235,0.35); }
   .sidebar-logo .plan { font-family: "Fira Code", monospace; font-size: 0.65rem; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; }
   .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
   .nav-item {
@@ -113,7 +114,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     border-left: 2px solid transparent; transition: background 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s;
   }
   .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
-  .nav-item.active { background: var(--primary-soft); color: var(--text); border-left-color: var(--primary); box-shadow: 0 0 16px rgba(67,97,238,0.18); }
+  .nav-item.active { background: var(--primary-soft); color: var(--text); border-left-color: var(--primary); box-shadow: 0 0 16px rgba(37,99,235,0.18); }
   .nav-item:hover:not(.active) { color: var(--text); background: var(--surface-alt); transform: translateX(2px); }
 
   /* --- Main --- */
@@ -125,7 +126,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   .tab-view { display: none; }
   .tab-view.active { display: block; }
 
-  h2.section-title { font-size: 1rem; color: var(--accent); margin: 28px 0 12px; display: flex; align-items: center; gap: 8px; text-shadow: 0 0 16px rgba(255,176,32,0.28); }
+  h2.section-title { font-size: 1rem; color: var(--accent); margin: 28px 0 12px; display: flex; align-items: center; gap: 8px; text-shadow: 0 0 16px rgba(16,185,129,0.28); }
   .panel { background: var(--panel); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
 
   /* --- Conectores (Agencia: canales disponibles con íconos reales) --- */
@@ -135,8 +136,8 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     padding: 14px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px;
     cursor: pointer; transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease; text-align: center;
   }
-  .connector-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 0 18px rgba(67,97,238,0.22); }
-  .connector-card.selected { border-color: var(--primary); background: var(--primary-soft); box-shadow: 0 0 18px rgba(67,97,238,0.22); }
+  .connector-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 0 18px rgba(37,99,235,0.22); }
+  .connector-card.selected { border-color: var(--primary); background: var(--primary-soft); box-shadow: 0 0 18px rgba(37,99,235,0.22); }
   .connector-card.disabled { cursor: default; opacity: 0.45; }
   .connector-card.disabled:hover { border-color: var(--border); transform: none; }
   .connector-icon { width: 36px; height: 36px; flex-shrink: 0; }
@@ -156,7 +157,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
     box-shadow: var(--shadow-sm);
   }
-  .bot-card:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: var(--shadow-md), 0 0 22px rgba(67,97,238,0.14); }
+  .bot-card:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: var(--shadow-md), 0 0 22px rgba(37,99,235,0.14); }
   .bot-card-header { display: flex; justify-content: space-between; align-items: flex-start; }
   .bot-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--primary-soft); display: flex; align-items: center; justify-content: center; color: var(--primary); }
   .bot-icon svg { width: 22px; height: 22px; }
@@ -191,7 +192,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   .flow-main-row { display: flex; gap: 70px; align-items: center; position: relative; z-index: 2; }
   .flow-resource-row { display: flex; gap: 22px; flex-wrap: nowrap; margin-top: 90px; position: relative; z-index: 2; }
   .flow-node { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 168px; flex-shrink: 0; }
-  .flow-node.flow-node-main { border-color: var(--primary); box-shadow: 0 0 14px rgba(67,97,238,0.22); }
+  .flow-node.flow-node-main { border-color: var(--primary); box-shadow: 0 0 14px rgba(37,99,235,0.22); }
   .flow-node-title { font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; gap: 7px; }
   .flow-node-icon { width: 17px; height: 17px; flex-shrink: 0; color: var(--primary); }
   .flow-node-title .status-dot { margin-left: auto; }
@@ -219,10 +220,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   textarea { width: 100%; min-height: 90px; }
   button { cursor: pointer; transition: filter 150ms ease, box-shadow 150ms ease; }
   button:hover { filter: brightness(1.1); }
-  button:not(.secondary):not(.link-btn) { background: linear-gradient(135deg, var(--primary-deep), var(--accent-deep)); border-color: transparent; color: #fff; font-weight: 600; box-shadow: 0 0 0 1px rgba(67,97,238,0.35) inset, 0 4px 18px rgba(67,97,238,0.2); }
-  button:not(.secondary):not(.link-btn):hover { box-shadow: 0 0 0 1px rgba(67,97,238,0.55) inset, 0 6px 26px rgba(67,97,238,0.35); }
+  button:not(.secondary):not(.link-btn) { background: linear-gradient(135deg, var(--primary-deep), var(--accent-deep)); border-color: transparent; color: #fff; font-weight: 600; box-shadow: 0 0 0 1px rgba(37,99,235,0.35) inset, 0 4px 18px rgba(37,99,235,0.2); }
+  button:not(.secondary):not(.link-btn):hover { box-shadow: 0 0 0 1px rgba(37,99,235,0.55) inset, 0 6px 26px rgba(37,99,235,0.35); }
   button.secondary { background: var(--glass); color: var(--accent); border-color: var(--accent); display: inline-flex; align-items: center; gap: 6px; }
-  button.secondary:hover { box-shadow: 0 0 14px rgba(255,176,32,0.22); }
+  button.secondary:hover { box-shadow: 0 0 14px rgba(16,185,129,0.22); }
   button.secondary svg { width: 14px; height: 14px; }
   form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
   .error { color: var(--danger); font-size: 0.85rem; margin-top: 8px; }
@@ -232,7 +233,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
   .metrics { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; }
   .metric { min-width: 110px; }
-  .metric .value { font-size: 1.4rem; font-weight: 700; font-family: "Space Grotesk", sans-serif; text-shadow: 0 0 18px rgba(67,97,238,0.25); }
+  .metric .value { font-size: 1.4rem; font-weight: 700; font-family: "Space Grotesk", sans-serif; text-shadow: 0 0 18px rgba(37,99,235,0.25); }
   .metric .label { font-size: 0.75rem; color: var(--text-muted); }
   .status-ok { color: var(--ok); }
   .status-necesita_atencion { color: var(--warning); }
@@ -240,7 +241,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 
   #authGate { grid-column: 1 / -1; max-width: 420px; margin: 100px auto; text-align: center; animation: authIn 0.7s cubic-bezier(.2,.8,.2,1); }
   #authGate .panel { text-align: left; }
-  #authGate .panel:first-of-type { box-shadow: var(--shadow-lg), 0 0 60px rgba(67,97,238,0.1), 0 0 90px rgba(255,176,32,0.06); }
+  #authGate .panel:first-of-type { box-shadow: var(--shadow-lg), 0 0 60px rgba(37,99,235,0.1), 0 0 90px rgba(16,185,129,0.06); }
   @keyframes authIn { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: none; } }
 
   @media (max-width: 768px) {
@@ -666,7 +667,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var ctx = canvas.getContext("2d");
   var w, h, particles, rafId;
-  var COLORS = ["67,97,238", "255,176,32"];
+  var COLORS = ["37,99,235", "16,185,129"];
 
   function resize() {
     w = canvas.width = window.innerWidth;
@@ -1895,7 +1896,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   // llega un evento al webhook COMPARTIDO de Meta, ver src/index.ts).
   var CHANNEL_ICONS = {
     telegram: '<svg viewBox="0 0 24 24" fill="#26A5E4" xmlns="http://www.w3.org/2000/svg"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>',
-    web: '<svg viewBox="0 0 24 24" fill="none" stroke="#4361EE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+    web: '<svg viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
     facebook: '<svg viewBox="0 0 24 24" fill="#1877F2" xmlns="http://www.w3.org/2000/svg"><path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z"/></svg>',
     instagram: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="radIgGrad" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#FFDC80"/><stop offset="25%" stop-color="#FCAF45"/><stop offset="50%" stop-color="#E1306C"/><stop offset="75%" stop-color="#C13584"/><stop offset="100%" stop-color="#5851DB"/></linearGradient></defs><path fill="url(#radIgGrad)" d="M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077"/></svg>',
     whatsapp: '<svg viewBox="0 0 24 24" fill="#25D366" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>'

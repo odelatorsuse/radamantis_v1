@@ -84,16 +84,40 @@ export async function deleteCatalogItem(db: D1Database, tenantId: string, itemId
   await db.prepare("DELETE FROM catalog_items WHERE tenant_id = ? AND item_id = ?").bind(tenantId, itemId).run();
 }
 
-// Búsqueda real que usa la tool del bot (src/catalogTool.ts) — LIKE simple
-// contra título y descripción, nunca resultados inventados: si no hay
-// match, la lista viene vacía y el modelo debe decirlo así, no adivinar.
+// Conectores comunes en español — filtrarlos evita que "de", "con", "que"
+// hagan match casi con cualquier fila y vuelvan la búsqueda inútil.
+const STOPWORDS = new Set([
+  "que", "para", "con", "los", "las", "una", "uno", "del", "por", "tienen",
+  "tiene", "hay", "algo", "esta", "este", "sobre", "como", "cual", "cuales",
+]);
+
+// Búsqueda real que usa la tool del bot (src/catalogTool.ts) — LIKE contra
+// título y descripción, nunca resultados inventados: si no hay match, la
+// lista viene vacía y el modelo debe decirlo así, no adivinar.
+//
+// Bug real encontrado en la primera prueba funcional: comparar la FRASE
+// completa como una sola subcadena (ej. "playeras de algodón") nunca
+// calzaba contra un título más corto como "Playera básica algodón" — el
+// modelo casi nunca repite el título exacto al preguntar. Se busca por
+// PALABRA (cualquiera de las palabras significativas calza, OR entre
+// ellas) en vez de por frase completa — no arregla mayúsculas/plurales
+// (sigue siendo LIKE simple, sin stemming), pero sí tolera que el cliente
+// pregunte con sus propias palabras en cualquier orden.
 export async function searchCatalogItems(db: D1Database, tenantId: string, query: string, limit = 3): Promise<CatalogItem[]> {
-  const like = `%${query.trim()}%`;
+  const words = query
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length >= 4 && !STOPWORDS.has(w));
+  const terms = words.length > 0 ? words : [query.trim()];
+
+  const conditions = terms.map(() => "(title LIKE ? OR description LIKE ?)").join(" OR ");
+  const params = terms.flatMap((term) => [`%${term}%`, `%${term}%`]);
+
   const { results } = await db
     .prepare(
-      "SELECT item_id, title, description, price, photo_url, updated_at FROM catalog_items WHERE tenant_id = ? AND (title LIKE ? OR description LIKE ?) ORDER BY updated_at DESC LIMIT ?",
+      `SELECT item_id, title, description, price, photo_url, updated_at FROM catalog_items WHERE tenant_id = ? AND (${conditions}) ORDER BY updated_at DESC LIMIT ?`,
     )
-    .bind(tenantId, like, like, limit)
+    .bind(tenantId, ...params, limit)
     .all<CatalogItemRow>();
   return results.map(mapRow);
 }

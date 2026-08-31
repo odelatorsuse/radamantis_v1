@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   addChannelBinding,
   createTenant,
+  deleteTenant,
   getTenantDetail,
   getUsageSummary,
   getUsageSummaryThisMonth,
@@ -201,5 +202,68 @@ describe("getUsageSummaryThisMonth", () => {
     await getUsageSummaryThisMonth(db);
     const sql = prepare.mock.calls[0][0] as string;
     expect(sql).toContain("date(created_at) >= date('now', 'start of month')");
+  });
+});
+
+describe("deleteTenant (Agencia, 'Borrar cliente')", () => {
+  it("borra los vectores reales de Vectorize (solo los de ESE tenant) antes que las filas de D1", async () => {
+    const all = vi.fn().mockResolvedValue({ results: [{ doc_id: "horario" }, { doc_id: "precios" }] });
+    const prepareCalls: string[] = [];
+    const batch = vi.fn().mockResolvedValue([]);
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        prepareCalls.push(sql);
+        return { bind: () => ({ all, run: vi.fn() }) };
+      }),
+      batch,
+    } as unknown as D1Database;
+    const deleteByIds = vi.fn().mockResolvedValue({});
+    const vectorize = { deleteByIds } as unknown as VectorizeIndex;
+
+    await deleteTenant(db, vectorize, "vet-ch");
+
+    expect(deleteByIds).toHaveBeenCalledWith(["vet-ch:horario", "vet-ch:precios"]);
+    expect(batch).toHaveBeenCalled();
+  });
+
+  it("no llama a deleteByIds si el tenant no tiene documentos de KB", async () => {
+    const all = vi.fn().mockResolvedValue({ results: [] });
+    const db = {
+      prepare: vi.fn().mockReturnValue({ bind: () => ({ all, run: vi.fn() }) }),
+      batch: vi.fn().mockResolvedValue([]),
+    } as unknown as D1Database;
+    const deleteByIds = vi.fn();
+    const vectorize = { deleteByIds } as unknown as VectorizeIndex;
+
+    await deleteTenant(db, vectorize, "vet-ch");
+
+    expect(deleteByIds).not.toHaveBeenCalled();
+  });
+
+  it("borra las 14 tablas tenant-scoped conocidas más la fila de tenants, todas filtradas por tenant_id/id", async () => {
+    const bindCalls: unknown[][] = [];
+    const preparedSql: string[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        preparedSql.push(sql);
+        return {
+          bind: (...args: unknown[]) => {
+            bindCalls.push(args);
+            return { all: vi.fn().mockResolvedValue({ results: [] }), run: vi.fn() };
+          },
+        };
+      }),
+      batch: vi.fn(async (statements: unknown[]) => statements),
+    } as unknown as D1Database;
+    const vectorize = { deleteByIds: vi.fn() } as unknown as VectorizeIndex;
+
+    await deleteTenant(db, vectorize, "vet-ch");
+
+    const deleteStatements = preparedSql.filter((sql) => sql.startsWith("DELETE FROM"));
+    // 14 tablas tenant-scoped + la fila de tenants misma = 15 DELETE.
+    expect(deleteStatements.length).toBe(15);
+    expect(deleteStatements.some((sql) => sql.includes("DELETE FROM tenants WHERE id = ?"))).toBe(true);
+    expect(deleteStatements.some((sql) => sql.includes("DELETE FROM catalog_items WHERE tenant_id = ?"))).toBe(true);
+    expect(deleteStatements.some((sql) => sql.includes("DELETE FROM appointments WHERE tenant_id = ?"))).toBe(true);
   });
 });

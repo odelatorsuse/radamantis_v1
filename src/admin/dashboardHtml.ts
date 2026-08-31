@@ -336,6 +336,21 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       <h2 class="section-title">Calendario</h2>
       <div id="calendarStatus" style="font-size:0.9rem"></div>
       <p id="calendarError"></p>
+
+      <h2 class="section-title" style="color:var(--danger)">Zona de peligro</h2>
+      <div class="panel" id="deleteTenantPanel" style="border-color:var(--danger)">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0">Borra este cliente PARA SIEMPRE: conversaciones, citas, KB, catálogo, canales conectados, calendario, todo. No se puede deshacer.</p>
+        <button class="secondary" id="deleteTenantOpenBtn" style="border-color:var(--danger);color:var(--danger)">Borrar cliente</button>
+        <div id="deleteTenantConfirm" style="display:none;margin-top:12px">
+          <label style="font-size:0.8rem;color:var(--text-muted)">Escribe el id exacto del tenant (<code id="deleteTenantIdLabel"></code>) para confirmar</label>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <input type="text" id="deleteTenantConfirmInput" placeholder="id del tenant" style="flex:1" />
+            <button id="deleteTenantConfirmBtn" style="background:var(--danger);border-color:var(--danger)">Borrar para siempre</button>
+            <button class="secondary" id="deleteTenantCancelBtn">Cancelar</button>
+          </div>
+          <p class="error" id="deleteTenantError"></p>
+        </div>
+      </div>
     </div>
 
     <div id="botsListView">
@@ -552,6 +567,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     document.getElementById("navTeam").style.display = admin ? "" : "none";
     document.getElementById("navPlatform").style.display = admin ? "" : "none";
     document.getElementById("tenantCreateSection").style.display = admin ? "" : "none";
+    document.getElementById("deleteTenantPanel").style.display = admin ? "" : "none";
   }
 
   document.querySelectorAll(".nav-item").forEach(function (btn) {
@@ -1038,6 +1054,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       renderConnectorGrid();
       renderChannelFields();
       document.getElementById("channelError").textContent = "";
+      document.getElementById("deleteTenantIdLabel").textContent = tenantId;
+      document.getElementById("deleteTenantConfirm").style.display = "none";
+      document.getElementById("deleteTenantConfirmInput").value = "";
+      document.getElementById("deleteTenantError").textContent = "";
     });
   }
 
@@ -1244,6 +1264,38 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     document.getElementById("tenantDetail").style.display = "none";
     document.getElementById("botsListView").style.display = "block";
     currentDetailTenantId = null;
+  });
+
+  // Agencia ("Borrar cliente"): irreversible — exige teclear el id EXACTO
+  // del tenant antes de habilitar el botón real, para que un clic
+  // accidental nunca alcance a borrar nada. El servidor vuelve a validar
+  // esto mismo (confirmId en el body), esta pantalla es solo la primera
+  // capa, no la real.
+  document.getElementById("deleteTenantOpenBtn").addEventListener("click", function () {
+    document.getElementById("deleteTenantConfirm").style.display = "block";
+  });
+
+  document.getElementById("deleteTenantCancelBtn").addEventListener("click", function () {
+    document.getElementById("deleteTenantConfirm").style.display = "none";
+    document.getElementById("deleteTenantConfirmInput").value = "";
+    document.getElementById("deleteTenantError").textContent = "";
+  });
+
+  document.getElementById("deleteTenantConfirmBtn").addEventListener("click", function () {
+    var errEl = document.getElementById("deleteTenantError");
+    var typed = document.getElementById("deleteTenantConfirmInput").value;
+    if (typed !== currentDetailTenantId) {
+      errEl.textContent = "El id no coincide.";
+      return;
+    }
+    api("/tenants/" + currentDetailTenantId, { method: "DELETE", body: JSON.stringify({ confirmId: typed }) })
+      .then(function () {
+        document.getElementById("tenantDetail").style.display = "none";
+        document.getElementById("botsListView").style.display = "block";
+        currentDetailTenantId = null;
+        loadTenants();
+      })
+      .catch(function (err) { errEl.textContent = err.message; });
   });
 
   document.getElementById("settingsForm").addEventListener("submit", function (e) {

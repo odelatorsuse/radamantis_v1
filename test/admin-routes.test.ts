@@ -97,6 +97,71 @@ describe("adminApp tenant detail + settings", () => {
   });
 });
 
+describe("adminApp DELETE /tenants/:id ('Borrar cliente')", () => {
+  function mockDeletableTenantEnv() {
+    const batch = vi.fn().mockResolvedValue([]);
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        if (sql.includes("FROM tenants")) {
+          return { bind: () => ({ first: async () => ({ id: "vet-ch", name: "Dr. Vet CH", vertical_id: "veterinaria", created_at: "2026-01-01" }) }) };
+        }
+        if (sql.includes("FROM kb_documents")) {
+          return { bind: () => ({ all: async () => ({ results: [] }) }) };
+        }
+        if (sql.includes("FROM tenant_settings")) {
+          return { bind: () => ({ first: async () => null }) };
+        }
+        if (sql.includes("FROM channel_bindings")) {
+          return { bind: () => ({ all: async () => ({ results: [] }) }) };
+        }
+        if (sql.includes("INSERT INTO admin_actions")) {
+          return { bind: () => ({ run: async () => ({ success: true }) }) };
+        }
+        return { bind: () => ({ first: async () => ({ messages_in: 0, messages_out: 0, conversations: 0, open_handoffs: 0 }) }) };
+      }),
+      batch,
+    } as unknown as D1Database;
+    return {
+      DB: db,
+      ADMIN_API_KEY: "test-admin-key",
+      ADMIN_SESSION_SECRET: SESSION_SECRET,
+      OPENAI_API_KEY: "fake-openai-key",
+      TELEGRAM_WEBHOOK_SECRET: "webhook-secret",
+      VECTORIZE: { deleteByIds: vi.fn().mockResolvedValue({}) } as unknown as VectorizeIndex,
+      __batch: batch,
+    };
+  }
+
+  it("rechaza si confirmId no coincide exactamente con el id del tenant (400)", async () => {
+    const res = await adminApp.request(
+      "/tenants/vet-ch",
+      { method: "DELETE", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({ confirmId: "otro-id" }) },
+      mockDeletableTenantEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("devuelve 404 si el tenant no existe", async () => {
+    const res = await adminApp.request(
+      "/tenants/no-existe",
+      { method: "DELETE", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({ confirmId: "no-existe" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("borra el tenant cuando confirmId coincide, y registra la auditoría con tenantId null", async () => {
+    const env = mockDeletableTenantEnv();
+    const res = await adminApp.request(
+      "/tenants/vet-ch",
+      { method: "DELETE", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({ confirmId: "vet-ch" }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(env.__batch).toHaveBeenCalled();
+  });
+});
+
 describe("adminApp channels (Etapa 9 — auto-registro de webhook)", () => {
   // vi.restoreAllMocks() también limpiaba el mock de embedText definido a
   // nivel de módulo (vi.mock arriba), rompiendo tests de OTROS describe

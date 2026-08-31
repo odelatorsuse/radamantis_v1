@@ -238,6 +238,55 @@ export async function getTenantDetail(db: D1Database, tenantId: string): Promise
   };
 }
 
+// Agencia ("Borrar cliente"): borra TODO lo que vive en D1/Vectorize bajo
+// este tenant_id — las 14 tablas tenant-scoped que existen hoy en el
+// esquema, más los vectores reales de su KB (Vectorize no tiene "borra
+// todo lo de este tenant", hay que borrar por id exacto, así que primero
+// se leen los doc_id de kb_documents). admin_actions es la única
+// excepción: sus filas de ESTE tenant también se borran (son su
+// historial), pero el registro de la propia acción "delete_tenant" se
+// guarda con tenant_id NULL (ver adminApp.delete /tenants/:id) para que
+// sobreviva al borrado que acaba de describir.
+//
+// Límite real, no oculto: los Durable Objects de conversación
+// (tenantId:channel:chatId) no tienen una API de borrado masivo en
+// Cloudflare — quedan huérfanos pero inertes (nadie vuelve a resolver ese
+// tenant_id para escribirles), no acumulan costo ni son alcanzables sin
+// conocer el chatId exacto. El webhook del canal (Telegram/Meta) tampoco
+// se desregistra del lado del proveedor — vive fuera del alcance de
+// "borrar de Radamantis".
+const TENANT_SCOPED_TABLES = [
+  "channel_bindings",
+  "usage_log",
+  "messages",
+  "handoffs",
+  "admin_actions",
+  "tenant_settings",
+  "calendar_connections",
+  "appointments",
+  "tenant_users",
+  "kb_gaps",
+  "lead_reengagement",
+  "kb_documents",
+  "tool_calls",
+  "catalog_items",
+];
+
+export async function deleteTenant(db: D1Database, vectorize: VectorizeIndex, tenantId: string): Promise<void> {
+  const { results: kbDocs } = await db
+    .prepare("SELECT doc_id FROM kb_documents WHERE tenant_id = ?")
+    .bind(tenantId)
+    .all<{ doc_id: string }>();
+  if (kbDocs.length > 0) {
+    await vectorize.deleteByIds(kbDocs.map((d) => `${tenantId}:${d.doc_id}`));
+  }
+
+  await db.batch([
+    ...TENANT_SCOPED_TABLES.map((table) => db.prepare(`DELETE FROM ${table} WHERE tenant_id = ?`).bind(tenantId)),
+    db.prepare("DELETE FROM tenants WHERE id = ?").bind(tenantId),
+  ]);
+}
+
 export async function logAdminAction(
   db: D1Database,
   params: { tenantId: string | null; actor: string; action: string; details?: unknown },

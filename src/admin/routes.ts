@@ -25,6 +25,7 @@ import { getVerticalTemplate, listVerticalTemplates } from "../verticals/registr
 import {
   addChannelBinding,
   createTenant,
+  deleteTenant,
   getTenantDetail,
   getUsageSummary,
   getUsageSummaryThisMonth,
@@ -119,6 +120,27 @@ adminApp.post("/tenants", requireAdmin, async (c) => {
   await createTenant(c.env.DB, body.id, body.name, body.verticalId);
   await logAdminAction(c.env.DB, { tenantId: body.id, actor: c.get("actor"), action: "create_tenant", details: body });
   return c.json({ ok: true }, 201);
+});
+
+// Agencia ("Borrar cliente"): irreversible — borra TODO lo del tenant en
+// D1/Vectorize (ver deleteTenant). Requiere confirmar el id EXACTO en el
+// body, no solo el de la URL, para que un doble-click accidental en el
+// botón nunca alcance a borrar algo sin que el operador haya tecleado el
+// id a propósito. El registro de auditoría se guarda con tenantId NULL
+// (details lleva el id borrado) para sobrevivir al borrado de admin_actions
+// de ese mismo tenant que ocurre un instante antes.
+adminApp.delete("/tenants/:id", requireAdmin, async (c) => {
+  const tenantId = c.req.param("id");
+  const body = await c.req.json<{ confirmId?: string }>().catch(() => ({}) as { confirmId?: string });
+  if (body.confirmId !== tenantId) {
+    return c.json({ error: "confirmId debe coincidir exactamente con el id del tenant" }, 400);
+  }
+  const tenant = await getTenantDetail(c.env.DB, tenantId);
+  if (!tenant) return c.json({ error: "Tenant no encontrado" }, 404);
+
+  await deleteTenant(c.env.DB, c.env.VECTORIZE, tenantId);
+  await logAdminAction(c.env.DB, { tenantId: null, actor: c.get("actor"), action: "delete_tenant", details: { id: tenantId, name: tenant.name } });
+  return c.json({ ok: true });
 });
 
 // Etapa 9 (D8): alta/edición de canal = INSERT + registrar el webhook en el

@@ -151,3 +151,13 @@ Oscar pidió una lista de 12 giros para el onboarding de clientes nuevos, notand
 | Fase 2b: catálogo con fotos (inmobiliaria/restaurante/panadería/tienda) | **Completa (2026-08-30)** | `catalog_items` (D1, sin Vectorize) + tool `searchCatalog` + `ChannelProvider.sendPhoto` (Telegram real, Meta sin verificar) — ver `CLAUDE.md` y memoria `project_catalog_photos`. Cierra la Fase 2 completa. |
 
 No se prioriza el resto del backlog general sin pedido explícito de Oscar.
+
+## Octava ronda: "Borrar cliente" + pruebas funcionales (2026-08-31)
+
+Oscar pidió agregar la opción de borrar un cliente por completo (infra + información) dentro del detalle de cada tenant, y luego crear 3 clientes nuevos para probar todo lo reciente.
+
+| Ítem | Estado | Nota |
+|---|---|---|
+| "Borrar cliente" (backend + UI, doble confirmación) | **Completa (2026-08-31)** | `deleteTenant` borra las 14 tablas tenant-scoped + vectores reales de Vectorize + la fila de `tenants`. `confirmId` exacto exigido en servidor, no solo en el dashboard — ver `CLAUDE.md` y memoria `project_delete_tenant_qa`. |
+| Ronda de pruebas funcionales (3 clientes nuevos, luego borrados) | **Completa (2026-08-31)** | KB, catálogo con fotos, disponibilidad por persona (probada en `vet-ch`, reversible), y la propia función de borrar — probadas contra producción real, no simuladas. |
+| Bug real encontrado y corregido: búsqueda de catálogo por frase completa | **Corregido (2026-08-31)** | `searchCatalogItems` ahora busca por palabra, no por la frase entera — ver `CLAUDE.md`. |

@@ -73,6 +73,30 @@ describe("searchCatalogItems", () => {
     await searchCatalogItems(db, "t", "Polanco");
 
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("LIKE"));
-    expect(bind).toHaveBeenCalledWith("t", "%Polanco%", "%Polanco%", 3);
+    expect(bind).toHaveBeenCalledWith("t", "%polanco%", "%polanco%", 3);
+  });
+
+  // Bug real encontrado en la primera prueba funcional (2026-08-31): una
+  // consulta de varias palabras nunca calzaba como una sola subcadena
+  // contra un título más corto — el modelo casi nunca repite el título
+  // exacto. Ahora busca por palabra (OR entre ellas), filtrando
+  // conectores comunes.
+  it("busca por palabra individual, no por la frase completa (bug real: 'playeras de algodón' no calzaba con 'Playera básica algodón')", async () => {
+    const bind = vi.fn().mockReturnValue({ all: vi.fn().mockResolvedValue({ results: [] }) });
+    const db = { prepare: vi.fn().mockReturnValue({ bind }) } as unknown as D1Database;
+
+    await searchCatalogItems(db, "t", "playeras de algodón");
+
+    // "de" se filtra (conector corto); "playeras" y "algodón" quedan.
+    expect(bind).toHaveBeenCalledWith("t", "%playeras%", "%playeras%", "%algodón%", "%algodón%", 3);
+  });
+
+  it("cae de vuelta a la frase completa si no quedan palabras útiles tras filtrar conectores", async () => {
+    const bind = vi.fn().mockReturnValue({ all: vi.fn().mockResolvedValue({ results: [] }) });
+    const db = { prepare: vi.fn().mockReturnValue({ bind }) } as unknown as D1Database;
+
+    await searchCatalogItems(db, "t", "de con que");
+
+    expect(bind).toHaveBeenCalledWith("t", "%de con que%", "%de con que%", 3);
   });
 });

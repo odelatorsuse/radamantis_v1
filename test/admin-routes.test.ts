@@ -25,6 +25,7 @@ function mockEnv(overrides?: Record<string, unknown>) {
     VECTORIZE: { upsert: vi.fn().mockResolvedValue({}) } as unknown as VectorizeIndex,
     __first: first,
     __run: run,
+    __bind: bind,
     ...overrides,
   };
 }
@@ -137,6 +138,154 @@ describe("adminApp PUT /tenants/:id/staff-members (Agencia — preguntas mínima
       mockEnv(),
     );
     expect(res.status).toBe(401);
+  });
+});
+
+// Backlog de Agencia (ronda de canchas + parejas): mismo criterio que
+// staff-members arriba — el onboarding de /admin escribe la modalidad por
+// defecto (reta/pareja) durante el alta de un cliente tipo padel.
+describe("adminApp PUT /tenants/:id/padel-settings (Agencia — onboarding de padel)", () => {
+  it("guarda la modalidad por defecto vía upsertPadelSettings", async () => {
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const bind = vi.fn().mockReturnValue({ run });
+    const env = mockEnv({ DB: { prepare: vi.fn().mockReturnValue({ bind }) } as unknown as D1Database });
+
+    const res = await adminApp.request(
+      "/tenants/qa-padel/padel-settings",
+      {
+        method: "PUT",
+        headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" },
+        body: JSON.stringify({ defaultRegistrationMode: "pareja" }),
+      },
+      env,
+    );
+    expect(res.status).toBe(200);
+    // 2 escrituras: upsertPadelSettings + logAdminAction (auditoría).
+    expect(run).toHaveBeenCalledTimes(2);
+    const settingsCall = bind.mock.calls.find((call) => call.includes("pareja"));
+    expect(settingsCall).toBeDefined();
+  });
+
+  it("rechaza sin auth (401)", async () => {
+    const res = await adminApp.request(
+      "/tenants/qa-padel/padel-settings",
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ defaultRegistrationMode: "individual" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(401);
+  });
+});
+
+// Backlog de Agencia: tablero Kanban de modificaciones pendientes a
+// Radamantis mismo (no de un tenant) — Oscar pidió poder anotar tareas
+// aquí para que una sesión autónoma las recoja después.
+describe("adminApp /backlog (tablero Kanban)", () => {
+  it("GET devuelve la lista de tareas", async () => {
+    const all = vi.fn().mockResolvedValue({ results: [{ id: 1, title: "T", description: null, status: "pendiente", created_by: null, result_notes: null, created_at: "t1", updated_at: "t1" }] });
+    const env = mockEnv({ DB: { prepare: vi.fn().mockReturnValue({ all }) } as unknown as D1Database });
+    const res = await adminApp.request("/backlog", { headers: { Authorization: "Bearer test-admin-key" } }, env);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toEqual([{ id: 1, title: "T", description: null, status: "pendiente", createdBy: null, resultNotes: null, createdAt: "t1", updatedAt: "t1" }]);
+  });
+
+  it("POST crea una tarea nueva con el actor real", async () => {
+    const run = vi.fn().mockResolvedValue({ success: true, meta: { last_row_id: 5 } });
+    const bind = vi.fn().mockReturnValue({ run });
+    const env = mockEnv({ DB: { prepare: vi.fn().mockReturnValue({ bind }) } as unknown as D1Database });
+    const res = await adminApp.request(
+      "/backlog",
+      { method: "POST", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({ title: "Agregar SMS", description: "recordatorios" }) },
+      env,
+    );
+    expect(res.status).toBe(201);
+    expect(bind).toHaveBeenCalledWith("Agregar SMS", "recordatorios", "api-key");
+  });
+
+  it("POST rechaza sin title", async () => {
+    const res = await adminApp.request(
+      "/backlog",
+      { method: "POST", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({}) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT rechaza un status inválido", async () => {
+    const res = await adminApp.request(
+      "/backlog/1",
+      { method: "PUT", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({ status: "en-la-luna" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT cambia el status vía drag-and-drop", async () => {
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const bind = vi.fn().mockReturnValue({ run });
+    const env = mockEnv({ DB: { prepare: vi.fn().mockReturnValue({ bind }) } as unknown as D1Database });
+    const res = await adminApp.request(
+      "/backlog/1",
+      { method: "PUT", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({ status: "en_progreso" }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(run).toHaveBeenCalledTimes(2); // updateBacklogItem + logAdminAction
+  });
+
+  // Backlog de Agencia: Oscar confirmó explícitamente que mover una
+  // tarjeta a 'aprobado' es la señal real de "empieza a trabajar en
+  // esto" — no basta con crearla en 'pendiente'.
+  it("PUT acepta 'aprobado' (dispara que se empiece a trabajar en la tarea)", async () => {
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const bind = vi.fn().mockReturnValue({ run });
+    const env = mockEnv({ DB: { prepare: vi.fn().mockReturnValue({ bind }) } as unknown as D1Database });
+    const res = await adminApp.request(
+      "/backlog/1",
+      { method: "PUT", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({ status: "aprobado" }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("PUT acepta 'test' (código listo, esperando aprobación de deploy)", async () => {
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const bind = vi.fn().mockReturnValue({ run });
+    const env = mockEnv({ DB: { prepare: vi.fn().mockReturnValue({ bind }) } as unknown as D1Database });
+    const res = await adminApp.request(
+      "/backlog/1",
+      { method: "PUT", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({ status: "test", resultNotes: "Implementado y probado, listo para revisar." }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("PUT acepta 'en_espera' (pausada a propósito, no cancelada)", async () => {
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const bind = vi.fn().mockReturnValue({ run });
+    const env = mockEnv({ DB: { prepare: vi.fn().mockReturnValue({ bind }) } as unknown as D1Database });
+    const res = await adminApp.request(
+      "/backlog/1",
+      { method: "PUT", headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" }, body: JSON.stringify({ status: "en_espera" }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("DELETE borra la tarea", async () => {
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const bind = vi.fn().mockReturnValue({ run });
+    const env = mockEnv({ DB: { prepare: vi.fn().mockReturnValue({ bind }) } as unknown as D1Database });
+    const res = await adminApp.request("/backlog/1", { method: "DELETE", headers: { Authorization: "Bearer test-admin-key" } }, env);
+    expect(res.status).toBe(200);
+    expect(bind).toHaveBeenCalledWith(1);
+  });
+
+  it("rechaza sin auth (401) en todas las rutas", async () => {
+    const getRes = await adminApp.request("/backlog", {}, mockEnv());
+    expect(getRes.status).toBe(401);
+    const postRes = await adminApp.request("/backlog", { method: "POST", body: JSON.stringify({ title: "x" }) }, mockEnv());
+    expect(postRes.status).toBe(401);
   });
 });
 
@@ -327,6 +476,67 @@ describe("adminApp channels (Etapa 9 — auto-registro de webhook)", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  // Backlog de Agencia (WhatsApp, "tan fácil como Telegram"): a diferencia
+  // de los demás canales, el dashboard manda 3 campos separados
+  // (phoneNumberId/accessToken/wabaId) que esta ruta combina en el
+  // externalId compuesto que espera whatsappChannelProvider.
+  it("POST /tenants/:id/channels combina phoneNumberId/accessToken/wabaId en el externalId compuesto para whatsapp", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = mockEnv();
+
+    const res = await adminApp.request(
+      "/tenants/vet-ch/channels",
+      {
+        method: "POST",
+        headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: "whatsapp", phoneNumberId: "pnid-1", accessToken: "token-1", wabaId: "waba-1" }),
+      },
+      env,
+    );
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body).toEqual({ ok: true, webhookRegistered: true });
+    // La suscripción real fue al WABA, con el token — confirma que se
+    // combinaron los 3 campos correctamente antes de llegar al provider.
+    expect(fetchMock).toHaveBeenCalledWith("https://graph.facebook.com/v21.0/waba-1/subscribed_apps", expect.objectContaining({ method: "POST" }));
+    const calls = (env.__bind as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((args) => args.includes("pnid-1|token-1|waba-1"))).toBe(true);
+  });
+
+  it("POST /tenants/:id/channels rechaza whatsapp sin los 3 campos (400)", async () => {
+    const res = await adminApp.request(
+      "/tenants/vet-ch/channels",
+      {
+        method: "POST",
+        headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: "whatsapp", phoneNumberId: "pnid-1" }),
+      },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT /tenants/:id/channels/whatsapp también combina los 3 campos al rotar", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) }));
+    const env = mockEnv();
+
+    const res = await adminApp.request(
+      "/tenants/vet-ch/channels/whatsapp",
+      {
+        method: "PUT",
+        headers: { Authorization: "Bearer test-admin-key", "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneNumberId: "pnid-2", accessToken: "token-2", wabaId: "waba-2" }),
+      },
+      env,
+    );
+
+    expect(res.status).toBe(200);
+    const calls = (env.__bind as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((args) => args.includes("pnid-2|token-2|waba-2"))).toBe(true);
+  });
 });
 
 describe("adminApp channels/supported (Etapa 10 — multi-canal)", () => {
@@ -340,6 +550,7 @@ describe("adminApp channels/supported (Etapa 10 — multi-canal)", () => {
         { channel: "web", displayName: "Sitio web" },
         { channel: "facebook", displayName: "Facebook Messenger" },
         { channel: "instagram", displayName: "Instagram" },
+        { channel: "whatsapp", displayName: "WhatsApp" },
       ],
     });
   });

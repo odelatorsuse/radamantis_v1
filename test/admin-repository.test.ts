@@ -240,7 +240,7 @@ describe("deleteTenant (Agencia, 'Borrar cliente')", () => {
     expect(deleteByIds).not.toHaveBeenCalled();
   });
 
-  it("borra las 14 tablas tenant-scoped conocidas más la fila de tenants, todas filtradas por tenant_id/id", async () => {
+  it("borra las 19 tablas tenant-scoped conocidas más la fila de tenants, todas filtradas por tenant_id/id", async () => {
     const bindCalls: unknown[][] = [];
     const preparedSql: string[] = [];
     const db = {
@@ -260,10 +260,13 @@ describe("deleteTenant (Agencia, 'Borrar cliente')", () => {
     await deleteTenant(db, vectorize, "vet-ch");
 
     const deleteStatements = preparedSql.filter((sql) => sql.startsWith("DELETE FROM"));
-    // 14 tablas tenant-scoped + la fila de tenants misma = 15 DELETE.
-    expect(deleteStatements.length).toBe(15);
+    // 19 tablas tenant-scoped + la fila de tenants misma = 20 DELETE.
+    expect(deleteStatements.length).toBe(20);
     expect(deleteStatements.some((sql) => sql.includes("DELETE FROM tenants WHERE id = ?"))).toBe(true);
     expect(deleteStatements.some((sql) => sql.includes("DELETE FROM catalog_items WHERE tenant_id = ?"))).toBe(true);
     expect(deleteStatements.some((sql) => sql.includes("DELETE FROM appointments WHERE tenant_id = ?"))).toBe(true);
+    expect(deleteStatements.some((sql) => sql.includes("DELETE FROM padel_tournaments WHERE tenant_id = ?"))).toBe(true);
+    expect(deleteStatements.some((sql) => sql.includes("DELETE FROM padel_registrations WHERE tenant_id = ?"))).toBe(true);
+    expect(deleteStatements.some((sql) => sql.includes("DELETE FROM padel_matches WHERE tenant_id = ?"))).toBe(true);
   });
 });

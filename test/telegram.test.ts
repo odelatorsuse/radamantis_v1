@@ -7,7 +7,24 @@ describe("extractIncomingMessage", () => {
       update_id: 1,
       message: { message_id: 1, chat: { id: 42 }, text: "hola" },
     };
-    expect(extractIncomingMessage(update)).toEqual({ chatId: 42, text: "hola" });
+    expect(extractIncomingMessage(update)).toEqual({ chatId: 42, chatType: "private", senderId: 42, senderName: "Alguien", text: "hola" });
+  });
+
+  // Backlog de Agencia (padel, Fase 1): en un grupo, "from" es el remitente
+  // individual real, distinto del chat compartido — necesario para saber
+  // quién de varios jugadores escribió cada mensaje.
+  it("extrae chatType, senderId y senderName reales cuando el mensaje viene de un grupo", () => {
+    const update = {
+      update_id: 1,
+      message: { message_id: 1, chat: { id: 42, type: "group" }, from: { id: 777, first_name: "Ana" }, text: "me apunto" },
+    };
+    expect(extractIncomingMessage(update)).toEqual({
+      chatId: 42,
+      chatType: "group",
+      senderId: 777,
+      senderName: "Ana",
+      text: "me apunto",
+    });
   });
 
   it("devuelve null si el update no tiene mensaje", () => {
@@ -27,7 +44,13 @@ describe("extractIncomingMessage", () => {
       update_id: 1,
       message: { message_id: 1, chat: { id: 42 }, voice: { file_id: "abc", mime_type: "audio/ogg" } },
     };
-    expect(extractIncomingMessage(update)).toEqual({ chatId: 42, voice: { fileId: "abc", mimeType: "audio/ogg" } });
+    expect(extractIncomingMessage(update)).toEqual({
+      chatId: 42,
+      chatType: "private",
+      senderId: 42,
+      senderName: "Alguien",
+      voice: { fileId: "abc", mimeType: "audio/ogg" },
+    });
   });
 
   it("usa audio/ogg como mimeType por default si Telegram no lo manda", () => {
@@ -35,7 +58,13 @@ describe("extractIncomingMessage", () => {
       update_id: 1,
       message: { message_id: 1, chat: { id: 42 }, voice: { file_id: "abc" } },
     };
-    expect(extractIncomingMessage(update)).toEqual({ chatId: 42, voice: { fileId: "abc", mimeType: "audio/ogg" } });
+    expect(extractIncomingMessage(update)).toEqual({
+      chatId: 42,
+      chatType: "private",
+      senderId: 42,
+      senderName: "Alguien",
+      voice: { fileId: "abc", mimeType: "audio/ogg" },
+    });
   });
 
   it("extrae la foto de mayor resolución (última del arreglo)", () => {
@@ -50,7 +79,13 @@ describe("extractIncomingMessage", () => {
         ],
       },
     };
-    expect(extractIncomingMessage(update)).toEqual({ chatId: 42, photo: { fileId: "large" } });
+    expect(extractIncomingMessage(update)).toEqual({
+      chatId: 42,
+      chatType: "private",
+      senderId: 42,
+      senderName: "Alguien",
+      photo: { fileId: "large" },
+    });
   });
 });
 

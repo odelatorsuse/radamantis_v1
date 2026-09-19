@@ -4,7 +4,7 @@ import { DASHBOARD_HTML } from "./admin/dashboardHtml";
 import { exchangeCodeForTokens } from "./calendar/oauth";
 import { saveCalendarConnection } from "./calendar/repository";
 import { getChannelProvider } from "./channels/registry";
-import { parseMetaWebhookMessages, verifyMetaSignature } from "./channels/meta";
+import { parseMetaWebhookMessages, parseWhatsAppWebhookMessages, verifyMetaSignature } from "./channels/meta";
 import { exchangeCodeForUserToken, exchangeForLongLivedUserToken, listManagedPages } from "./channels/metaOauth";
 import { updateChannelBinding } from "./admin/repository";
 import { getPlatformSettings } from "./platformSettings";
@@ -16,6 +16,12 @@ import { runDailyReportSweep } from "./dailyReport";
 import { runAutoResumeSweep } from "./handoffAutoResume";
 import { describeImage, transcribeVoice } from "./media";
 import { runNoShowSweep } from "./noShowSweep";
+import { runTournamentDeadlineSweep } from "./padelDeadlineSweep";
+import { runPaymentReminderSweep } from "./padelPaymentReminderSweep";
+import { padelScreenApp } from "./padelScreen";
+import { PADEL_POSTER_HTML } from "./padelPosterHtml";
+import { PADEL_SCREEN_HTML } from "./padelScreenHtml";
+import { PADEL_VICTORIAS_HTML } from "./padelVictoriesHtml";
 import { downloadTelegramFile, extractIncomingMessage, sendTelegramMessage } from "./telegram";
 import { getChannelExternalId, getTenantSettings, resolveTenant, resolveTenantByRouteKey } from "./tenants";
 import { logUsage } from "./usage";
@@ -61,6 +67,26 @@ app.get("/console", (c) => c.html(CONSOLE_HTML));
 // vincular el canal), no en estas rutas.
 app.route("/api/widget", widgetApp);
 app.get("/widget.js", (c) => c.body(WIDGET_JS, 200, { "Content-Type": "application/javascript; charset=utf-8" }));
+
+// Backlog de Agencia (padel, Fase 5: "Broadcast Visual") — pantalla pública
+// de un torneo (pensada para una TV/monitor del club), sin autenticación a
+// propósito (ver src/padelScreen.ts). URL explícita con tenantId+
+// tournamentId, mismo criterio que el snippet del widget: nadie tiene que
+// adivinar qué torneo mostrar.
+app.route("/api/pantalla", padelScreenApp);
+// Ranking acumulado de "más victorias" (vista nueva y separada, confirmada
+// con Oscar — ver src/padelVictories.ts). Registrada ANTES de la ruta de
+// 2 segmentos de abajo para que "victorias" nunca se interprete como un
+// tournamentId numérico (mismo número de segmentos, sí colisionarían).
+app.get("/pantalla/:tenantId/victorias", (c) => c.html(PADEL_VICTORIAS_HTML));
+app.get("/pantalla/:tenantId/:tournamentId", (c) => c.html(PADEL_SCREEN_HTML));
+// Backlog de Agencia (padel, ronda de categorías): vista de club completo
+// — una sección por cada una de las 6 categorías reales (Oscar: "las
+// llaves deben aplicar para todo el torneo o retas"). Registrada DESPUÉS
+// de la ruta de 2 segmentos — Hono no las confunde (distinto número de
+// segmentos de path), pero el orden de lectura ayuda a ver cuál es la
+// "general" y cuál la específica.
+app.get("/pantalla/:tenantId", (c) => c.html(PADEL_POSTER_HTML));
 
 // Etapa 10 (Fase A): callback público de OAuth de Google — Google redirige
 // el navegador aquí directo (sin nuestro Bearer token), con ?state=tenantId.
@@ -222,6 +248,15 @@ app.post("/webhook/telegram/:botToken", async (c) => {
     return c.text("ok");
   }
 
+  // Backlog de Agencia (padel, Fase 1): en un GRUPO de Telegram compartido
+  // (ej. la convocatoria de un torneo), varias personas escriben en el
+  // mismo chat — sin esto el modelo no tiene forma de saber quién dijo qué.
+  // Mismo patrón ya usado para enmarcar imágenes ("[El cliente envió una
+  // imagen] ..."), solo que aquí es el remitente, no el tipo de contenido.
+  if (incoming.chatType === "group" || incoming.chatType === "supergroup") {
+    userText = `${incoming.senderName}: ${userText}`;
+  }
+
   // Etapa 10 (superpower "Vigilante"): el código de activación de alertas
   // se detecta ANTES de entrar al agente normal — es un mensaje de
   // configuración, no una conversación con el bot. Solo funciona si
@@ -246,7 +281,15 @@ app.post("/webhook/telegram/:botToken", async (c) => {
     // agrupa mensajes seguidos del mismo cliente en vez de contestar cada
     // uno por separado — a diferencia del widget de sitio web, que necesita
     // la respuesta en la misma petición y nunca manda este campo.
-    body: JSON.stringify({ tenantId, channel: "telegram", chatId, userText, verticalId, bufferSeconds: TELEGRAM_BUFFER_SECONDS }),
+    body: JSON.stringify({
+      tenantId,
+      channel: "telegram",
+      chatId,
+      userText,
+      verticalId,
+      bufferSeconds: TELEGRAM_BUFFER_SECONDS,
+      senderId: String(incoming.senderId),
+    }),
   });
   const { replyText } = await agentRes.json<{ replyText: string | null }>();
 
@@ -254,7 +297,18 @@ app.post("/webhook/telegram/:botToken", async (c) => {
   // mientras el mensaje quedó encolado esperando el resto del lote — en
   // ambos casos el bot se calla a propósito.
   if (replyText) {
-    await sendTelegramMessage(botToken, incoming.chatId, replyText);
+    // Bug real encontrado probando WhatsApp (ronda de conectores): un envío
+    // fallido (token revocado, Telegram/Meta caído) tumbaba TODA la
+    // respuesta del webhook con 500 — el mensaje del bot ya quedó guardado
+    // en appendMessage() dentro del Durable Object antes de este punto, así
+    // que un push fallido nunca debe perder eso ni la conversación en sí.
+    // Mismo criterio "best-effort" ya usado en el resto del proyecto
+    // (Vigilante, recupera no-shows, etc.).
+    try {
+      await sendTelegramMessage(botToken, incoming.chatId, replyText);
+    } catch (err) {
+      console.error("No se pudo enviar la respuesta a Telegram:", err);
+    }
   }
 
   return c.text("ok");
@@ -285,12 +339,23 @@ app.post("/webhook/meta", async (c) => {
   if (!valid) return c.text("Unauthorized", 401);
 
   const body = JSON.parse(rawBody) as { object?: string };
-  const channel = body.object === "instagram" ? "instagram" : body.object === "page" ? "facebook" : null;
+  // Backlog de Agencia (WhatsApp): mismo webhook compartido que Facebook/
+  // Instagram (misma firma, mismo App de Meta) — solo cambia la forma del
+  // payload según el "object" que Meta manda (confirmado contra la
+  // documentación real: "whatsapp_business_account" vs "page"/"instagram").
+  let channel: string | null = null;
+  let messages: { routeKeyValue: string; senderId: string; text: string }[] = [];
+  if (body.object === "instagram" || body.object === "page") {
+    channel = body.object === "instagram" ? "instagram" : "facebook";
+    messages = parseMetaWebhookMessages(body, body.object).map((m) => ({ routeKeyValue: m.pageId, senderId: m.senderId, text: m.text }));
+  } else if (body.object === "whatsapp_business_account") {
+    channel = "whatsapp";
+    messages = parseWhatsAppWebhookMessages(body).map((m) => ({ routeKeyValue: m.phoneNumberId, senderId: m.senderId, text: m.text }));
+  }
   if (!channel) return c.text("ok");
 
-  const messages = parseMetaWebhookMessages(body, body.object as "page" | "instagram");
   for (const msg of messages) {
-    const resolved = await resolveTenantByRouteKey(c.env.DB, channel, msg.pageId);
+    const resolved = await resolveTenantByRouteKey(c.env.DB, channel, msg.routeKeyValue);
     if (!resolved) continue; // Page/cuenta no vinculada a ningún tenant — se ignora en silencio.
     const { tenantId, verticalId } = resolved;
     const externalId = await getChannelExternalId(c.env.DB, tenantId, channel);
@@ -306,7 +371,15 @@ app.post("/webhook/meta", async (c) => {
     });
     const { replyText } = await agentRes.json<{ replyText: string | null }>();
     if (replyText) {
-      await getChannelProvider(channel)?.sendMessage(externalId, chatId, replyText);
+      // Mismo criterio best-effort que el webhook de Telegram (ver arriba)
+      // — bug real encontrado probando WhatsApp con un token inválido: sin
+      // este try/catch, un envío rechazado por Meta tumbaba TODO el
+      // webhook con 500 (y potencialmente los demás mensajes del batch).
+      try {
+        await getChannelProvider(channel)?.sendMessage(externalId, chatId, replyText);
+      } catch (err) {
+        console.error(`No se pudo enviar la respuesta por ${channel}:`, err);
+      }
     }
   }
 
@@ -326,5 +399,7 @@ export default {
     ctx.waitUntil(runDailyReportSweep(env.DB));
     ctx.waitUntil(runColdLeadSweep(env.DB));
     ctx.waitUntil(runAutoResumeSweep(env.DB));
+    ctx.waitUntil(runTournamentDeadlineSweep(env.DB));
+    ctx.waitUntil(runPaymentReminderSweep(env.DB));
   },
 };

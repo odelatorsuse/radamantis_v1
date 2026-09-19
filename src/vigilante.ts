@@ -11,19 +11,28 @@ import { getChannelExternalId, getTenantSettings } from "./tenants";
 // importa; si la alerta falla, el dueño simplemente no se entera a tiempo,
 // pero puede ver el handoff en /admin o /console.
 export async function notifyBusinessOwner(db: D1Database, ref: ConversationRef, triggerMessage: string): Promise<void> {
+  const alertText =
+    `Un cliente necesita atención en tu bot (conversación ${ref.channel} #${ref.chatId}).\n` +
+    `Mensaje: "${triggerMessage}"`;
+  await sendAlertToOwner(db, ref.tenantId, alertText);
+}
+
+// Backlog de Agencia (padel, aviso de pago pendiente): extraído de
+// notifyBusinessOwner para reusar el mismo "avisa al dueño por Telegram si
+// tiene alertas activadas" desde otros barridos (ver src/padelDeadlineSweep.ts)
+// sin acoplarlos al texto específico de handoffs. Mismo criterio
+// best-effort: nunca debe poder romper el flujo que la llama.
+export async function sendAlertToOwner(db: D1Database, tenantId: string, text: string): Promise<void> {
   try {
-    const settings = await getTenantSettings(db, ref.tenantId);
+    const settings = await getTenantSettings(db, tenantId);
     if (!settings.alertChatId) return;
 
     const provider = getChannelProvider("telegram");
-    const externalId = await getChannelExternalId(db, ref.tenantId, "telegram");
+    const externalId = await getChannelExternalId(db, tenantId, "telegram");
     if (!provider || !externalId) return;
 
-    const alertText =
-      `Un cliente necesita atención en tu bot (conversación ${ref.channel} #${ref.chatId}).\n` +
-      `Mensaje: "${triggerMessage}"`;
-    await provider.sendMessage(externalId, settings.alertChatId, alertText);
+    await provider.sendMessage(externalId, settings.alertChatId, text);
   } catch {
-    // best-effort — nunca romper la respuesta al cliente por esto.
+    // best-effort — nunca romper el flujo que llama a esto.
   }
 }

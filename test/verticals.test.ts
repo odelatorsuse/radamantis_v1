@@ -65,3 +65,34 @@ describe("verticales nuevos de onboarding", () => {
     }
   });
 });
+
+// Backlog de Agencia (padel, Fase 1: "Convocador Bot" + ronda de
+// reservas/catálogo/clases): usa las 3 tools propias de torneo (retas) Y,
+// desde la ronda de "reservas de cancha/clases + tienda", también
+// checkAvailability/bookAppointment (canchas/clases, vía staffMember como
+// etiqueta de recurso) y searchCatalog (palas/pelotas/ropa) — no todo el
+// día son retas, confirmado con Oscar.
+describe("vertical padel", () => {
+  it("tiene las 3 tools de torneo habilitadas, más calendario y catálogo", () => {
+    const template = getVerticalTemplate("padel");
+    expect(template.verticalId).toBe("padel");
+    expect(template.toolsEnabled).toEqual(
+      expect.arrayContaining([
+        "searchKb",
+        "handoffHuman",
+        "checkTournamentStatus",
+        "registerForTournament",
+        "cancelTournamentRegistration",
+        "checkAvailability",
+        "bookAppointment",
+        "searchCatalog",
+      ]),
+    );
+  });
+
+  it("tiene displayName y kbSchema propios", () => {
+    const template = getVerticalTemplate("padel");
+    expect(template.displayName.length).toBeGreaterThan(0);
+    expect(template.kbSchema.length).toBeGreaterThan(0);
+  });
+});

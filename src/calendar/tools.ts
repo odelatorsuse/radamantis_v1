@@ -24,6 +24,17 @@ export const CHECK_AVAILABILITY_TOOL: ToolDefinition = {
   },
 };
 
+// attendeeEmail es opcional a propósito, para TODOS los verticales que usan
+// esta misma tool (D6: la capacidad vive en el core, no solo para pádel) —
+// un cliente que no quiera dar su correo sigue pudiendo agendar igual. Cada
+// vertical decide en su propio promptBase si lo pide como parte del flujo
+// normal (ver src/verticals/padel.ts) o ni lo menciona.
+const ATTENDEE_EMAIL_PROPERTY = {
+  type: "string",
+  description:
+    "Correo del cliente, SOLO si lo dio, para mandarle una invitación real de calendario a su bandeja de entrada. Nunca lo inventes ni lo pidas si el vertical no lo requiere.",
+};
+
 export const BOOK_APPOINTMENT_TOOL: ToolDefinition = {
   name: "bookAppointment",
   description:
@@ -39,6 +50,7 @@ export const BOOK_APPOINTMENT_TOOL: ToolDefinition = {
       summary: { type: "string", description: "Motivo/tipo de cita, ej. 'Consulta general - Firulais'" },
       attendeeName: { type: "string", description: "Nombre completo del cliente (obligatorio)" },
       attendeeContact: { type: "string", description: "Teléfono o contacto del cliente para confirmar la cita (obligatorio)" },
+      attendeeEmail: ATTENDEE_EMAIL_PROPERTY,
     },
     required: ["start", "end", "summary", "attendeeName", "attendeeContact"],
   },
@@ -84,6 +96,7 @@ export function buildCalendarTools(staffMembers: string[]): ToolDefinition[] {
         summary: { type: "string", description: "Motivo/tipo de cita, ej. 'Consulta general - Firulais'" },
         attendeeName: { type: "string", description: "Nombre completo del cliente (obligatorio)" },
         attendeeContact: { type: "string", description: "Teléfono o contacto del cliente para confirmar la cita (obligatorio)" },
+        attendeeEmail: ATTENDEE_EMAIL_PROPERTY,
         staffMember: staffProperty,
       },
       required: ["start", "end", "summary", "attendeeName", "attendeeContact", "staffMember"],
@@ -100,6 +113,7 @@ interface ToolCallArgs {
   summary?: string;
   attendeeName?: string;
   attendeeContact?: string;
+  attendeeEmail?: string;
   staffMember?: string;
 }
 
@@ -191,6 +205,7 @@ export async function executeCalendarTool(
         summary: args.summary,
         attendeeName: args.attendeeName,
         attendeeContact: args.attendeeContact,
+        attendeeEmail: args.attendeeEmail,
         staffMember: args.staffMember,
       });
       return JSON.stringify(result);

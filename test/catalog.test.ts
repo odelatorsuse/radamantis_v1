@@ -73,7 +73,7 @@ describe("searchCatalogItems", () => {
     await searchCatalogItems(db, "t", "Polanco");
 
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("LIKE"));
-    expect(bind).toHaveBeenCalledWith("t", "%polanco%", "%polanco%", 3);
+    expect(bind).toHaveBeenCalledWith("t", "%polanco%", "%polanco%", "%polancos%", "%polancos%", 3);
   });
 
   // Bug real encontrado en la primera prueba funcional (2026-08-31): una
@@ -87,8 +87,20 @@ describe("searchCatalogItems", () => {
 
     await searchCatalogItems(db, "t", "playeras de algodón");
 
-    // "de" se filtra (conector corto); "playeras" y "algodón" quedan.
-    expect(bind).toHaveBeenCalledWith("t", "%playeras%", "%playeras%", "%algodón%", "%algodón%", 3);
+    // "de" se filtra (conector corto); "playeras" y "algodón" quedan, cada
+    // una con su variante singular/plural agregada.
+    expect(bind).toHaveBeenCalledWith(
+      "t",
+      "%playeras%",
+      "%playeras%",
+      "%playera%",
+      "%playera%",
+      "%algodón%",
+      "%algodón%",
+      "%algodóns%",
+      "%algodóns%",
+      3,
+    );
   });
 
   it("cae de vuelta a la frase completa si no quedan palabras útiles tras filtrar conectores", async () => {

@@ -148,6 +148,24 @@ describe("executeCalendarTool — bookAppointment", () => {
     });
   });
 
+  // Backlog de Agencia (padel: reservas de cancha/clases) — el correo del
+  // cliente, cuando lo da, se pasa tal cual al proveedor para que agende
+  // la invitación real de calendario.
+  it("pasa attendeeEmail al provider cuando el cliente lo dio", async () => {
+    const provider = mockProvider();
+    await executeCalendarTool(
+      "bookAppointment",
+      JSON.stringify({ start: "2026-09-01T13:30:00", end: "2026-09-01T14:00:00", summary: "Reserva de cancha", ...clientArgs, attendeeEmail: "cliente@example.com" }),
+      provider,
+      "America/Mexico_City",
+      businessHours,
+    );
+
+    expect(provider.bookAppointment).toHaveBeenCalledWith(
+      expect.objectContaining({ attendeeEmail: "cliente@example.com" }),
+    );
+  });
+
   it("respeta un valor ya en UTC (con Z) sin reinterpretarlo como hora local", async () => {
     const provider = mockProvider();
     await executeCalendarTool(

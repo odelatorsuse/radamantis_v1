@@ -102,8 +102,15 @@ export class GoogleCalendarProvider implements CalendarProvider {
       .filter(Boolean)
       .join("\n");
 
+    // Backlog de Agencia (padel: reservas de cancha/clases, "que se le mande
+    // la invitación también al cliente... al correo que nos indique"):
+    // agregarlo como attendee real del evento + sendUpdates=all (query
+    // param real de la API de Google, no un campo del body) es lo que hace
+    // que Google le mande el correo de invitación de verdad — sin
+    // sendUpdates, el attendee queda registrado pero nunca recibe nada.
+    const query = details.attendeeEmail ? "?sendUpdates=all" : "";
     const res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(this.calendarId)}/events`,
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(this.calendarId)}/events${query}`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${this.accessToken}`, "Content-Type": "application/json" },
@@ -112,6 +119,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
           description,
           start: { dateTime: details.start },
           end: { dateTime: details.end },
+          ...(details.attendeeEmail ? { attendees: [{ email: details.attendeeEmail }] } : {}),
           ...(details.staffMember
             ? { extendedProperties: { private: { [STAFF_PROPERTY_KEY]: details.staffMember } } }
             : {}),

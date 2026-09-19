@@ -108,7 +108,15 @@ export async function searchCatalogItems(db: D1Database, tenantId: string, query
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter((w) => w.length >= 4 && !STOPWORDS.has(w));
-  const terms = words.length > 0 ? words : [query.trim()];
+  // ponytail: singular/plural en español sin stemming real — "palas" no
+  // calzaba contra "Pala" en el título. Se agrega la forma contraria (quitar
+  // o poner una "s" final) como término OR adicional; cubre el caso común,
+  // no plurales irregulares (ej. "lápiz"/"lápices"). Solo aplica a palabras
+  // reales filtradas, nunca al fallback de frase completa sin filtrar.
+  const terms =
+    words.length > 0
+      ? [...new Set(words.flatMap((w) => (w.endsWith("s") ? [w, w.slice(0, -1)] : [w, `${w}s`])))]
+      : [query.trim()];
 
   const conditions = terms.map(() => "(title LIKE ? OR description LIKE ?)").join(" OR ");
   const params = terms.flatMap((term) => [`%${term}%`, `%${term}%`]);

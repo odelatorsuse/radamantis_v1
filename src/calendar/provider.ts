@@ -13,6 +13,12 @@ export interface AppointmentDetails {
   description?: string;
   attendeeName?: string;
   attendeeContact?: string;
+  // Backlog de Agencia (padel: reservas de cancha/clases): opcional — solo
+  // si el cliente da su correo, se le agrega como asistente del evento real
+  // de Google Calendar y Google le manda la invitación a su bandeja
+  // (sendUpdates=all). Sin correo, la cita se agenda exactamente igual que
+  // siempre — no es un requisito nuevo para verticales que no lo pidan.
+  attendeeEmail?: string;
   // Agencia (Fase 2, agendar con persona específica): opcional a propósito
   // — un tenant sin staff configurado nunca manda esto, cero cambio de
   // comportamiento. Cuando viene, se guarda como etiqueta del evento (no

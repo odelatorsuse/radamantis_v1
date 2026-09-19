@@ -6,6 +6,7 @@ import { dentistaTemplate } from "./dentista";
 import { esteticaTemplate } from "./estetica";
 import { gimnasioTemplate } from "./gimnasio";
 import { inmobiliariaTemplate } from "./inmobiliaria";
+import { padelTemplate } from "./padel";
 import { restauranteTemplate } from "./restaurante";
 import { sandboxTemplate } from "./sandbox";
 import { spaTemplate } from "./spa";
@@ -26,6 +27,7 @@ const TEMPLATES: Record<string, VerticalTemplate> = {
   spa: spaTemplate,
   inmobiliaria: inmobiliariaTemplate,
   coach: coachTemplate,
+  padel: padelTemplate,
   sandbox: sandboxTemplate,
 };
 

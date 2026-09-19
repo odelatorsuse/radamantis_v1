@@ -128,6 +128,40 @@ describe("auth middleware", () => {
   });
 });
 
+// Backlog de Agencia: Oscar detectó que /console mostraba las mismas
+// pestañas a todos los tenants sin importar su giro (ej. "Torneos" para un
+// dentista) — este endpoint es lo que /console usa para decidir qué
+// pestañas mostrar, así que debe reflejar el vertical REAL del tenant.
+describe("GET /vertical", () => {
+  it("devuelve el vertical y sus tools reales del tenant (ej. padel)", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    (env.__first as ReturnType<typeof vi.fn>).mockResolvedValue({ vertical_id: "padel" });
+    const res = await clientApp.request("/vertical", { headers: { Authorization: `Bearer ${token}` } }, env);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.verticalId).toBe("padel");
+    expect(body.toolsEnabled).toContain("registerForTournament");
+    // Desde la ronda de "reservas de cancha/clases + tienda", padel SÍ
+    // tiene calendario y catálogo además de las tools de torneo.
+    expect(body.toolsEnabled).toContain("checkAvailability");
+    expect(body.toolsEnabled).toContain("searchCatalog");
+  });
+
+  it("cae a sandbox (sin tools) si el tenant no tiene vertical_id en D1", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/vertical", { headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.toolsEnabled).toEqual([]);
+  });
+
+  it("401 sin token", async () => {
+    const res = await clientApp.request("/vertical", {}, mockEnv());
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("aislamiento entre tenants", () => {
   it("las rutas de conversación nunca reciben tenantId de la URL, solo del token", async () => {
     const token = await createSessionToken(SECRET, "vet-ch", 1);
@@ -169,14 +203,32 @@ describe("POST /conversations/:channel/:chatId/send (manejo de chats)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("400 si el canal no es telegram todavía", async () => {
+  it("400 si el canal no tiene ChannelProvider registrado", async () => {
     const token = await createSessionToken(SECRET, "vet-ch", 1);
     const res = await clientApp.request(
-      "/conversations/whatsapp/555/send",
+      "/conversations/sms/555/send",
       { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "hola" }) },
       mockEnvForSend(),
     );
     expect(res.status).toBe(400);
+  });
+
+  // Backlog de Agencia (WhatsApp, "tan fácil como Telegram"): responder
+  // manual desde /console ya funciona igual para WhatsApp que para
+  // Telegram, sin ningún cambio en esta ruta (getChannelProvider genérico).
+  it("responde manual por WhatsApp igual que por Telegram (mismo mecanismo genérico)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/conversations/whatsapp/5215500001111/send",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "hola" }) },
+      mockEnvForSend({ channelToken: "pnid-1|token-1|waba-1" }),
+    );
+    expect(res.status).toBe(200);
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toContain("/pnid-1/messages");
+    vi.unstubAllGlobals();
   });
 
   it("404 si el tenant no tiene channel_binding de telegram", async () => {
@@ -539,6 +591,68 @@ describe("GET/PUT /branding (White-label por tenant)", () => {
   });
 });
 
+// Backlog de Agencia (White-label, "el cliente pueda subir una imagen o
+// foto de su negocio como icono, no solo una URL"): R2 no está habilitado
+// en la cuenta de Cloudflare todavía, así que la imagen se guarda como
+// data URI directo en brand_logo_url — mismo contrato que la URL pegada a
+// mano, solo que generada por el servidor a partir de los bytes reales.
+describe("POST /branding/logo (subida real de logo)", () => {
+  it("rechaza un Content-Type no soportado", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/branding/logo",
+      { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/pdf" }, body: new Uint8Array([1, 2, 3]) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rechaza un archivo vacío", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/branding/logo",
+      { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "image/png" }, body: new Uint8Array([]) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rechaza un archivo más grande que el tope defensivo", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const tooBig = new Uint8Array(900 * 1024); // por encima de los 800KB del tope
+    const res = await clientApp.request(
+      "/branding/logo",
+      { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "image/png" }, body: tooBig },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("guarda un data URI válido y preserva brandName/brandColor existentes", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    (env.__first as ReturnType<typeof vi.fn>).mockResolvedValue({
+      tone: "profesional", language: "es", timezone: "America/Mexico_City", currency: "MXN",
+      prompt_override: null, business_hours: "{}", alert_chat_id: null, alert_activation_code: null,
+      review_link: null, lead_reengagement_enabled: 0, auto_resume_handoff_enabled: 0, custom_handoff_keywords: "[]",
+      brand_name: "Dr. Vet CH", brand_logo_url: null, brand_color: "#0E9F6E", staff_members: "[]",
+    });
+    const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]); // no necesita ser un PNG real, solo bytes
+    const res = await clientApp.request(
+      "/branding/logo",
+      { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "image/png" }, body: bytes },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.brandLogoUrl).toMatch(/^data:image\/png;base64,/);
+    const lastBind = (env.__bind as ReturnType<typeof vi.fn>).mock.calls[(env.__bind as ReturnType<typeof vi.fn>).mock.calls.length - 1];
+    expect(lastBind).toContain("Dr. Vet CH");
+    expect(lastBind).toContain("#0E9F6E");
+    expect(lastBind).toContain(data.brandLogoUrl);
+  });
+});
+
 describe("GET/PUT /staff-members (Agencia, Fase 2 — agendar con persona específica)", () => {
   it("GET devuelve [] por default", async () => {
     const token = await createSessionToken(SECRET, "vet-ch", 1);
@@ -622,6 +736,297 @@ describe("GET/POST/PUT/DELETE /catalog (Agencia, Fase 2b — catálogo con fotos
     const token = await createSessionToken(SECRET, "vet-ch", 1);
     const env = mockEnv();
     const res = await clientApp.request("/catalog/pizza-margarita", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }, env);
+    expect(res.status).toBe(200);
+    expect((env.__run as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+  });
+});
+
+// Backlog de Agencia (padel, Fase 1: "Convocador Bot") — la lógica real de
+// cupo/lista de espera/promoción ya se prueba a fondo en test/padel.test.ts
+// y test/padelTool.test.ts contra un fake D1; aquí solo se verifica la
+// forma de las rutas (validación, códigos de estado, scoping por tenant).
+describe("GET/POST /torneos y DELETE /torneos/registrations/:id (padel, Fase 1)", () => {
+  it("GET devuelve la lista de convocatorias abiertas (vacía por default)", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/torneos", { headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ tournaments: [] });
+  });
+
+  it("POST rechaza sin label/scheduledAt/registrationDeadline", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/torneos",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ label: "Categoría B" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST abre una convocatoria nueva con cupo default 20", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    (env.__run as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, meta: { last_row_id: 7 } });
+    const res = await clientApp.request(
+      "/torneos",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ label: "Categoría B", scheduledAt: "2026-09-10T19:00:00", registrationDeadline: "2026-09-10T18:00:00" }),
+      },
+      env,
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json<{ tournamentId: number }>();
+    expect(body.tournamentId).toBe(7);
+  });
+
+  it("POST /torneos/:id/close cierra la convocatoria", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request("/torneos/7/close", { method: "POST", headers: { Authorization: `Bearer ${token}` } }, env);
+    expect(res.status).toBe(200);
+    expect((env.__run as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("DELETE /torneos/registrations/:id devuelve 404 si la inscripción no existe", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/torneos/registrations/999", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(404);
+  });
+});
+
+// Backlog de Agencia (padel, Fase 2: "Reception Bot" — check-in en el club).
+describe("PUT /torneos/registrations/:id/checkin y POST /torneos/:id/registrations (padel, Fase 2)", () => {
+  it("PUT checkin marca pagado/asistió", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/torneos/registrations/1/checkin",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ paid: true, attended: true }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect((env.__run as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("POST registro espontáneo rechaza sin playerName", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/torneos/1/registrations",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({}) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST registro espontáneo devuelve 404 si la convocatoria no existe", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/torneos/999/registrations",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ playerName: "Espontáneo" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(404);
+  });
+});
+
+// Backlog de Agencia (padel, Fase 3-4: "Score Engine") — la lógica real de
+// fixture/puntaje/playoffs ya se prueba a fondo en test/padelMatches.test.ts
+// contra un fake D1; aquí solo se verifica la forma de las rutas.
+describe("POST /torneos/:id/fixture, PUT matches/:id/score, POST playoffs/final (padel, Fase 3-4)", () => {
+  it("POST fixture devuelve 404 si la convocatoria no existe", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/torneos/999/fixture", { method: "POST", headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(404);
+  });
+
+  it("PUT score rechaza sin scoreA/scoreB numéricos", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/torneos/matches/1/score",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ scoreA: "veintiuno" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT score devuelve 404 si el match no existe", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/torneos/matches/999/score",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ scoreA: 21, scoreB: 15 }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("POST playoffs devuelve 404 si la convocatoria no existe", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/torneos/999/playoffs", { method: "POST", headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(404);
+  });
+
+  it("POST final devuelve 404 si la convocatoria no existe", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/torneos/999/final", { method: "POST", headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(404);
+  });
+});
+
+// Backlog de Agencia (padel): "Limpiar / Iniciar nuevo torneo" — destructivo
+// real (Oscar lo confirmó explícitamente), así que exige confirmLabel
+// exacto — mismo patrón que "Zona de peligro" al borrar un tenant.
+describe("POST /torneos/:id/reset (padel, Limpiar/Iniciar nuevo torneo)", () => {
+  it("404 si la convocatoria no existe", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/torneos/999/reset",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ confirmLabel: "x", scheduledAt: "2026-09-17T19:00:00", registrationDeadline: "2026-09-17T18:00:00" }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("400 si confirmLabel no coincide con el nombre real", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    (env.__first as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 1, tenant_id: "vet-ch", label: "Reta 6ta - Martes", category: "6ta",
+      scheduled_at_utc: "x", registration_deadline_utc: "y", capacity: 20, status: "finalizado", created_at: "z",
+    });
+    const res = await clientApp.request(
+      "/torneos/1/reset",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ confirmLabel: "nombre incorrecto", scheduledAt: "2026-09-17T19:00:00", registrationDeadline: "2026-09-17T18:00:00" }) },
+      env,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  // Backlog de Agencia (ronda de reestructura): Oscar confirmó que escribir
+  // el nombre exacto ya es confirmación suficiente — las fechas son
+  // opcionales, si no se mandan se mantienen las que ya tenía la convocatoria.
+  it("200 sin mandar fechas nuevas — el nombre exacto ya es confirmación suficiente", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    (env.__first as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 1, tenant_id: "vet-ch", label: "Reta 6ta - Martes", category: "6ta",
+      scheduled_at_utc: "x", registration_deadline_utc: "y", capacity: 20, status: "finalizado", created_at: "z",
+    });
+    const res = await clientApp.request(
+      "/torneos/1/reset",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ confirmLabel: "Reta 6ta - Martes" }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    // scheduledAtUtc/registrationDeadlineUtc deben ir como null (mantiene las existentes vía COALESCE).
+    const resetCall = (env.__bind as ReturnType<typeof vi.fn>).mock.calls.find((call) => call.includes(1) && call.length === 4);
+    expect(resetCall).toEqual([null, null, 1, "vet-ch"]);
+  });
+
+  it("200 y borra/reinicia cuando confirmLabel coincide y vienen las fechas", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    (env.__first as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 1, tenant_id: "vet-ch", label: "Reta 6ta - Martes", category: "6ta",
+      scheduled_at_utc: "x", registration_deadline_utc: "y", capacity: 20, status: "finalizado", created_at: "z",
+    });
+    const res = await clientApp.request(
+      "/torneos/1/reset",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ confirmLabel: "Reta 6ta - Martes", scheduledAt: "2026-09-17T19:00:00", registrationDeadline: "2026-09-17T18:00:00" }),
+      },
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect((env.__batch as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+  });
+});
+
+// Backlog de Agencia (padel, ronda de categorías): 6 categorías reales
+// (6ta..1ra), cada una con su grupo de Telegram y día configurable.
+describe("GET/PUT /padel-categorias y GET/PUT /padel-settings (padel, categorías)", () => {
+  it("GET /padel-categorias devuelve las 6 categorías (vacías por default)", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/padel-categorias", { headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(200);
+    const body = await res.json<{ categories: unknown[] }>();
+    expect(body.categories).toHaveLength(6);
+  });
+
+  it("PUT /padel-categorias/:category rechaza una categoría inválida", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/padel-categorias/septima",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ weekday: 2 }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT /padel-categorias/:category guarda día y chat de una categoría válida", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/padel-categorias/6ta",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ weekday: 2, chatId: "-100123" }) },
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect((env.__run as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("POST /torneos rechaza una categoría que no es una de las 6 reales", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/torneos",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ label: "Reta", category: "septima", scheduledAt: "2026-09-10T19:00:00", registrationDeadline: "2026-09-10T18:00:00" }),
+      },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /padel-settings devuelve 5 rondas, 5 canchas y modalidad individual por default", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request("/padel-settings", { headers: { Authorization: `Bearer ${token}` } }, mockEnv());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ rounds: 5, courtCount: 5, defaultRegistrationMode: "individual" });
+  });
+
+  it("PUT /padel-settings rechaza un número de rondas inválido", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/padel-settings",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ rounds: 0, courtCount: 5 }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT /padel-settings rechaza un número de canchas inválido", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const res = await clientApp.request(
+      "/padel-settings",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ rounds: 5, courtCount: 0 }) },
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT /padel-settings guarda rondas y canchas válidas", async () => {
+    const token = await createSessionToken(SECRET, "vet-ch", 1);
+    const env = mockEnv();
+    const res = await clientApp.request(
+      "/padel-settings",
+      { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ rounds: 4, courtCount: 3, defaultRegistrationMode: "pareja" }) },
+      env,
+    );
     expect(res.status).toBe(200);
     expect((env.__run as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
   });

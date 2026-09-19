@@ -270,6 +270,17 @@ const TENANT_SCOPED_TABLES = [
   "kb_documents",
   "tool_calls",
   "catalog_items",
+  // Backlog de Agencia (padel, Fase 1/3-4): padel_matches y
+  // padel_registrations van ANTES que padel_tournaments en este arreglo
+  // por si algún día se le agrega una FK real con ON DELETE RESTRICT (hoy
+  // SQLite/D1 no la aplica por default, pero el orden ya es el correcto).
+  "padel_matches",
+  "padel_registrations",
+  "padel_tournaments",
+  // Backlog de Agencia (padel, ronda de categorías): configuración por
+  // categoría (día/chat) y reglas (# de rondas) — también tenant-scoped.
+  "padel_categories",
+  "padel_settings",
 ];
 
 export async function deleteTenant(db: D1Database, vectorize: VectorizeIndex, tenantId: string): Promise<void> {

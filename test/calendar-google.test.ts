@@ -74,6 +74,56 @@ describe("GoogleCalendarProvider.bookAppointment", () => {
     expect(result).toEqual({ ok: true, eventId: "evt-123" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  // Backlog de Agencia (padel: reservas de cancha/clases) — "que se le
+  // mande la invitación también al cliente... al correo que nos indique":
+  // sendUpdates=all es un QUERY PARAM real de la API de Google (no un
+  // campo del body), sin él Google nunca manda el correo aunque el
+  // attendee quede registrado.
+  it("con attendeeEmail agrega attendees y ?sendUpdates=all en la URL", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ calendars: { primary: { busy: [] } } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "evt-456" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new GoogleCalendarProvider("token", "primary");
+
+    const result = await provider.bookAppointment({
+      start: "2026-09-01T10:00:00Z",
+      end: "2026-09-01T10:30:00Z",
+      summary: "Reserva de cancha",
+      attendeeName: "Oscar",
+      attendeeContact: "555-0000",
+      attendeeEmail: "oscar@example.com",
+    });
+
+    expect(result).toEqual({ ok: true, eventId: "evt-456" });
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).toContain("?sendUpdates=all");
+    const body = JSON.parse(init.body as string);
+    expect(body.attendees).toEqual([{ email: "oscar@example.com" }]);
+  });
+
+  it("sin attendeeEmail no manda attendees ni sendUpdates (comportamiento de siempre)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ calendars: { primary: { busy: [] } } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "evt-789" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new GoogleCalendarProvider("token", "primary");
+
+    await provider.bookAppointment({
+      start: "2026-09-01T10:00:00Z",
+      end: "2026-09-01T10:30:00Z",
+      summary: "Consulta",
+      attendeeName: "Oscar",
+    });
+
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).not.toContain("sendUpdates");
+    const body = JSON.parse(init.body as string);
+    expect(body.attendees).toBeUndefined();
+  });
 });
 
 describe("GoogleCalendarProvider.checkAvailability con staffMember (Agencia, Fase 2)", () => {

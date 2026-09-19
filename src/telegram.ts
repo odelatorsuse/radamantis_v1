@@ -2,7 +2,13 @@ export interface TelegramUpdate {
   update_id: number;
   message?: {
     message_id: number;
-    chat: { id: number };
+    // Backlog de Agencia (padel, Fase 1): "type" distingue un chat 1:1
+    // ("private") de un GRUPO compartido ("group"/"supergroup") — lo
+    // necesitamos para saber cuándo etiquetar los mensajes con quién los
+    // escribió (index.ts). "from" es el remitente individual real, distinto
+    // del chat en un grupo (todos comparten el mismo chat.id).
+    chat: { id: number; type?: string };
+    from?: { id: number; first_name?: string; username?: string };
     text?: string;
     // Etapa 10 (superpower "Oído y vista"): Telegram manda el audio/imagen
     // como un file_id — hay que pedirle a su API la URL real de descarga
@@ -14,6 +20,9 @@ export interface TelegramUpdate {
 
 export interface IncomingMessage {
   chatId: number;
+  chatType: string;
+  senderId: number;
+  senderName: string;
   text?: string;
   voice?: { fileId: string; mimeType: string };
   photo?: { fileId: string };
@@ -22,15 +31,24 @@ export interface IncomingMessage {
 export function extractIncomingMessage(update: TelegramUpdate): IncomingMessage | null {
   const message = update.message;
   if (!message) return null;
-  if (message.text) return { chatId: message.chat.id, text: message.text };
+  const base = {
+    chatId: message.chat.id,
+    chatType: message.chat.type ?? "private",
+    // Sin "from" (raro, pero Telegram no lo garantiza en todos los tipos de
+    // update) se asume que el remitente es el propio chat — mismo
+    // comportamiento de siempre para una conversación 1:1.
+    senderId: message.from?.id ?? message.chat.id,
+    senderName: message.from?.first_name || message.from?.username || "Alguien",
+  };
+  if (message.text) return { ...base, text: message.text };
   if (message.voice) {
-    return { chatId: message.chat.id, voice: { fileId: message.voice.file_id, mimeType: message.voice.mime_type ?? "audio/ogg" } };
+    return { ...base, voice: { fileId: message.voice.file_id, mimeType: message.voice.mime_type ?? "audio/ogg" } };
   }
   if (message.photo && message.photo.length > 0) {
     // Telegram manda el mismo archivo en varias resoluciones — la última es
     // siempre la de mayor calidad disponible.
     const largest = message.photo[message.photo.length - 1];
-    return { chatId: message.chat.id, photo: { fileId: largest.file_id } };
+    return { ...base, photo: { fileId: largest.file_id } };
   }
   return null;
 }

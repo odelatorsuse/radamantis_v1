@@ -7,6 +7,7 @@ import { buildGoogleAuthUrl } from "../calendar/oauth";
 import { deleteCalendarConnection, getCalendarConnection } from "../calendar/repository";
 import { getChannelProvider, listSupportedChannels } from "../channels/registry";
 import { buildFacebookAuthUrl } from "../channels/metaOauth";
+import { buildWhatsAppExternalId } from "../channels/whatsapp";
 import { getPlatformSettings, upsertPlatformSettings } from "../platformSettings";
 import { fetchCloudflareUsageThisMonth } from "../cloudflareAnalytics";
 import { estimateCloudflareCostUsd } from "../cloudflareCosts";
@@ -18,6 +19,10 @@ import { runAutoResumeSweep } from "../handoffAutoResume";
 import { runDailyReportSweep } from "../dailyReport";
 import { hasRecentActivity } from "../messages";
 import { runNoShowSweep } from "../noShowSweep";
+import { runTournamentDeadlineSweep } from "../padelDeadlineSweep";
+import { runPaymentReminderSweep } from "../padelPaymentReminderSweep";
+import { upsertPadelSettings } from "../padelCategories";
+import { createBacklogItem, deleteBacklogItem, listBacklogItems, updateBacklogItem, type BacklogStatus } from "../backlog";
 import { MIN_RELEVANCE_SCORE } from "../prompts";
 import { ingestKbDocs, listKbDocuments, type KbDocInput } from "../rag/kb";
 import { getTenantSettings, upsertTenantSettings } from "../tenants";
@@ -156,10 +161,37 @@ async function registerChannelWebhook(origin: string, channel: string, externalI
   return { webhookRegistered: result.ok, webhookError: result.error };
 }
 
+// Backlog de Agencia (WhatsApp): a diferencia de los demás canales
+// (externalId es un solo valor pegado a mano), WhatsApp necesita 3 datos
+// reales de Meta (phone_number_id, el System User token de Oscar, y el WABA
+// ID) — el dashboard los pide como 3 campos separados (mismo criterio de
+// claridad que Telegram pidiendo "bot token" en vez de un id genérico), y
+// aquí se combinan en el externalId compuesto que espera
+// whatsappChannelProvider (ver src/channels/whatsapp.ts) — el formato
+// compuesto queda encapsulado en el backend, nunca expuesto en el dashboard.
+function buildWhatsAppBindingFields(body: { phoneNumberId?: string; accessToken?: string; wabaId?: string }): { externalId: string; routeKey: string } | { error: string } {
+  if (!body.phoneNumberId?.trim() || !body.accessToken?.trim() || !body.wabaId?.trim()) {
+    return { error: "phoneNumberId, accessToken y wabaId son requeridos para WhatsApp" };
+  }
+  return {
+    externalId: buildWhatsAppExternalId({ phoneNumberId: body.phoneNumberId.trim(), accessToken: body.accessToken.trim(), wabaId: body.wabaId.trim() }),
+    routeKey: body.phoneNumberId.trim(),
+  };
+}
+
 adminApp.post("/tenants/:id/channels", async (c) => {
   const tenantId = c.req.param("id");
-  const body = await c.req.json<{ channel?: string; externalId?: string; routeKey?: string }>();
-  if (!body.channel || !body.externalId) {
+  const body = await c.req.json<{ channel?: string; externalId?: string; routeKey?: string; phoneNumberId?: string; accessToken?: string; wabaId?: string }>();
+  if (!body.channel) {
+    return c.json({ error: "channel es requerido" }, 400);
+  }
+  if (body.channel === "whatsapp") {
+    const built = buildWhatsAppBindingFields(body);
+    if ("error" in built) return c.json({ error: built.error }, 400);
+    body.externalId = built.externalId;
+    body.routeKey = built.routeKey;
+  }
+  if (!body.externalId) {
     return c.json({ error: "channel y externalId son requeridos" }, 400);
   }
   await addChannelBinding(c.env.DB, tenantId, body.channel, body.externalId, body.routeKey);
@@ -180,7 +212,13 @@ adminApp.post("/tenants/:id/channels", async (c) => {
 adminApp.put("/tenants/:id/channels/:channel", requireAdmin, async (c) => {
   const tenantId = c.req.param("id");
   const channel = c.req.param("channel");
-  const body = await c.req.json<{ externalId?: string; routeKey?: string }>();
+  const body = await c.req.json<{ externalId?: string; routeKey?: string; phoneNumberId?: string; accessToken?: string; wabaId?: string }>();
+  if (channel === "whatsapp") {
+    const built = buildWhatsAppBindingFields(body);
+    if ("error" in built) return c.json({ error: built.error }, 400);
+    body.externalId = built.externalId;
+    body.routeKey = built.routeKey;
+  }
   if (!body.externalId) {
     return c.json({ error: "externalId es requerido" }, 400);
   }
@@ -345,6 +383,60 @@ adminApp.put("/platform-settings", requireAdmin, async (c) => {
   return c.json({ ok: true });
 });
 
+// Backlog de Agencia: tablero Kanban de modificaciones pendientes a
+// Radamantis MISMO (no de un tenant) — Oscar anota tareas aquí en vez de
+// tener que recordarlas o volver a pedirlas cada vez. Solo admin — es
+// planeación interna del proyecto, no algo que un operador deba tocar.
+// `status` (confirmado con Oscar, quién mueve cada una):
+//   'pendiente'    — la pelota está en la cancha de Oscar: recién
+//                    anotada, o regresó aquí porque necesita que apruebe,
+//                    aclare algo, o resuelva una duda que surgió trabajándola.
+//   'aprobado'     — Oscar la movió aquí A PROPÓSITO — es la señal real
+//                    de "empieza a trabajar en esto", no basta con
+//                    crearla en 'pendiente'.
+//   'en_espera'    — pausada a propósito (no urgente ahora), cualquiera
+//                    la puede mover aquí/sacar de aquí.
+//   'en_progreso'  — una sesión la está implementando activamente.
+//   'test'         — código hecho y probado de este lado, esperando que
+//                    Oscar la pruebe/apruebe el deploy — confirmó
+//                    explícitamente que no quiere deploys automáticos.
+//   'terminada'    — ya desplegada y confirmada en producción.
+adminApp.get("/backlog", requireAdmin, async (c) => {
+  const items = await listBacklogItems(c.env.DB);
+  return c.json({ items });
+});
+
+adminApp.post("/backlog", requireAdmin, async (c) => {
+  const body = await c.req.json<{ title?: string; description?: string | null }>();
+  if (!body.title?.trim()) return c.json({ error: "title es requerido" }, 400);
+  const id = await createBacklogItem(c.env.DB, { title: body.title.trim(), description: body.description?.trim() || null, createdBy: c.get("actor") });
+  await logAdminAction(c.env.DB, { tenantId: null, actor: c.get("actor"), action: "create_backlog_item", details: { id, title: body.title } });
+  return c.json({ ok: true, id }, 201);
+});
+
+adminApp.put("/backlog/:id", requireAdmin, async (c) => {
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json<{ title?: string; description?: string | null; status?: string; resultNotes?: string | null }>();
+  const VALID_STATUSES = ["pendiente", "aprobado", "en_espera", "en_progreso", "test", "terminada"];
+  if (body.status && !VALID_STATUSES.includes(body.status)) {
+    return c.json({ error: "status debe ser uno de: " + VALID_STATUSES.join(", ") }, 400);
+  }
+  const update: Parameters<typeof updateBacklogItem>[2] = { status: body.status as BacklogStatus | undefined };
+  if (body.title !== undefined) update.title = body.title;
+  if ("description" in body) update.description = body.description ?? null;
+  if ("resultNotes" in body) update.resultNotes = body.resultNotes ?? null;
+  await updateBacklogItem(c.env.DB, id, update);
+  await logAdminAction(c.env.DB, { tenantId: null, actor: c.get("actor"), action: "update_backlog_item", details: { id, ...body } });
+  return c.json({ ok: true });
+});
+
+adminApp.delete("/backlog/:id", requireAdmin, async (c) => {
+  const id = Number(c.req.param("id"));
+  await deleteBacklogItem(c.env.DB, id);
+  await logAdminAction(c.env.DB, { tenantId: null, actor: c.get("actor"), action: "delete_backlog_item", details: { id } });
+  return c.json({ ok: true });
+});
+
 adminApp.get("/verticals", (c) => {
   const verticals = listVerticalTemplates().map((v) => ({
     verticalId: v.verticalId,
@@ -471,6 +563,20 @@ adminApp.post("/auto-resume-sweep", async (c) => {
   return c.json(result);
 });
 
+// Backlog de Agencia (padel, Fase 1): mismo patrón que los otros barridos —
+// probarlo bajo demanda sin esperar a que venza la hora límite real.
+adminApp.post("/tournament-deadline-sweep", async (c) => {
+  const result = await runTournamentDeadlineSweep(c.env.DB);
+  return c.json(result);
+});
+
+// Backlog de Agencia (ronda de reestructura): mismo patrón — aviso de
+// pago pendiente 30 min antes de la jornada, probarlo bajo demanda.
+adminApp.post("/payment-reminder-sweep", async (c) => {
+  const result = await runPaymentReminderSweep(c.env.DB);
+  return c.json(result);
+});
+
 // Agencia (UI de "Acceso a consola"): lista los logins de /console que ya
 // existen para este tenant, para mostrarlos en el dashboard sin tener que
 // operar la API por curl.
@@ -532,6 +638,24 @@ adminApp.put("/tenants/:id/staff-members", async (c) => {
   const body = await c.req.json<{ staffMembers?: string[] }>();
   await setStaffMembers(c.env.DB, tenantId, body.staffMembers || []);
   await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "update_staff_members", details: { staffMembers: body.staffMembers || [] } });
+  return c.json({ ok: true });
+});
+
+// Agencia (ronda de canchas + parejas): mismo dato que la pestaña "Reglas"
+// de /console (el club lo edita después) — este endpoint es el
+// equivalente de "staff-members" arriba, escrito desde /admin durante el
+// onboarding cuando Oscar ya sabe si el club juega retas americanas o
+// torneos de pareja fija. Solo precarga el formulario de "Nueva
+// convocatoria" en /console — la modalidad real se elige por convocatoria.
+adminApp.put("/tenants/:id/padel-settings", async (c) => {
+  const tenantId = c.req.param("id");
+  const body = await c.req.json<{ rounds?: number; courtCount?: number; defaultRegistrationMode?: string }>();
+  await upsertPadelSettings(c.env.DB, tenantId, {
+    rounds: Number.isInteger(body.rounds) && (body.rounds as number) > 0 ? (body.rounds as number) : 5,
+    courtCount: Number.isInteger(body.courtCount) && (body.courtCount as number) > 0 ? (body.courtCount as number) : 5,
+    defaultRegistrationMode: body.defaultRegistrationMode === "pareja" ? "pareja" : "individual",
+  });
+  await logAdminAction(c.env.DB, { tenantId, actor: c.get("actor"), action: "update_padel_settings", details: { defaultRegistrationMode: body.defaultRegistrationMode } });
   return c.json({ ok: true });
 });
 

@@ -43,6 +43,7 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     --danger-bg: rgba(255,59,107,0.15);
     --ok: #2CFCB4;
     --ok-bg: rgba(44,252,180,0.15);
+    --gold: #E8C25A;
     --warn-bg: rgba(255,176,32,0.15);
     --radius: 20px;
     --radius-sm: 14px;
@@ -158,6 +159,58 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
   .health-label { font-weight: 500; }
   .health-value { font-size: 0.85rem; color: var(--text-muted); }
 
+  /* Backlog de Agencia (padel): "llaves" de verdad para cada partido (no
+     texto plano) — la pareja ganadora se marca en color en cuanto hay
+     marcador, y la tabla de posiciones tiene una vista "gamer" (rachas en
+     llamas, líder con corona, barra de puntos) — pedido explícito de
+     Oscar tras ver la primera versión de este panel. */
+  .padelMatch { background: var(--glass); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 10px; }
+  .padelMatch.final { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset, 0 0 24px rgba(168,85,247,0.18); }
+  .padelCourt { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; font-weight: 700; }
+  .padelTeam { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); margin-bottom: 6px; transition: background 0.15s, box-shadow 0.15s; }
+  .padelTeam:last-of-type { margin-bottom: 10px; }
+  .padelTeam.winner { background: var(--ok-bg); box-shadow: 0 0 0 1px var(--ok) inset; }
+  .padelNames { font-weight: 600; font-size: 0.92rem; }
+  .padelTeam.winner .padelNames { color: var(--ok); }
+  .padelTeam.winner .padelNames::before { content: "🏆 "; }
+  .padelScoreInput { width: 58px; text-align: center; padding: 6px 4px; flex-shrink: 0; }
+  .padelSaveBtn { margin-top: 2px; }
+  .standingsGamer { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .standingsRow { position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--glass); border: 1px solid var(--border); }
+  /* Oscar: "los 8 que pasan a semifinales, en un color diferente, y los 3
+     primeros lugares también en otro color diferente" — 2 tiers reales,
+     no decorativos: top8 = quien clasificaría a semifinal hoy mismo. */
+  .standingsRow.top8 { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--glass)); }
+  .standingsRow.top3 { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, var(--glass)); }
+  .standingsRow.leader { box-shadow: 0 0 0 1px var(--accent) inset, 0 0 20px rgba(168,85,247,0.25); }
+  .standingsBar { position: absolute; inset: 0; right: auto; background: linear-gradient(90deg, var(--primary-deep), transparent); opacity: 0.3; z-index: 0; }
+  .standingsRow.top3 .standingsBar { background: linear-gradient(90deg, var(--gold), transparent); opacity: 0.35; }
+  .standingsRow > * { position: relative; z-index: 1; }
+  .standingsPos { font-family: "Space Grotesk", sans-serif; font-weight: 800; width: 24px; text-align: center; color: var(--text-muted); flex-shrink: 0; }
+  .standingsRow.top3 .standingsPos { color: var(--gold); }
+  .standingsRow.leader .standingsPos { color: var(--accent); }
+  .standingsIcon { font-size: 1rem; flex-shrink: 0; }
+  .standingsName { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .standingsStreak { font-size: 0.82rem; flex-shrink: 0; }
+  .standingsPoints { font-family: "Space Grotesk", sans-serif; font-weight: 800; font-size: 1.05rem; min-width: 42px; text-align: right; flex-shrink: 0; }
+
+  /* Backlog de Agencia (padel): NO árbol de eliminación (Oscar fue
+     explícito) — pestañas por ronda/fase, cada una con un grid de
+     tarjetas, estilo Reta Americana real (todos juegan todas las rondas,
+     nadie "avanza" a un centro de cuadro). */
+  .padelTabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 14px; }
+  .padelTab { background: var(--glass); border: 1px solid var(--border); color: var(--text-muted); border-radius: 999px; padding: 7px 16px; font-size: 0.85rem; font-weight: 600; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+  .padelTab:hover { color: var(--text); border-color: var(--primary); }
+  .padelTab.active { background: linear-gradient(135deg, var(--primary-deep), var(--accent-deep)); color: #fff; border-color: transparent; box-shadow: 0 0 0 1px rgba(34,211,238,0.3) inset; }
+  .padelMatchGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+
+  /* Backlog de Agencia (padel): "Limpiar / Iniciar nuevo torneo" — Oscar
+     confirmó que borra de verdad inscripciones/marcadores (destructivo
+     real), así que usa el mismo patrón de doble confirmación que "Zona de
+     peligro" al borrar un tenant: escribir el nombre exacto para habilitar. */
+  .padelDangerZone { border: 1px solid rgba(255,59,107,0.35); border-radius: var(--radius-sm); padding: 14px 16px; margin-top: 16px; }
+  .padelDangerZone h4 { margin: 0 0 6px; color: var(--danger); font-size: 0.9rem; }
+
   .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
   .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; }
   .badge.paused { background: var(--danger-bg); color: var(--danger); }
@@ -244,6 +297,10 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     <button class="nav-item" data-tab="catalogo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
       Catálogo
+    </button>
+    <button class="nav-item" data-tab="torneos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="2" width="10" height="13" rx="5"/><path d="M11 15v3M8 21h6"/><circle cx="19" cy="19" r="2.2"/></svg>
+      Torneos
     </button>
     <div class="nav-section">Configuración</div>
     <button class="nav-item" data-tab="salud">
@@ -377,6 +434,140 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       </div>
     </section>
 
+    <section class="tab-view" id="tab-torneos">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Torneos</h1>
+          <p class="page-sub">Convocatorias de Retas Americanas y torneos de pareja fija — cupo, lista de espera y quién se ha inscrito.</p>
+        </div>
+      </div>
+
+      <div class="padelTabs" style="margin-bottom:16px;">
+        <button type="button" class="padelTab active" id="padelSectionConfigBtn">Configuración</button>
+        <button type="button" class="padelTab" id="padelSectionLiveBtn">En vivo</button>
+      </div>
+
+      <!-- Backlog de Agencia (ronda de reestructura): "2 secciones
+           seleccionables" — Configuración (categorías, reglas por
+           defecto, alta de convocatorias) vs. En vivo (una pestaña por
+           cada reta/torneo que sigue activo). Antes todo vivía apilado
+           en una sola vista larga. -->
+      <div id="padelSectionConfig">
+        <div class="panel">
+          <h3>Pantalla del club</h3>
+          <p class="page-sub" style="margin-bottom:10px;">Una sola pantalla con las 6 categorías a la vez (llaves, marcadores, campeones) — pensada para una TV o monitor del club.</p>
+          <button class="btn-secondary" id="posterScreenBtn">Abrir pantalla del club</button>
+        </div>
+
+        <div class="panel">
+          <h3>Categorías</h3>
+          <p class="page-sub" style="margin-bottom:10px;">Cada categoría tiene su propio grupo de Telegram y normalmente un día fijo de la semana (ej. 6ta los martes, 5ta los jueves) — configúralo aquí, es editable cuando quieras.</p>
+          <table id="categoriesTable"><thead><tr><th>Categoría</th><th>Día habitual</th><th>Chat de Telegram (grupo)</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <div class="panel">
+          <h3>Reglas (valores por defecto)</h3>
+          <p class="page-sub" style="margin-bottom:10px;">Solo precargan el formulario de "Nueva convocatoria" — cada convocatoria pregunta y guarda sus propios valores, así que un club puede usar distinto número de canchas o rondas según la categoría o el día.</p>
+          <form id="padelSettingsForm">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <div style="flex:1;min-width:140px;">
+                <label style="font-size:0.8rem;color:var(--text-muted);">Rondas por defecto</label>
+                <input type="number" id="padelRoundsInput" min="1" style="width:100%;" />
+              </div>
+              <div style="flex:1;min-width:140px;">
+                <label style="font-size:0.8rem;color:var(--text-muted);">Canchas por defecto</label>
+                <input type="number" id="padelCourtCountInput" min="1" style="width:100%;" />
+              </div>
+              <div style="flex:2;min-width:220px;">
+                <label style="font-size:0.8rem;color:var(--text-muted);">Modalidad por defecto</label>
+                <select id="padelDefaultModeInput" style="width:100%;">
+                  <option value="individual">Reta americana (pareja rotativa)</option>
+                  <option value="pareja">Torneo de parejas (pareja fija)</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top:12px;">
+              <button class="btn-primary" type="submit">Guardar</button>
+            </div>
+            <div class="error" id="padelSettingsMsg"></div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h3>Nueva convocatoria</h3>
+          <button class="btn-primary" id="tournamentNewBtn">+ Nueva convocatoria</button>
+          <div id="tournamentFormPanel" style="display:none;margin-top:16px;">
+            <form id="tournamentForm">
+              <h4 style="margin:0 0 8px;color:var(--text-muted);font-size:0.85rem;text-transform:uppercase;letter-spacing:0.06em;">Retas y torneos</h4>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:160px;">
+                  <label style="font-size:0.8rem;color:var(--text-muted);">Categoría</label>
+                  <select id="tournamentCategoryInput" style="width:100%;">
+                    <option value="">Sin categoría</option>
+                    <option value="6ta">6ta</option>
+                    <option value="5ta">5ta</option>
+                    <option value="4ta">4ta</option>
+                    <option value="3ra">3ra</option>
+                    <option value="2da">2da</option>
+                    <option value="1ra">1ra</option>
+                  </select>
+                </div>
+                <div style="flex:1;min-width:200px;">
+                  <label style="font-size:0.8rem;color:var(--text-muted);">Modalidad</label>
+                  <select id="tournamentModeInput" style="width:100%;">
+                    <option value="individual">Reta americana (pareja rotativa)</option>
+                    <option value="pareja">Torneo de parejas (pareja fija)</option>
+                  </select>
+                </div>
+                <div style="width:130px;">
+                  <label style="font-size:0.8rem;color:var(--text-muted);">Cupo (<span id="tournamentCapacityUnitLabel">jugadores</span>)</label>
+                  <input type="number" id="tournamentCapacityInput" value="20" min="1" style="width:100%;" />
+                </div>
+                <div style="width:110px;">
+                  <label style="font-size:0.8rem;color:var(--text-muted);">Rondas</label>
+                  <input type="number" id="tournamentRoundsInput" min="1" style="width:100%;" />
+                </div>
+                <div style="width:110px;">
+                  <label style="font-size:0.8rem;color:var(--text-muted);">Canchas</label>
+                  <input type="number" id="tournamentCourtCountInput" min="1" style="width:100%;" />
+                </div>
+              </div>
+
+              <h4 style="margin:16px 0 8px;color:var(--text-muted);font-size:0.85rem;text-transform:uppercase;letter-spacing:0.06em;">Detalles</h4>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <div style="flex:2;min-width:200px;">
+                  <label style="font-size:0.8rem;color:var(--text-muted);">Nombre</label>
+                  <input type="text" id="tournamentLabelInput" placeholder="Ej. Reta 6ta - Martes" style="width:100%;" required />
+                </div>
+                <div style="flex:1;min-width:200px;">
+                  <label style="font-size:0.8rem;color:var(--text-muted);">Fecha y hora de la jornada</label>
+                  <input type="datetime-local" id="tournamentScheduledInput" style="width:100%;" required />
+                </div>
+                <div style="flex:1;min-width:200px;">
+                  <label style="font-size:0.8rem;color:var(--text-muted);">Hora límite de inscripción</label>
+                  <input type="datetime-local" id="tournamentDeadlineInput" style="width:100%;" required />
+                </div>
+              </div>
+
+              <div style="margin-top:14px;display:flex;gap:8px;">
+                <button class="btn-primary" type="submit">Abrir convocatoria</button>
+                <button class="btn-secondary" type="button" id="tournamentFormCancel">Cancelar</button>
+              </div>
+              <div class="error" id="tournamentFormMsg"></div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección "En vivo": una pestaña por cada reta/torneo que sigue
+           activo — desaparece sola cuando la convocatoria se finaliza. -->
+      <div id="padelSectionLive" style="display:none;">
+        <div class="padelTabs" id="tournamentsTabStrip"></div>
+        <div id="tournamentsPanel"></div>
+        <p class="empty" id="tournamentsEmpty" style="display:none;">No hay convocatorias activas todavía. Abre la primera desde "Configuración".</p>
+      </div>
+    </section>
+
     <section class="tab-view" id="tab-salud">
       <h1 class="page-title">Salud</h1>
       <p class="page-sub">Estado de conexión de tu bot — no es un monitoreo en vivo, es lo último que sabemos.</p>
@@ -428,9 +619,9 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
         </form>
       </div>
 
-      <div class="panel">
+      <div class="panel" id="staffPanel" style="display:none;">
         <h3>Personal</h3>
-        <p class="page-sub" style="margin-bottom:14px;">Si tienes más de una persona atendiendo citas (estilistas, barberos, doctores), agrégalos aquí para que el bot pueda preguntar y agendar con quién específico. Déjalo vacío si no aplica — el bot sigue agendando normal, sin pedir con quién. Sepáralos con comas.</p>
+        <p class="page-sub" style="margin-bottom:14px;">Si tienes más de una persona, cancha o clase con la que se puede agendar (estilistas, barberos, doctores, Cancha 1/Cancha 2, Clase de iniciación...), agrégalos aquí para que el bot pueda preguntar y agendar con cuál específico. Déjalo vacío si no aplica — el bot sigue agendando normal, sin pedir con cuál. Sepáralos con comas.</p>
         <form id="staffMembersForm">
           <textarea id="staffMembersInput" placeholder="ej. Ana, Carlos" style="width:100%;min-height:50px;"></textarea>
           <div style="margin-top:10px;"><button class="btn-primary" type="submit">Guardar</button></div>
@@ -459,6 +650,10 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
           <label>URL de tu logo</label>
           <input type="text" id="brandingLogoUrl" placeholder="https://tusitio.com/logo.png" />
           <p class="page-sub" style="margin:4px 0 0;">Cuadrado, idealmente 128×128px o más. Si la imagen no carga, se muestra el punto de color de siempre.</p>
+
+          <label style="margin-top:10px;">O sube una imagen o foto de tu negocio</label>
+          <input type="file" id="brandingLogoFile" accept="image/png,image/jpeg,image/webp,image/gif" />
+          <p class="page-sub" style="margin:4px 0 0;">Se ajusta sola al subirla — puedes usar una foto tomada con el celular, no hace falta editarla antes.</p>
 
           <label>Color principal</label>
           <div style="display:flex;align-items:center;gap:10px;">
@@ -1015,6 +1210,895 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
       .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
   });
 
+  // Backlog de Agencia (padel, Fase 1) — un club puede tener varias
+  // convocatorias abiertas a la vez, cada una con su propio cupo/lista de
+  // espera; se renderiza una tarjeta por convocatoria con su roster.
+  function formatLocalDateTime(s) {
+    if (!s) return "—";
+    var parts = s.split("T");
+    return parts[0] + " " + (parts[1] || "").slice(0, 5);
+  }
+
+  var STATUS_LABELS = { inscrito: "Inscrito", lista_espera: "Lista de espera", cancelado: "Cancelado" };
+
+  // Backlog de Agencia (padel, Fase 2: "Reception Bot" — check-in en el
+  // club, 100% desde /console, sin conversación con el bot: más práctico
+  // para confirmar ~20 personas rápido en el mostrador que un chat).
+  function renderTournament(t) {
+    var card = document.createElement("div");
+    card.className = "panel";
+    card.style.marginBottom = "16px";
+
+    var header = document.createElement("div");
+    header.style.cssText = "display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;";
+    var info = document.createElement("div");
+    var title = document.createElement("h3");
+    title.textContent = t.label;
+    var sub = document.createElement("div");
+    sub.style.cssText = "font-size:0.85rem;color:var(--text-muted);margin-top:2px;";
+    var inscritos = t.registrations.filter(function (r) { return r.status === "inscrito"; }).length;
+    var listaEspera = t.registrations.filter(function (r) { return r.status === "lista_espera"; }).length;
+    var presentes = t.registrations.filter(function (r) { return r.status === "inscrito" && r.attended === true; }).length;
+    var TOURNAMENT_STATUS_LABELS = { abierta: "Abierta", cerrada: "Cerrada", en_curso: "En curso", finalizado: "Finalizada" };
+    sub.textContent = "[" + (TOURNAMENT_STATUS_LABELS[t.status] || t.status) + "] " +
+      formatLocalDateTime(t.scheduledAtLocal) + " · Inscripción hasta " + formatLocalDateTime(t.registrationDeadlineLocal) +
+      " · " + inscritos + "/" + t.capacity + " inscritos" + (listaEspera ? " · " + listaEspera + " en espera" : "") +
+      " · " + presentes + " presentes confirmados";
+    info.appendChild(title);
+    info.appendChild(sub);
+
+    header.appendChild(info);
+    var headerActions = document.createElement("div");
+    headerActions.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;";
+    // Backlog de Agencia (padel, Fase 5: "Broadcast Visual") — abre
+    // directo la pantalla pública de este torneo en otra pestaña (Oscar:
+    // "no que copie el link, sino que directamente lo abra").
+    var screenBtn = document.createElement("button");
+    screenBtn.className = "btn-secondary";
+    screenBtn.textContent = "Abrir pantalla";
+    screenBtn.addEventListener("click", function () {
+      var tenantId = localStorage.getItem(STORAGE_TENANT) || "";
+      window.open(window.location.origin + "/pantalla/" + tenantId + "/" + t.id, "_blank");
+    });
+    headerActions.appendChild(screenBtn);
+    if (t.matches.length === 0) {
+      var closeBtn = document.createElement("button");
+      closeBtn.className = "btn-secondary";
+      closeBtn.textContent = "Cerrar convocatoria";
+      closeBtn.addEventListener("click", function () {
+        if (!confirm('¿Cerrar "' + t.label + '"? Ya no se podrán inscribir más jugadores.')) return;
+        api("/torneos/" + t.id + "/close", { method: "POST" }).then(loadTournaments);
+      });
+      headerActions.appendChild(closeBtn);
+    }
+    header.appendChild(headerActions);
+    card.appendChild(header);
+
+    var table = document.createElement("table");
+    table.style.marginTop = "10px";
+    table.innerHTML = "<thead><tr><th>Jugador</th><th>Teléfono</th><th>Estado</th><th>Pagó</th><th>Asistió</th><th>Confirmó</th><th></th></tr></thead>";
+    var tbody = document.createElement("tbody");
+    // En torneos de PAREJA fija, las 2 filas de una misma pareja
+    // (compartiendo pair_id) se muestran como UNA sola fila visual — el
+    // servidor ya cascada pagó/asistió/cancelar a ambas (setRegistrationCheckin/
+    // cancelRegistration), así que basta con disparar la acción sobre la
+    // primera fila de cada pareja.
+    var seenPairIds = {};
+    var rowsToRender = [];
+    t.registrations.forEach(function (r) {
+      if (r.pairId) {
+        if (seenPairIds[r.pairId]) return; // ya se renderizó esta pareja
+        seenPairIds[r.pairId] = true;
+        var partner = t.registrations.filter(function (x) { return x.pairId === r.pairId && x.id !== r.id; })[0];
+        rowsToRender.push({ r: r, displayName: partner ? r.playerName + " / " + partner.playerName : r.playerName });
+      } else {
+        rowsToRender.push({ r: r, displayName: r.playerName });
+      }
+    });
+    rowsToRender.forEach(function (entry) {
+      var r = entry.r;
+      var tr = document.createElement("tr");
+      var tdName = document.createElement("td"); tdName.textContent = entry.displayName;
+      var tdPhone = document.createElement("td"); tdPhone.textContent = r.phone || "—";
+      var tdStatus = document.createElement("td"); tdStatus.textContent = STATUS_LABELS[r.status] || r.status;
+
+      var tdPaid = document.createElement("td");
+      if (r.status !== "cancelado") {
+        var paidBtn = document.createElement("button");
+        paidBtn.className = r.paid ? "btn-primary" : "btn-secondary";
+        paidBtn.textContent = r.paid ? "✓ Pagó" : "Marcar pagado";
+        paidBtn.addEventListener("click", function () {
+          api("/torneos/registrations/" + r.id + "/checkin", { method: "PUT", body: JSON.stringify({ paid: !r.paid }) }).then(loadTournaments);
+        });
+        tdPaid.appendChild(paidBtn);
+      }
+
+      var tdAttended = document.createElement("td");
+      if (r.status !== "cancelado") {
+        var attendedLabel = document.createElement("div");
+        attendedLabel.style.cssText = "font-size:0.78rem;color:var(--text-muted);margin-bottom:4px;";
+        attendedLabel.textContent = r.attended === true ? "✓ Presente" : r.attended === false ? "✗ No llegó" : "Sin confirmar";
+        var presentBtn = document.createElement("button");
+        presentBtn.className = "btn-secondary";
+        presentBtn.textContent = "Presente";
+        presentBtn.addEventListener("click", function () {
+          api("/torneos/registrations/" + r.id + "/checkin", { method: "PUT", body: JSON.stringify({ attended: true }) }).then(loadTournaments);
+        });
+        var noShowBtn = document.createElement("button");
+        noShowBtn.className = "btn-secondary";
+        noShowBtn.textContent = "No llegó";
+        noShowBtn.addEventListener("click", function () {
+          api("/torneos/registrations/" + r.id + "/checkin", { method: "PUT", body: JSON.stringify({ attended: false }) }).then(loadTournaments);
+        });
+        tdAttended.appendChild(attendedLabel);
+        tdAttended.appendChild(presentBtn);
+        tdAttended.appendChild(noShowBtn);
+      }
+
+      // Backlog de Agencia (ronda de reestructura): "posterior a la hora
+      // límite de inscripción, buscar que confirmen" — el bot ya pregunta
+      // solo al cerrar inscripciones (src/padelDeadlineSweep.ts); estos
+      // botones son el respaldo manual si alguien confirma por otro medio
+      // (llamada, WhatsApp personal, etc.) en vez de contestarle al bot.
+      var tdConfirmed = document.createElement("td");
+      if (r.status !== "cancelado") {
+        var confirmedLabel = document.createElement("div");
+        confirmedLabel.style.cssText = "font-size:0.78rem;color:var(--text-muted);margin-bottom:4px;";
+        confirmedLabel.textContent = r.confirmed === true ? "✓ Confirmó" : r.confirmed === false ? "✗ No va" : "Sin confirmar";
+        var confirmYesBtn = document.createElement("button");
+        confirmYesBtn.className = "btn-secondary";
+        confirmYesBtn.textContent = "Confirmó";
+        confirmYesBtn.addEventListener("click", function () {
+          api("/torneos/registrations/" + r.id + "/checkin", { method: "PUT", body: JSON.stringify({ confirmed: true }) }).then(loadTournaments);
+        });
+        var confirmNoBtn = document.createElement("button");
+        confirmNoBtn.className = "btn-secondary";
+        confirmNoBtn.textContent = "No va";
+        confirmNoBtn.addEventListener("click", function () {
+          api("/torneos/registrations/" + r.id + "/checkin", { method: "PUT", body: JSON.stringify({ confirmed: false }) }).then(loadTournaments);
+        });
+        tdConfirmed.appendChild(confirmedLabel);
+        tdConfirmed.appendChild(confirmYesBtn);
+        tdConfirmed.appendChild(confirmNoBtn);
+      }
+
+      var tdActions = document.createElement("td");
+      if (r.status !== "cancelado") {
+        var cancelBtn = document.createElement("button");
+        cancelBtn.className = "btn-secondary";
+        cancelBtn.textContent = "Cancelar";
+        cancelBtn.addEventListener("click", function () {
+          if (!confirm('¿Cancelar la inscripción de "' + entry.displayName + '"?')) return;
+          api("/torneos/registrations/" + r.id, { method: "DELETE" }).then(loadTournaments);
+        });
+        tdActions.appendChild(cancelBtn);
+      }
+      tr.appendChild(tdName); tr.appendChild(tdPhone); tr.appendChild(tdStatus); tr.appendChild(tdPaid); tr.appendChild(tdAttended); tr.appendChild(tdConfirmed); tr.appendChild(tdActions);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    card.appendChild(table);
+    if (t.registrations.length === 0) {
+      var empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = "Todavía nadie se ha inscrito.";
+      card.appendChild(empty);
+    }
+
+    // Jugador "espontáneo" — llegó al club sin haberse inscrito antes por
+    // el grupo de Telegram. Siempre visible (no un botón que abre/cierra),
+    // así sobrevive a que la tarjeta se vuelva a dibujar en cada recarga.
+    var walkinForm = document.createElement("form");
+    walkinForm.style.cssText = "margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;";
+    var walkinNameWrap = document.createElement("div");
+    var walkinNameLabel = document.createElement("label");
+    walkinNameLabel.style.cssText = "font-size:0.8rem;color:var(--text-muted);";
+    walkinNameLabel.textContent = "Nombre del jugador espontáneo";
+    var walkinNameInput = document.createElement("input");
+    walkinNameInput.type = "text";
+    walkinNameInput.required = true;
+    walkinNameInput.style.width = "220px";
+    walkinNameWrap.appendChild(walkinNameLabel);
+    walkinNameWrap.appendChild(document.createElement("br"));
+    walkinNameWrap.appendChild(walkinNameInput);
+    walkinForm.appendChild(walkinNameWrap);
+
+    // En torneos de PAREJA fija, un espontáneo también llega en pareja —
+    // se pide el segundo nombre a la vez (una pareja = una inscripción).
+    var walkinPartnerInput = null;
+    if (t.registrationMode === "pareja") {
+      var walkinPartnerWrap = document.createElement("div");
+      var walkinPartnerLabel = document.createElement("label");
+      walkinPartnerLabel.style.cssText = "font-size:0.8rem;color:var(--text-muted);";
+      walkinPartnerLabel.textContent = "Nombre del compañero(a)";
+      walkinPartnerInput = document.createElement("input");
+      walkinPartnerInput.type = "text";
+      walkinPartnerInput.required = true;
+      walkinPartnerInput.style.width = "220px";
+      walkinPartnerWrap.appendChild(walkinPartnerLabel);
+      walkinPartnerWrap.appendChild(document.createElement("br"));
+      walkinPartnerWrap.appendChild(walkinPartnerInput);
+      walkinForm.appendChild(walkinPartnerWrap);
+    }
+
+    var walkinPhoneInput = document.createElement("input");
+    walkinPhoneInput.type = "text";
+    walkinPhoneInput.placeholder = "Teléfono (opcional)";
+    walkinPhoneInput.style.width = "160px";
+    var walkinSubmit = document.createElement("button");
+    walkinSubmit.className = "btn-secondary";
+    walkinSubmit.type = "submit";
+    walkinSubmit.textContent = t.registrationMode === "pareja" ? "+ Agregar pareja espontánea" : "+ Agregar jugador espontáneo";
+    var walkinMsg = document.createElement("span");
+    walkinMsg.className = "error";
+    walkinForm.appendChild(walkinPhoneInput);
+    walkinForm.appendChild(walkinSubmit);
+    walkinForm.appendChild(walkinMsg);
+    walkinForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var body = { playerName: walkinNameInput.value, phone: walkinPhoneInput.value };
+      if (walkinPartnerInput) body.player2Name = walkinPartnerInput.value;
+      api("/torneos/" + t.id + "/registrations", { method: "POST", body: JSON.stringify(body) })
+        .then(loadTournaments)
+        .catch(function (err) { walkinMsg.textContent = err.message; });
+    });
+    card.appendChild(walkinForm);
+
+    appendScoreEngine(card, t);
+
+    return card;
+  }
+
+  // Backlog de Agencia (padel, Fase 3-4: "Score Engine") — fixture de 5
+  // rondas, marcadores por cancha, tabla de posiciones y playoffs. 100%
+  // desde /console (staff del club captura marcadores), sin tool de LLM
+  // nueva, mismo criterio ya usado en Fase 2.
+  function playerNameLookup(t) {
+    var byId = {};
+    t.registrations.forEach(function (r) { byId[r.id] = r.playerName; });
+    return function (id) { return byId[id] || ("#" + id); };
+  }
+
+  // Backlog de Agencia (padel): una "fila de equipo" es nombre + marcador
+  // editable en la MISMA línea — así cada partido se lee como una llave de
+  // verdad (dos filas apiladas), no como texto con dos inputs sueltos al
+  // lado. isWinner se decide con el marcador YA guardado (no el valor que
+  // se está escribiendo) — se resalta solo después de "Guardar".
+  function padelTeamRow(names, scoreValue, isWinner) {
+    var row = document.createElement("div");
+    row.className = "padelTeam" + (isWinner ? " winner" : "");
+    var namesEl = document.createElement("div");
+    namesEl.className = "padelNames";
+    namesEl.textContent = names;
+    var scoreInput = document.createElement("input");
+    scoreInput.type = "number";
+    scoreInput.className = "padelScoreInput";
+    scoreInput.value = scoreValue === null ? "" : scoreValue;
+    row.appendChild(namesEl);
+    row.appendChild(scoreInput);
+    return { row: row, input: scoreInput };
+  }
+
+  function renderMatchRow(match, name, courtLabel, isFinal) {
+    var card = document.createElement("div");
+    card.className = "padelMatch" + (isFinal ? " final" : "");
+    if (courtLabel) {
+      var court = document.createElement("div");
+      court.className = "padelCourt";
+      court.textContent = courtLabel;
+      card.appendChild(court);
+    }
+
+    var hasDecision = match.scoreA !== null && match.scoreB !== null && match.scoreA !== match.scoreB;
+    var teamA = padelTeamRow(name(match.teamAPlayer1Id) + " / " + name(match.teamAPlayer2Id), match.scoreA, hasDecision && match.scoreA > match.scoreB);
+    var teamB = padelTeamRow(name(match.teamBPlayer1Id) + " / " + name(match.teamBPlayer2Id), match.scoreB, hasDecision && match.scoreB > match.scoreA);
+    card.appendChild(teamA.row);
+    card.appendChild(teamB.row);
+
+    var saveBtn = document.createElement("button");
+    saveBtn.className = "btn-secondary padelSaveBtn";
+    saveBtn.type = "button";
+    saveBtn.textContent = "Guardar marcador";
+    var msg = document.createElement("div");
+    msg.className = "error";
+    saveBtn.addEventListener("click", function () {
+      var body = { scoreA: Number(teamA.input.value), scoreB: Number(teamB.input.value) };
+      api("/torneos/matches/" + match.id + "/score", { method: "PUT", body: JSON.stringify(body) })
+        .then(loadTournaments)
+        .catch(function (err) { msg.textContent = err.message; });
+    });
+    card.appendChild(saveBtn);
+    card.appendChild(msg);
+    return card;
+  }
+
+  // Backlog de Agencia (padel): "racha" real — cuenta victorias
+  // consecutivas de ESE jugador en sus rondas jugadas, empezando por la
+  // más reciente hacia atrás, hasta la primera derrota. Se calcula del
+  // lado del cliente a partir de los marcadores reales (t.matches), nunca
+  // inventado — si no hay racha (0 o 1 victoria seguida), no se muestra
+  // ninguna llama.
+  function computeStreak(matches, registrationId) {
+    var jugados = matches
+      .filter(function (m) { return m.phase === "ronda" && m.scoreA !== null && m.scoreB !== null; })
+      .filter(function (m) {
+        return m.teamAPlayer1Id === registrationId || m.teamAPlayer2Id === registrationId ||
+          m.teamBPlayer1Id === registrationId || m.teamBPlayer2Id === registrationId;
+      })
+      .sort(function (a, b) { return a.roundNumber - b.roundNumber; });
+    var streak = 0;
+    for (var i = jugados.length - 1; i >= 0; i--) {
+      var m = jugados[i];
+      var enEquipoA = m.teamAPlayer1Id === registrationId || m.teamAPlayer2Id === registrationId;
+      var gano = enEquipoA ? m.scoreA > m.scoreB : m.scoreB > m.scoreA;
+      if (gano) streak++; else break;
+    }
+    return streak;
+  }
+
+  // Tabla de posiciones "gamer": corona para el líder, paleta para el
+  // resto, llamas según racha real de victorias, y una barra de fondo
+  // proporcional a los puntos (relativa al líder) — todo derivado de datos
+  // reales, nunca decorado con algo inventado.
+  function renderStandingsGamer(t) {
+    var wrap = document.createElement("div");
+    wrap.className = "standingsGamer";
+    var maxPoints = t.standings.length ? t.standings[0].points : 0;
+    t.standings.forEach(function (s, i) {
+      var isTop3 = i < 3 && s.points > 0;
+      var isTop8 = i < 8 && s.points > 0;
+      var row = document.createElement("div");
+      row.className = "standingsRow" + (isTop8 ? " top8" : "") + (isTop3 ? " top3" : "") + (i === 0 && s.points > 0 ? " leader" : "");
+
+      var bar = document.createElement("div");
+      bar.className = "standingsBar";
+      bar.style.width = (maxPoints > 0 ? Math.max(3, Math.round((s.points / maxPoints) * 100)) : 0) + "%";
+      row.appendChild(bar);
+
+      var pos = document.createElement("div");
+      pos.className = "standingsPos";
+      pos.textContent = String(i + 1);
+      row.appendChild(pos);
+
+      var icon = document.createElement("div");
+      icon.className = "standingsIcon";
+      icon.textContent = !s.points ? "🎾" : i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "🎾";
+      row.appendChild(icon);
+
+      var name = document.createElement("div");
+      name.className = "standingsName";
+      name.textContent = s.playerName;
+      row.appendChild(name);
+
+      var streak = computeStreak(t.matches, s.registrationId);
+      if (streak >= 2) {
+        var flames = document.createElement("div");
+        flames.className = "standingsStreak";
+        flames.textContent = "🔥".repeat(Math.min(streak, 3));
+        flames.title = streak + " victorias seguidas";
+        row.appendChild(flames);
+      }
+
+      var points = document.createElement("div");
+      points.className = "standingsPoints";
+      points.textContent = String(s.points);
+      row.appendChild(points);
+
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  // Backlog de Agencia (ronda de reestructura, ronda 2): "quiero que el
+  // ranking [de victorias] esté dentro de Tabla de posiciones. Se tiene
+  // que ver iguales" — misma lista .standingsGamer/.standingsRow que la
+  // tabla de puntos, pero ordenada por partidos GANADOS acumulados de
+  // TODO el club (src/padelVictories.ts), no por puntos de este torneo.
+  function renderVictoriesGamer(leaderboard) {
+    var wrap = document.createElement("div");
+    wrap.className = "standingsGamer";
+    var maxWins = leaderboard.length ? leaderboard[0].wins : 0;
+    leaderboard.forEach(function (row, i) {
+      var isTop3 = i < 3 && row.wins > 0;
+      var tr = document.createElement("div");
+      tr.className = "standingsRow" + (isTop3 ? " top3" : "") + (i === 0 && row.wins > 0 ? " leader" : "");
+
+      var bar = document.createElement("div");
+      bar.className = "standingsBar";
+      bar.style.width = (maxWins > 0 ? Math.max(3, Math.round((row.wins / maxWins) * 100)) : 0) + "%";
+      tr.appendChild(bar);
+
+      var pos = document.createElement("div");
+      pos.className = "standingsPos";
+      pos.textContent = String(i + 1);
+      tr.appendChild(pos);
+
+      var icon = document.createElement("div");
+      icon.className = "standingsIcon";
+      icon.textContent = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "🎾";
+      tr.appendChild(icon);
+
+      var name = document.createElement("div");
+      name.className = "standingsName";
+      name.textContent = row.playerName;
+      tr.appendChild(name);
+
+      var wins = document.createElement("div");
+      wins.className = "standingsPoints";
+      wins.textContent = String(row.wins);
+      tr.appendChild(wins);
+
+      wrap.appendChild(tr);
+    });
+    return wrap;
+  }
+
+  // Backlog de Agencia (padel): qué pestaña (ronda/fase) está viendo cada
+  // convocatoria — persiste entre recargas de loadTournaments() porque
+  // vive fuera de la función de render (no se resetea con cada redibujado).
+  var activePadelTab = {};
+
+  // Oscar fue explícito: NADA de árbol de eliminación — en una Reta
+  // Americana todos juegan todas las rondas, nadie "avanza" ni queda
+  // fuera. Cada ronda (y semifinal/final) es una PESTAÑA con su propio
+  // grid de tarjetas, nunca líneas conectando partidos.
+  function appendScoreEngine(card, t) {
+    var name = playerNameLookup(t);
+
+    if (t.matches.length === 0) {
+      if (t.status === "abierta" || t.status === "cerrada") {
+        var fixtureBtn = document.createElement("button");
+        fixtureBtn.className = "btn-primary";
+        fixtureBtn.style.marginTop = "14px";
+        fixtureBtn.textContent = "Generar fixture";
+        fixtureBtn.addEventListener("click", function () {
+          api("/torneos/" + t.id + "/fixture", { method: "POST" }).then(loadTournaments).catch(function (err) { alert(err.message); });
+        });
+        card.appendChild(fixtureBtn);
+      }
+      appendDangerZone(card, t);
+      return;
+    }
+
+    var wrap = document.createElement("div");
+    wrap.style.cssText = "margin-top:16px;padding-top:16px;border-top:2px solid var(--border);";
+    var wrapTitle = document.createElement("h3");
+    wrapTitle.textContent = "Partidos";
+    wrap.appendChild(wrapTitle);
+
+    var rondaMatches = t.matches.filter(function (m) { return m.phase === "ronda"; });
+    // Rondas reales presentes (no un rango fijo 1-5 — el # de rondas es
+    // configurable por el club, ver panel de "Reglas").
+    var roundNumbers = [];
+    rondaMatches.forEach(function (m) { if (roundNumbers.indexOf(m.roundNumber) === -1) roundNumbers.push(m.roundNumber); });
+    roundNumbers.sort(function (a, b) { return a - b; });
+
+    var semis = t.matches.filter(function (m) { return m.phase === "semifinal"; });
+    var final = t.matches.filter(function (m) { return m.phase === "final"; })[0] || null;
+
+    var tabs = roundNumbers.map(function (round) {
+      return { key: "ronda-" + round, label: "Ronda " + round, matches: rondaMatches.filter(function (m) { return m.roundNumber === round; }) };
+    });
+    if (semis.length > 0) tabs.push({ key: "semifinal", label: "Semifinal", matches: semis });
+    if (final) tabs.push({ key: "final", label: "Final", matches: [final] });
+
+    var stillValid = tabs.some(function (tb) { return tb.key === activePadelTab[t.id]; });
+    if (!activePadelTab[t.id] || !stillValid) activePadelTab[t.id] = tabs[0].key;
+
+    var tabStrip = document.createElement("div");
+    tabStrip.className = "padelTabs";
+    tabs.forEach(function (tab) {
+      var tabBtn = document.createElement("button");
+      tabBtn.type = "button";
+      tabBtn.className = "padelTab" + (activePadelTab[t.id] === tab.key ? " active" : "");
+      tabBtn.textContent = tab.label;
+      tabBtn.addEventListener("click", function () {
+        activePadelTab[t.id] = tab.key;
+        loadTournaments();
+      });
+      tabStrip.appendChild(tabBtn);
+    });
+    wrap.appendChild(tabStrip);
+
+    var activeTab = tabs.filter(function (tb) { return tb.key === activePadelTab[t.id]; })[0];
+    var grid = document.createElement("div");
+    grid.className = "padelMatchGrid";
+    activeTab.matches.forEach(function (m, i) {
+      var label = activeTab.key === "semifinal" ? "Semifinal " + (i + 1) : activeTab.key === "final" ? "Gran Final" : "Cancha " + m.courtNumber;
+      grid.appendChild(renderMatchRow(m, name, label, activeTab.key === "final"));
+    });
+    wrap.appendChild(grid);
+
+    var standingsTitle = document.createElement("h3");
+    standingsTitle.style.marginTop = "16px";
+    standingsTitle.textContent = "Tabla de posiciones";
+    wrap.appendChild(standingsTitle);
+    wrap.appendChild(renderStandingsGamer(t));
+
+    // Backlog de Agencia (ronda de reestructura, ronda 2): el ranking de
+    // victorias (histórico de TODO el club) vive dentro de esta misma
+    // sección, con el mismo look que la tabla de puntos de arriba.
+    var victoriesHeader = document.createElement("div");
+    victoriesHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px;flex-wrap:wrap;";
+    var victoriesTitle = document.createElement("h3");
+    victoriesTitle.style.margin = "0";
+    victoriesTitle.textContent = "Ranking de victorias (histórico del club)";
+    var victoriesOpenBtn = document.createElement("button");
+    victoriesOpenBtn.className = "btn-secondary";
+    victoriesOpenBtn.textContent = "Abrir pantalla completa";
+    victoriesOpenBtn.addEventListener("click", function () {
+      var tenantId = localStorage.getItem(STORAGE_TENANT) || "";
+      window.open(window.location.origin + "/pantalla/" + tenantId + "/victorias", "_blank");
+    });
+    victoriesHeader.appendChild(victoriesTitle);
+    victoriesHeader.appendChild(victoriesOpenBtn);
+    wrap.appendChild(victoriesHeader);
+    if (latestVictoriesLeaderboard.length === 0) {
+      var victoriesEmpty = document.createElement("p");
+      victoriesEmpty.className = "page-sub";
+      victoriesEmpty.textContent = "Todavía no hay partidos jugados con marcador para armar este ranking.";
+      wrap.appendChild(victoriesEmpty);
+    } else {
+      wrap.appendChild(renderVictoriesGamer(latestVictoriesLeaderboard));
+    }
+
+    var pendingRondaScores = rondaMatches.some(function (m) { return m.scoreA === null || m.scoreB === null; });
+    if (semis.length === 0) {
+      var playoffsBtn = document.createElement("button");
+      playoffsBtn.className = "btn-primary";
+      playoffsBtn.style.marginTop = "14px";
+      playoffsBtn.textContent = "Generar playoffs (top 8)";
+      playoffsBtn.disabled = pendingRondaScores;
+      playoffsBtn.title = pendingRondaScores ? "Faltan marcadores de ronda por capturar" : "";
+      playoffsBtn.addEventListener("click", function () {
+        api("/torneos/" + t.id + "/playoffs", { method: "POST" }).then(loadTournaments).catch(function (err) { alert(err.message); });
+      });
+      wrap.appendChild(playoffsBtn);
+    } else {
+      var pendingSemis = semis.some(function (m) { return m.scoreA === null || m.scoreB === null || m.scoreA === m.scoreB; });
+      if (!final) {
+        var finalBtn = document.createElement("button");
+        finalBtn.className = "btn-primary";
+        finalBtn.style.marginTop = "14px";
+        finalBtn.textContent = "Generar la final";
+        finalBtn.disabled = pendingSemis;
+        finalBtn.title = pendingSemis ? "Faltan marcadores de semifinal (o hay un empate)" : "";
+        finalBtn.addEventListener("click", function () {
+          api("/torneos/" + t.id + "/final", { method: "POST" }).then(loadTournaments).catch(function (err) { alert(err.message); });
+        });
+        wrap.appendChild(finalBtn);
+      } else if (t.status === "finalizado" && final.scoreA !== null && final.scoreB !== null) {
+        var championNames = final.scoreA > final.scoreB
+          ? [name(final.teamAPlayer1Id), name(final.teamAPlayer2Id)]
+          : [name(final.teamBPlayer1Id), name(final.teamBPlayer2Id)];
+        var championBanner = document.createElement("div");
+        championBanner.style.cssText = "margin-top:14px;padding:14px;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;text-align:center;";
+        championBanner.textContent = "🏆 Campeones: " + championNames.join(" / ");
+        wrap.appendChild(championBanner);
+      }
+    }
+
+    card.appendChild(wrap);
+    appendDangerZone(card, t);
+  }
+
+  // Backlog de Agencia (padel): "Limpiar / Iniciar nuevo torneo" — Oscar
+  // confirmó (pregunta directa) que borra de verdad inscripciones y
+  // marcadores de ESA convocatoria para reusarla la próxima semana, así
+  // que exige escribir el nombre EXACTO para habilitar el botón, mismo
+  // criterio que "Zona de peligro" al borrar un tenant completo.
+  // Backlog de Agencia (ronda de reestructura): Oscar reportó que la
+  // confirmación anterior no lo dejaba borrar y pidió simplificarla —
+  // "escribir el nombre exacto es más que suficiente". Se quitaron: el
+  // popup extra de confirm() del navegador, y los campos de fecha
+  // obligatorios (con 'required', el navegador bloqueaba el submit en
+  // silencio si se dejaban vacíos). Las fechas ahora son opcionales — si
+  // se dejan vacías, la convocatoria se reabre con las mismas fechas que
+  // ya tenía (ver resetTournament en src/padel.ts).
+  function appendDangerZone(card, t) {
+    var zone = document.createElement("div");
+    zone.className = "padelDangerZone";
+    var heading = document.createElement("h4");
+    heading.textContent = "Zona de peligro";
+    zone.appendChild(heading);
+    var desc = document.createElement("p");
+    desc.className = "page-sub";
+    desc.style.marginBottom = "10px";
+    desc.textContent = "Borra las inscripciones y marcadores de esta convocatoria para reusarla la próxima semana con otros participantes. No se puede deshacer.";
+    zone.appendChild(desc);
+
+    var toggleBtn = document.createElement("button");
+    toggleBtn.className = "btn-danger";
+    toggleBtn.type = "button";
+    toggleBtn.textContent = "Limpiar / Iniciar nuevo torneo";
+
+    var form = document.createElement("form");
+    form.style.cssText = "display:none;margin-top:12px;";
+
+    var confirmLabelEl = document.createElement("label");
+    confirmLabelEl.style.cssText = "font-size:0.8rem;color:var(--text-muted);";
+    confirmLabelEl.textContent = "Escribe \\"" + t.label + "\\" para confirmar";
+    var confirmInput = document.createElement("input");
+    confirmInput.type = "text";
+    confirmInput.style.width = "100%";
+
+    var dateRow = document.createElement("div");
+    dateRow.style.cssText = "display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;";
+    var scheduledWrap = document.createElement("div");
+    scheduledWrap.style.cssText = "flex:1;min-width:180px;";
+    var scheduledLabel = document.createElement("label");
+    scheduledLabel.style.cssText = "font-size:0.8rem;color:var(--text-muted);";
+    scheduledLabel.textContent = "Nueva fecha y hora (opcional)";
+    var scheduledInput = document.createElement("input");
+    scheduledInput.type = "datetime-local";
+    scheduledInput.style.width = "100%";
+    scheduledWrap.appendChild(scheduledLabel);
+    scheduledWrap.appendChild(scheduledInput);
+
+    var deadlineWrap = document.createElement("div");
+    deadlineWrap.style.cssText = "flex:1;min-width:180px;";
+    var deadlineLabel = document.createElement("label");
+    deadlineLabel.style.cssText = "font-size:0.8rem;color:var(--text-muted);";
+    deadlineLabel.textContent = "Nueva hora límite (opcional)";
+    var deadlineInput = document.createElement("input");
+    deadlineInput.type = "datetime-local";
+    deadlineInput.style.width = "100%";
+    deadlineWrap.appendChild(deadlineLabel);
+    deadlineWrap.appendChild(deadlineInput);
+
+    dateRow.appendChild(scheduledWrap);
+    dateRow.appendChild(deadlineWrap);
+
+    var confirmBtn = document.createElement("button");
+    confirmBtn.className = "btn-danger";
+    confirmBtn.type = "submit";
+    confirmBtn.textContent = "Borrar y reiniciar";
+    confirmBtn.style.marginTop = "10px";
+    confirmBtn.disabled = true;
+
+    var msg = document.createElement("div");
+    msg.className = "error";
+
+    confirmInput.addEventListener("input", function () {
+      confirmBtn.disabled = confirmInput.value !== t.label;
+    });
+
+    toggleBtn.addEventListener("click", function () {
+      form.style.display = form.style.display === "none" ? "block" : "none";
+    });
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var body = { confirmLabel: confirmInput.value, scheduledAt: scheduledInput.value || null, registrationDeadline: deadlineInput.value || null };
+      api("/torneos/" + t.id + "/reset", { method: "POST", body: JSON.stringify(body) })
+        .then(function () { delete activePadelTab[t.id]; loadTournaments(); })
+        .catch(function (err) { msg.textContent = err.message; });
+    });
+
+    form.appendChild(confirmLabelEl);
+    form.appendChild(confirmInput);
+    form.appendChild(dateRow);
+    form.appendChild(confirmBtn);
+    form.appendChild(msg);
+
+    zone.appendChild(toggleBtn);
+    zone.appendChild(form);
+    card.appendChild(zone);
+  }
+
+  // Backlog de Agencia: Oscar pidió que las convocatorias se vean por
+  // pestañas, "no que venga uno abajo de otra" — un club puede tener
+  // varias a la vez (categorías/fechas distintas) y antes se apilaban
+  // todas en una sola lista larga.
+  var activeTournamentId = null;
+
+  // Backlog de Agencia (ronda de reestructura, ronda 2): Oscar pidió que
+  // el ranking de victorias (acumulado de TODO el club, no de un solo
+  // torneo) viva DENTRO de "Tabla de posiciones" y se vea igual — se
+  // cachea aquí porque es la misma info para cualquier convocatoria activa
+  // que se esté viendo, no hace falta pedirla de nuevo por cada tab.
+  var latestVictoriesLeaderboard = [];
+
+  function loadVictoriesLeaderboard() {
+    var tenantId = localStorage.getItem(STORAGE_TENANT) || "";
+    // Endpoint público (mismo que usa la pantalla de TV) — no necesita el
+    // token de sesión de /console.
+    return fetch("/api/pantalla/" + tenantId + "/victorias")
+      .then(function (res) { return res.ok ? res.json() : { leaderboard: [] }; })
+      .then(function (data) { latestVictoriesLeaderboard = data.leaderboard || []; })
+      .catch(function () { latestVictoriesLeaderboard = []; });
+  }
+
+  // Backlog de Agencia (ronda de reestructura): la sección "En vivo" solo
+  // muestra convocatorias que "siguen vivas" — 'finalizado' desaparece
+  // sola de la lista de pestañas (los datos siguen en D1, solo ya no
+  // ocupan espacio de trabajo activo).
+  function loadTournaments() {
+    Promise.all([api("/torneos"), loadVictoriesLeaderboard()]).then(function (results) {
+      var data = results[0];
+      var tabStrip = document.getElementById("tournamentsTabStrip");
+      var panel = document.getElementById("tournamentsPanel");
+      tabStrip.innerHTML = "";
+      panel.innerHTML = "";
+      var live = data.tournaments.filter(function (t) { return t.status !== "finalizado"; });
+      document.getElementById("tournamentsEmpty").style.display = live.length ? "none" : "block";
+      if (live.length === 0) return;
+
+      var stillValid = live.some(function (t) { return t.id === activeTournamentId; });
+      if (!activeTournamentId || !stillValid) activeTournamentId = live[live.length - 1].id;
+
+      live.forEach(function (t) {
+        var tab = document.createElement("button");
+        tab.type = "button";
+        tab.className = "padelTab" + (t.id === activeTournamentId ? " active" : "");
+        tab.textContent = t.label + (t.category ? " (" + t.category + ")" : "");
+        tab.addEventListener("click", function () {
+          activeTournamentId = t.id;
+          loadTournaments();
+        });
+        tabStrip.appendChild(tab);
+      });
+
+      var active = live.filter(function (t) { return t.id === activeTournamentId; })[0];
+      panel.appendChild(renderTournament(active));
+    });
+  }
+
+  // Backlog de Agencia (ronda de reestructura): "2 secciones
+  // seleccionables" al entrar a Torneos — Configuración (categorías,
+  // reglas por defecto, alta de convocatorias) vs. En vivo (pestañas de
+  // las retas/torneos activos).
+  document.getElementById("padelSectionConfigBtn").addEventListener("click", function () {
+    document.getElementById("padelSectionConfigBtn").classList.add("active");
+    document.getElementById("padelSectionLiveBtn").classList.remove("active");
+    document.getElementById("padelSectionConfig").style.display = "block";
+    document.getElementById("padelSectionLive").style.display = "none";
+  });
+  document.getElementById("padelSectionLiveBtn").addEventListener("click", function () {
+    document.getElementById("padelSectionLiveBtn").classList.add("active");
+    document.getElementById("padelSectionConfigBtn").classList.remove("active");
+    document.getElementById("padelSectionLive").style.display = "block";
+    document.getElementById("padelSectionConfig").style.display = "none";
+    loadTournaments();
+  });
+
+  document.getElementById("tournamentNewBtn").addEventListener("click", function () {
+    document.getElementById("tournamentFormPanel").style.display = "block";
+  });
+  document.getElementById("tournamentFormCancel").addEventListener("click", function () {
+    document.getElementById("tournamentFormPanel").style.display = "none";
+  });
+
+  // Backlog de Agencia (ronda de canchas + parejas): la modalidad
+  // (individual/pareja) se elige CADA VEZ que se abre una convocatoria
+  // nueva (Oscar, pregunta directa) — precargada con la modalidad por
+  // defecto del panel de Reglas, pero siempre editable aquí.
+  document.getElementById("tournamentModeInput").addEventListener("change", function () {
+    var isPareja = document.getElementById("tournamentModeInput").value === "pareja";
+    document.getElementById("tournamentCapacityUnitLabel").textContent = isPareja ? "parejas" : "jugadores";
+  });
+
+  document.getElementById("tournamentForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msgEl = document.getElementById("tournamentFormMsg");
+    var body = {
+      label: document.getElementById("tournamentLabelInput").value,
+      category: document.getElementById("tournamentCategoryInput").value || null,
+      registrationMode: document.getElementById("tournamentModeInput").value,
+      scheduledAt: document.getElementById("tournamentScheduledInput").value,
+      registrationDeadline: document.getElementById("tournamentDeadlineInput").value,
+      capacity: Number(document.getElementById("tournamentCapacityInput").value) || 20,
+      rounds: Number(document.getElementById("tournamentRoundsInput").value) || undefined,
+      courtCount: Number(document.getElementById("tournamentCourtCountInput").value) || undefined,
+    };
+    api("/torneos", { method: "POST", body: JSON.stringify(body) })
+      .then(function () {
+        document.getElementById("tournamentForm").reset();
+        document.getElementById("tournamentCapacityInput").value = "20";
+        document.getElementById("tournamentCapacityUnitLabel").textContent = "jugadores";
+        document.getElementById("tournamentFormPanel").style.display = "none";
+        loadPadelSettings();
+        loadTournaments();
+      })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
+  // Backlog de Agencia (padel, ronda de categorías) — cada categoría tiene
+  // su propio grupo de Telegram y normalmente un día fijo de la semana,
+  // editable (Oscar: "esto debe de ser configurable").
+  var WEEKDAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+  function loadCategories() {
+    api("/padel-categorias").then(function (data) {
+      var tbody = document.querySelector("#categoriesTable tbody");
+      tbody.innerHTML = "";
+      data.categories.forEach(function (cat) {
+        var tr = document.createElement("tr");
+        var tdName = document.createElement("td");
+        tdName.textContent = cat.category;
+        tdName.style.fontWeight = "600";
+
+        var tdWeekday = document.createElement("td");
+        var weekdaySelect = document.createElement("select");
+        var noneOpt = document.createElement("option");
+        noneOpt.value = "";
+        noneOpt.textContent = "Sin definir";
+        weekdaySelect.appendChild(noneOpt);
+        WEEKDAY_NAMES.forEach(function (name, idx) {
+          var opt = document.createElement("option");
+          opt.value = String(idx);
+          opt.textContent = name;
+          if (cat.weekday === idx) opt.selected = true;
+          weekdaySelect.appendChild(opt);
+        });
+        tdWeekday.appendChild(weekdaySelect);
+
+        var tdChat = document.createElement("td");
+        var chatInput = document.createElement("input");
+        chatInput.type = "text";
+        chatInput.placeholder = "Ej. -1001234567890";
+        chatInput.value = cat.chatId || "";
+        chatInput.style.width = "180px";
+        tdChat.appendChild(chatInput);
+
+        var tdSave = document.createElement("td");
+        var saveBtn = document.createElement("button");
+        saveBtn.className = "btn-secondary";
+        saveBtn.textContent = "Guardar";
+        saveBtn.addEventListener("click", function () {
+          var body = {
+            weekday: weekdaySelect.value === "" ? null : Number(weekdaySelect.value),
+            chatId: chatInput.value.trim() || null,
+          };
+          api("/padel-categorias/" + cat.category, { method: "PUT", body: JSON.stringify(body) })
+            .then(function () {
+              saveBtn.textContent = "¡Guardado!";
+              setTimeout(function () { saveBtn.textContent = "Guardar"; }, 1500);
+            });
+        });
+        tdSave.appendChild(saveBtn);
+
+        tr.appendChild(tdName); tr.appendChild(tdWeekday); tr.appendChild(tdChat); tr.appendChild(tdSave);
+        tbody.appendChild(tr);
+      });
+    });
+  }
+
+  function loadPadelSettings() {
+    api("/padel-settings").then(function (data) {
+      document.getElementById("padelRoundsInput").value = data.rounds;
+      document.getElementById("padelCourtCountInput").value = data.courtCount;
+      document.getElementById("padelDefaultModeInput").value = data.defaultRegistrationMode;
+      document.getElementById("tournamentModeInput").value = data.defaultRegistrationMode;
+      document.getElementById("tournamentModeInput").dispatchEvent(new Event("change"));
+      // Backlog de Agencia (ronda de reestructura): rondas/canchas ahora
+      // se preguntan por convocatoria — esto solo precarga el formulario
+      // con los defaults del tenant, siempre editable antes de abrir.
+      document.getElementById("tournamentRoundsInput").value = data.rounds;
+      document.getElementById("tournamentCourtCountInput").value = data.courtCount;
+    });
+  }
+
+  document.getElementById("padelSettingsForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msgEl = document.getElementById("padelSettingsMsg");
+    var body = {
+      rounds: Number(document.getElementById("padelRoundsInput").value),
+      courtCount: Number(document.getElementById("padelCourtCountInput").value),
+      defaultRegistrationMode: document.getElementById("padelDefaultModeInput").value,
+    };
+    api("/padel-settings", { method: "PUT", body: JSON.stringify(body) })
+      .then(function () { msgEl.className = ""; msgEl.textContent = ""; })
+      .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
+  // Backlog de Agencia (ronda de reestructura, ronda 2): Oscar pidió que
+  // estos links dejen de ser "copiar" y abran directo en otra pestaña.
+  document.getElementById("posterScreenBtn").addEventListener("click", function () {
+    var tenantId = localStorage.getItem(STORAGE_TENANT) || "";
+    window.open(window.location.origin + "/pantalla/" + tenantId, "_blank");
+  });
+
   function loadReviewLink() {
     api("/review-link").then(function (data) {
       document.getElementById("reviewLinkInput").value = data.reviewLink || "";
@@ -1167,6 +2251,63 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     });
   });
 
+  // Backlog de Agencia (White-label, subida real de imagen): el negocio
+  // puede subir una foto tomada con el celular, así que se redimensiona
+  // sola en el navegador (canvas, máx 512px de lado, JPEG) antes de
+  // mandarla — evita depender de que el cliente la edite/comprima a mano
+  // y mantiene el payload chico sin importar el tamaño real de la foto.
+  document.getElementById("brandingLogoFile").addEventListener("change", function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var msgEl = document.getElementById("brandingMsg");
+    msgEl.className = "";
+    msgEl.textContent = "Subiendo…";
+
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      var img = new Image();
+      img.onload = function () {
+        var maxDim = 512;
+        var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function (blob) {
+          if (!blob) {
+            msgEl.className = "error";
+            msgEl.textContent = "No se pudo procesar la imagen.";
+            return;
+          }
+          fetch("/api/client/branding/logo", {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + token(), "Content-Type": blob.type },
+            body: blob,
+          }).then(function (res) {
+            return res.json().then(function (data) {
+              if (!res.ok) throw new Error(data.error || "Error");
+              return data;
+            });
+          }).then(function (data) {
+            document.getElementById("brandingLogoUrl").value = data.brandLogoUrl;
+            msgEl.className = "success-msg";
+            msgEl.textContent = "Logo subido y guardado.";
+            loadBranding();
+          }).catch(function (err) {
+            msgEl.className = "error";
+            msgEl.textContent = err.message;
+          });
+        }, "image/jpeg", 0.85);
+      };
+      img.onerror = function () {
+        msgEl.className = "error";
+        msgEl.textContent = "No se pudo leer esa imagen.";
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
   document.getElementById("resetBrandingBtn").addEventListener("click", function () {
     document.getElementById("brandingName").value = "";
     document.getElementById("brandingLogoUrl").value = "";
@@ -1267,23 +2408,59 @@ export const CONSOLE_HTML = `<!DOCTYPE html>
     });
   }
 
+  // Backlog de Agencia: Oscar detectó que /console mostraba las mismas
+  // pestañas a TODOS los tenants sin importar su giro — un dentista veía
+  // "Torneos", un CRM/tienda sin agenda veía "Citas", etc. La plantilla de
+  // cada giro (D6) YA declara qué tools tiene habilitadas; /console solo
+  // necesitaba preguntárselo al servidor (GET /vertical) y usar eso para
+  // decidir qué pestañas mostrar, en vez de mostrarlas todas siempre.
+  var tenantToolsEnabled = [];
+  function hasTool(name) { return tenantToolsEnabled.indexOf(name) !== -1; }
+
+  function setTabVisible(tabName, visible) {
+    var navBtn = document.querySelector('.nav-item[data-tab="' + tabName + '"]');
+    if (navBtn) navBtn.style.display = visible ? "" : "none";
+  }
+
+  function loadVerticalCapabilities() {
+    return api("/vertical")
+      .then(function (data) { tenantToolsEnabled = data.toolsEnabled || []; })
+      .catch(function () { tenantToolsEnabled = []; })
+      .then(function () {
+        var bookingEnabled = hasTool("checkAvailability") || hasTool("bookAppointment");
+        var catalogEnabled = hasTool("searchCatalog");
+        var tournamentsEnabled = hasTool("registerForTournament");
+        setTabVisible("citas", bookingEnabled);
+        setTabVisible("catalogo", catalogEnabled);
+        setTabVisible("torneos", tournamentsEnabled);
+        document.getElementById("staffPanel").style.display = bookingEnabled ? "block" : "none";
+        return { bookingEnabled: bookingEnabled, catalogEnabled: catalogEnabled, tournamentsEnabled: tournamentsEnabled };
+      });
+  }
+
   function loadAll() {
-    loadToday();
-    loadWeek();
-    loadAppointments();
-    loadClients();
-    loadHealth();
-    loadAlertSettings();
-    loadReviewLink();
-    loadLeadReengagement();
-    loadAutoResume();
-    loadHandoffKeywords();
-    loadStaffMembers();
-    loadKbGaps();
-    loadKbDocs();
-    loadCatalogItems();
-    loadConversations();
-    loadBranding();
+    loadVerticalCapabilities().then(function (caps) {
+      loadToday();
+      loadWeek();
+      if (caps.bookingEnabled) { loadAppointments(); loadStaffMembers(); }
+      loadClients();
+      loadHealth();
+      loadAlertSettings();
+      loadReviewLink();
+      loadLeadReengagement();
+      loadAutoResume();
+      loadHandoffKeywords();
+      loadKbGaps();
+      loadKbDocs();
+      if (caps.catalogEnabled) loadCatalogItems();
+      if (caps.tournamentsEnabled) {
+        loadCategories();
+        loadPadelSettings();
+        loadTournaments();
+      }
+      loadConversations();
+      loadBranding();
+    });
   }
 
   document.getElementById("loginForm").addEventListener("submit", function (e) {

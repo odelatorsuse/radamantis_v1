@@ -26,9 +26,17 @@ describe("getChannelProvider", () => {
     expect(provider?.displayName).toBe("Instagram");
   });
 
-  it("devuelve null para un canal sin adaptador todavía (ej. whatsapp)", () => {
-    expect(getChannelProvider("whatsapp")).toBeNull();
+  // Backlog de Agencia (WhatsApp): whatsapp ya tiene adaptador real, dejó de
+  // ser el ejemplo de "canal sin adaptador".
+  it("devuelve el adaptador de whatsapp", () => {
+    const provider = getChannelProvider("whatsapp");
+    expect(provider?.channel).toBe("whatsapp");
+    expect(provider?.displayName).toBe("WhatsApp");
+  });
+
+  it("devuelve null para un canal sin adaptador todavía (ej. messenger de escritorio)", () => {
     expect(getChannelProvider("messenger")).toBeNull();
+    expect(getChannelProvider("sms")).toBeNull();
   });
 });
 
@@ -39,5 +47,6 @@ describe("listSupportedChannels", () => {
     expect(channels).toContain("web");
     expect(channels).toContain("facebook");
     expect(channels).toContain("instagram");
+    expect(channels).toContain("whatsapp");
   });
 });

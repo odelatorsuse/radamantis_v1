@@ -129,6 +129,24 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   h2.section-title { font-size: 1rem; color: var(--accent); margin: 28px 0 12px; display: flex; align-items: center; gap: 8px; text-shadow: 0 0 16px rgba(16,185,129,0.28); }
   .panel { background: var(--panel); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
 
+  /* --- Backlog (Agencia: tablero Kanban de modificaciones pendientes a
+     Radamantis). 6 columnas es demasiado para un grid de columnas
+     iguales en pantallas normales — scroll horizontal con ancho mínimo
+     por columna en vez de exprimirlas, igual de usable en desktop y
+     celular. --- */
+  .kanbanBoard { display: flex; gap: 16px; margin-top: 6px; overflow-x: auto; padding-bottom: 10px; }
+  .kanbanColumn { background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; min-height: 220px; flex: 0 0 250px; transition: box-shadow 0.15s; }
+  .kanbanColumn.dragover { box-shadow: inset 0 0 0 2px var(--accent); }
+  .kanbanColumnTitle { font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .kanbanColumnTitle .count { background: var(--glass); border-radius: 999px; padding: 1px 8px; font-size: 0.75rem; }
+  .kanbanCard { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 10px; cursor: grab; }
+  .kanbanCard.dragging { opacity: 0.4; }
+  .kanbanCardTitle { font-weight: 600; font-size: 0.92rem; }
+  .kanbanCardDesc { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; white-space: pre-wrap; }
+  .kanbanCardNotes { font-size: 0.76rem; color: var(--accent); margin-top: 6px; font-style: italic; white-space: pre-wrap; }
+  .kanbanCardActions { display: flex; gap: 6px; margin-top: 8px; }
+  .kanbanCardActions button { font-size: 0.72rem; padding: 4px 8px; }
+
   /* --- Conectores (Agencia: canales disponibles con íconos reales) --- */
   .connector-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; margin-bottom: 6px; }
   .connector-card {
@@ -304,6 +322,10 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     <button class="nav-item" data-tab="platform" id="navPlatform">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><circle cx="7" cy="6.5" r="0.6" fill="currentColor" stroke="none"/><circle cx="10" cy="6.5" r="0.6" fill="currentColor" stroke="none"/></svg>
       Plataforma
+    </button>
+    <button class="nav-item" data-tab="backlog" id="navBacklog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="16" rx="1.5"/><rect x="9.5" y="4" width="6" height="10" rx="1.5"/><rect x="16" y="4" width="6" height="7" rx="1.5"/></svg>
+      Backlog
     </button>
   </nav>
   <button class="secondary" id="logoutBtn" style="margin-top:auto">Cerrar sesión</button>
@@ -500,6 +522,14 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
               <label style="display:block;font-size:0.8rem;color:var(--text-muted);margin-bottom:4px">Personal a agendar por separado (opcional)</label>
               <input id="tenantStaffInput" placeholder="ej. Ana, Carlos — vacío si agenda con el negocio en general" style="width:100%;display:block" />
             </div>
+            <div id="tenantPadelModeGroup" style="display:none;margin-top:14px">
+              <label style="display:block;font-size:0.8rem;color:var(--text-muted);margin-bottom:4px">¿Cómo juegan normalmente?</label>
+              <select id="tenantPadelModeInput" style="width:100%;display:block">
+                <option value="individual">Retas americanas (pareja rotativa)</option>
+                <option value="pareja">Torneos de pareja fija</option>
+              </select>
+              <p style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">Solo precarga el formulario de "Nueva convocatoria" en su consola — cada convocatoria puede elegir su propia modalidad de todos modos.</p>
+            </div>
             <p id="tenantCatalogHint" style="display:none;font-size:0.78rem;color:var(--text-muted);margin-top:10px"></p>
 
             <button type="submit" style="margin-top:16px">Crear cliente</button>
@@ -641,6 +671,55 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
         <button type="submit">Guardar</button>
       </form>
       <p id="platformSettingsMsg"></p>
+    </div>
+  </section>
+
+  <!-- Tab: Backlog (solo rol admin) — Agencia: tablero Kanban de
+       modificaciones pendientes a Radamantis mismo. -->
+  <section class="tab-view" id="tab-backlog">
+    <div class="topbar">
+      <div>
+        <div class="breadcrumb">Panel / Backlog</div>
+        <h1 class="page-title">Backlog</h1>
+      </div>
+    </div>
+    <p style="font-size:0.85rem;color:var(--text-muted)">Modificaciones pendientes a Radamantis — arrastra una tarjeta para cambiar su estado. "Pendiente" = necesita algo de ti (aprobarla, aclararla, revisar una duda). Mover una tarjeta a "Aprobado" es lo que dispara que se empiece a trabajar en ella. "En espera" = la pausamos a propósito, no es prioridad ahora. "Test" = código hecho y probado, esperando que la pruebes o apruebes el deploy. "Terminada" = ya desplegada y confirmada.</p>
+
+    <div class="panel">
+      <h3 style="margin-top:0">+ Nueva tarea</h3>
+      <form id="backlogForm">
+        <input id="backlogTitleInput" placeholder="Título (ej. 'Agregar recordatorio de cita por SMS')" required style="margin-bottom:8px" />
+        <textarea id="backlogDescInput" placeholder="Detalle (opcional)" style="width:100%;min-height:60px;margin-bottom:8px"></textarea>
+        <button type="submit">Agregar</button>
+      </form>
+      <p class="error" id="backlogFormMsg"></p>
+    </div>
+
+    <div class="kanbanBoard" id="kanbanBoard">
+      <div class="kanbanColumn" data-status="pendiente">
+        <div class="kanbanColumnTitle"><span>Pendiente</span><span class="count" id="kanbanCountPendiente">0</span></div>
+        <div class="kanbanCards" id="kanbanCardsPendiente"></div>
+      </div>
+      <div class="kanbanColumn" data-status="aprobado">
+        <div class="kanbanColumnTitle"><span>Aprobado</span><span class="count" id="kanbanCountAprobado">0</span></div>
+        <div class="kanbanCards" id="kanbanCardsAprobado"></div>
+      </div>
+      <div class="kanbanColumn" data-status="en_espera">
+        <div class="kanbanColumnTitle"><span>En espera</span><span class="count" id="kanbanCountEnEspera">0</span></div>
+        <div class="kanbanCards" id="kanbanCardsEnEspera"></div>
+      </div>
+      <div class="kanbanColumn" data-status="en_progreso">
+        <div class="kanbanColumnTitle"><span>En progreso</span><span class="count" id="kanbanCountEnProgreso">0</span></div>
+        <div class="kanbanCards" id="kanbanCardsEnProgreso"></div>
+      </div>
+      <div class="kanbanColumn" data-status="test">
+        <div class="kanbanColumnTitle"><span>Test</span><span class="count" id="kanbanCountTest">0</span></div>
+        <div class="kanbanCards" id="kanbanCardsTest"></div>
+      </div>
+      <div class="kanbanColumn" data-status="terminada">
+        <div class="kanbanColumnTitle"><span>Terminada</span><span class="count" id="kanbanCountTerminada">0</span></div>
+        <div class="kanbanCards" id="kanbanCardsTerminada"></div>
+      </div>
     </div>
   </section>
 
@@ -804,6 +883,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     document.getElementById("navUsage").style.display = admin ? "" : "none";
     document.getElementById("navTeam").style.display = admin ? "" : "none";
     document.getElementById("navPlatform").style.display = admin ? "" : "none";
+    document.getElementById("navBacklog").style.display = admin ? "" : "none";
     document.getElementById("tenantCreateSection").style.display = admin ? "" : "none";
     document.getElementById("deleteTenantPanel").style.display = admin ? "" : "none";
   }
@@ -867,6 +947,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     spa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c4 3.2 7 7.5 7 11.2A7 7 0 0 1 5 13.2C5 9.5 8 5.2 12 2z"/></svg>',
     inmobiliaria: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
     coach: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>',
+    padel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="10" height="13" rx="5"/><circle cx="11" cy="8.5" r="0.1"/><path d="M11 15v3M8 21h6"/><circle cx="19" cy="19" r="2.2"/></svg>',
     sandbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>'
   };
 
@@ -883,6 +964,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     spa: "Tratamientos, paquetes y citas.",
     inmobiliaria: "Zonas, tipos de propiedad y visitas.",
     coach: "Sesiones, metodología y precios.",
+    padel: "Convocatorias de Retas Americanas por grupo de Telegram, cupo y lista de espera.",
     sandbox: "Genérico, sin KB ni handoff (pruebas)."
   };
 
@@ -910,6 +992,11 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     } else {
       catalogHint.style.display = "none";
     }
+    // Backlog de Agencia (ronda de canchas + parejas): padel es especial —
+    // no se deriva de toolsEnabled (sus 3 tools de torneo no lo delatan),
+    // así que se especifica el giro directo, mismo criterio documentado
+    // en el comentario de arriba de VERTICAL_TOOLS.
+    document.getElementById("tenantPadelModeGroup").style.display = selectedVerticalId === "padel" ? "block" : "none";
   }
 
   function renderVerticalGrid(verticals) {
@@ -1042,6 +1129,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       loadCloudflareUsage();
       loadTeam().catch(function () {});
       loadPlatformSettings().catch(function () {});
+      loadBacklog().catch(function () {});
     }
   }
 
@@ -1085,6 +1173,130 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     api("/platform-settings", { method: "PUT", body: JSON.stringify(body) })
       .then(function () { msgEl.className = "success-msg"; msgEl.textContent = "Guardado."; })
       .catch(function (err) { msgEl.className = "error"; msgEl.textContent = err.message; });
+  });
+
+  // Backlog de Agencia: tablero Kanban de modificaciones pendientes a
+  // Radamantis mismo — arrastrar una tarjeta entre columnas cambia su
+  // status (PUT /backlog/:id). Drag-and-drop nativo del navegador (HTML5
+  // DnD API), sin librería — mismo criterio "vanilla JS" de todo el panel.
+  var KANBAN_COLUMN_IDS = {
+    pendiente: "kanbanCardsPendiente", aprobado: "kanbanCardsAprobado", en_espera: "kanbanCardsEnEspera",
+    en_progreso: "kanbanCardsEnProgreso", test: "kanbanCardsTest", terminada: "kanbanCardsTerminada",
+  };
+  var KANBAN_COUNT_IDS = {
+    pendiente: "kanbanCountPendiente", aprobado: "kanbanCountAprobado", en_espera: "kanbanCountEnEspera",
+    en_progreso: "kanbanCountEnProgreso", test: "kanbanCountTest", terminada: "kanbanCountTerminada",
+  };
+
+  function loadBacklog() {
+    return api("/backlog").then(function (data) {
+      Object.keys(KANBAN_COLUMN_IDS).forEach(function (status) {
+        document.getElementById(KANBAN_COLUMN_IDS[status]).innerHTML = "";
+      });
+      var counts = { pendiente: 0, aprobado: 0, en_espera: 0, en_progreso: 0, test: 0, terminada: 0 };
+      data.items.forEach(function (item) {
+        var status = KANBAN_COLUMN_IDS[item.status] ? item.status : "pendiente";
+        counts[status]++;
+        document.getElementById(KANBAN_COLUMN_IDS[status]).appendChild(renderBacklogCard(item));
+      });
+      Object.keys(KANBAN_COUNT_IDS).forEach(function (status) {
+        document.getElementById(KANBAN_COUNT_IDS[status]).textContent = String(counts[status]);
+      });
+    });
+  }
+
+  function renderBacklogCard(item) {
+    var card = document.createElement("div");
+    card.className = "kanbanCard";
+    card.draggable = true;
+    card.dataset.id = String(item.id);
+    card.addEventListener("dragstart", function () {
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", function () {
+      card.classList.remove("dragging");
+    });
+
+    var title = document.createElement("div");
+    title.className = "kanbanCardTitle";
+    title.textContent = item.title;
+    card.appendChild(title);
+
+    if (item.description) {
+      var desc = document.createElement("div");
+      desc.className = "kanbanCardDesc";
+      desc.textContent = item.description;
+      card.appendChild(desc);
+    }
+
+    if (item.resultNotes) {
+      var notes = document.createElement("div");
+      notes.className = "kanbanCardNotes";
+      notes.textContent = item.resultNotes;
+      card.appendChild(notes);
+    }
+
+    var actions = document.createElement("div");
+    actions.className = "kanbanCardActions";
+    var editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "secondary";
+    editBtn.textContent = "Editar";
+    editBtn.addEventListener("click", function () {
+      var newTitle = prompt("Título:", item.title);
+      if (newTitle === null) return;
+      var newDesc = prompt("Detalle:", item.description || "");
+      if (newDesc === null) return;
+      api("/backlog/" + item.id, { method: "PUT", body: JSON.stringify({ title: newTitle, description: newDesc }) }).then(loadBacklog);
+    });
+    var delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "secondary";
+    delBtn.textContent = "Borrar";
+    delBtn.addEventListener("click", function () {
+      if (!confirm('¿Borrar "' + item.title + '"?')) return;
+      api("/backlog/" + item.id, { method: "DELETE" }).then(loadBacklog);
+    });
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    card.appendChild(actions);
+
+    return card;
+  }
+
+  document.querySelectorAll(".kanbanColumn").forEach(function (column) {
+    column.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      column.classList.add("dragover");
+    });
+    column.addEventListener("dragleave", function () {
+      column.classList.remove("dragover");
+    });
+    column.addEventListener("drop", function (e) {
+      e.preventDefault();
+      column.classList.remove("dragover");
+      var dragging = document.querySelector(".kanbanCard.dragging");
+      if (!dragging) return;
+      var id = dragging.dataset.id;
+      var newStatus = column.dataset.status;
+      api("/backlog/" + id, { method: "PUT", body: JSON.stringify({ status: newStatus }) }).then(loadBacklog);
+    });
+  });
+
+  document.getElementById("backlogForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msgEl = document.getElementById("backlogFormMsg");
+    var body = {
+      title: document.getElementById("backlogTitleInput").value,
+      description: document.getElementById("backlogDescInput").value || null,
+    };
+    api("/backlog", { method: "POST", body: JSON.stringify(body) })
+      .then(function () {
+        document.getElementById("backlogForm").reset();
+        msgEl.textContent = "";
+        loadBacklog();
+      })
+      .catch(function (err) { msgEl.textContent = err.message; });
   });
 
   function loadTeam() {
@@ -1864,6 +2076,15 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
           );
         }
 
+        if (selectedVerticalId === "padel") {
+          var padelMode = document.getElementById("tenantPadelModeInput").value;
+          steps.push(
+            api("/tenants/" + newTenantId + "/padel-settings", { method: "PUT", body: JSON.stringify({ defaultRegistrationMode: padelMode }) })
+              .then(function () { notes.push("Modalidad por defecto: " + (padelMode === "pareja" ? "torneo de parejas" : "reta americana") + " ✓"); })
+              .catch(function () { notes.push("No se pudo guardar la modalidad por defecto, ajústala desde su consola (Torneos → Reglas)."); })
+          );
+        }
+
         return Promise.all(steps).then(function () { return notes; });
       })
       .then(function (notes) {
@@ -1923,7 +2144,28 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
       oauthNote: "Instagram se conecta con el mismo botón de Facebook — tu cuenta debe estar vinculada a una Página. Si ya conectaste Facebook para este tenant y tu Instagram estaba vinculado, ya quedó conectado también.",
       fields: [],
     },
-    whatsapp: { name: "WhatsApp", comingSoon: true, fields: [] },
+    // Backlog de Agencia (WhatsApp, "tan fácil como Telegram"): a diferencia
+    // de Facebook/Instagram (un botón OAuth), conectar WhatsApp requiere que
+    // el CLIENTE haga un paso manual en Meta primero (agregar a Oscar como
+    // Partner de su WhatsApp Business Account) — Meta no expone ninguna API
+    // para automatizar eso. El checklist real vive aquí como nota, no en una
+    // app aparte. Una vez hecho ese paso, dar de alta el canal en Radamantis
+    // es tan simple como Telegram: pegar 3 datos y listo.
+    whatsapp: {
+      name: "WhatsApp",
+      note:
+        "Antes de llenar esto, el cliente debe agregarte como Partner de su WhatsApp Business Account " +
+        "(Meta Business Suite → Configuración del negocio → Socios → Agregar → dale tu ID de negocio de Meta). " +
+        "Ese paso es 100% manual — Meta no tiene API para automatizarlo. Después, junta estos 3 datos desde " +
+        "el Meta Business Suite del cliente (o tu propia cuenta si ya tienes acceso): el Phone Number ID y el " +
+        "WABA ID (Configuración de WhatsApp → Números de teléfono/API), y TU System User Access Token " +
+        "(el mismo para todos tus clientes, se genera una sola vez en tu Business Manager).",
+      fields: [
+        { key: "phoneNumberId", label: "Phone Number ID", placeholder: "1234567890", hint: "El id del número de WhatsApp del cliente, no el número telefónico en sí." },
+        { key: "wabaId", label: "WABA ID", placeholder: "9876543210", hint: "El id de su WhatsApp Business Account." },
+        { key: "accessToken", label: "Tu System User Access Token", placeholder: "token de tu Business Manager", hint: "El mismo token para todos tus clientes — se genera una sola vez en tu propio Business Manager." },
+      ],
+    },
   };
 
   var CHANNEL_ORDER = ["telegram", "web", "facebook", "instagram", "whatsapp"];
@@ -1992,6 +2234,12 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     }
 
     submitBtn.style.display = "";
+    if (cfg.note) {
+      var noteEl = document.createElement("p");
+      noteEl.style.cssText = "font-size:0.8rem;color:var(--text-muted);margin:2px 0 10px;flex-basis:100%";
+      noteEl.textContent = cfg.note;
+      container.appendChild(noteEl);
+    }
     cfg.fields.forEach(function (field) {
       var group = document.createElement("div");
       group.className = "channel-field-group";

@@ -74,7 +74,11 @@ index_name = "radamantis-kb"
 [triggers]
 crons = ["*/30 * * * *"]
 
-# Etapa 5 en adelante (requiere Workers Paid si se necesita almacenar archivos):
+# Etapa 5 en adelante (requiere habilitar R2 desde el Cloudflare Dashboard
+# primero — intentado 2026-09-05 para la subida real de logo en White-label,
+# `wrangler r2 bucket create` falló con "Please enable R2 through the
+# Cloudflare Dashboard" [code: 10042]. Mientras tanto, la subida de logo usa
+# un data URI guardado directo en D1 — ver setBranding/POST /branding/logo):
 # [[r2_buckets]]
 # binding = "MEDIA"
 # bucket_name = "radamantis-media"

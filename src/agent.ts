@@ -9,6 +9,16 @@ import { createHandoff, detectsHandoffRequest, detectsUrgentSentiment, HANDOFF_R
 import { OpenAIProvider } from "./llm/openai";
 import { buildMessages, type LLMMessage, type LLMUsage } from "./llm/provider";
 import { appendMessage, getHistory, type ConversationRef } from "./messages";
+import {
+  CANCEL_TOURNAMENT_REGISTRATION_TOOL,
+  CHECK_TOURNAMENT_STATUS_TOOL,
+  CONFIRM_ATTENDANCE_TOOL,
+  executeCancelTournamentRegistrationTool,
+  executeCheckTournamentStatusTool,
+  executeConfirmAttendanceTool,
+  executeRegisterForTournamentTool,
+  REGISTER_FOR_TOURNAMENT_TOOL,
+} from "./padelTool";
 import { buildSystemPrompt, hasRelevantMatch } from "./prompts";
 import { embedText } from "./rag/embeddings";
 import { recordKbGap } from "./rag/gaps";
@@ -40,11 +50,20 @@ interface ReplyRequest extends ConversationRef {
   // cuenta (push, ej. Telegram) o necesita la respuesta en la misma
   // petición (ej. el widget de sitio web, que por eso nunca manda esto).
   bufferSeconds?: number;
+  // Backlog de Agencia (padel, Fase 1): quién escribió ESTE mensaje en
+  // particular — normalmente igual a chatId (una conversación 1:1 es su
+  // propio remitente), pero distinto cuando la conversación es un GRUPO de
+  // Telegram compartido (ej. la convocatoria de un torneo), donde chatId es
+  // el grupo pero cada jugador tiene su propio id individual. Solo lo usan
+  // las tools de torneo (identidad real del jugador para inscripción/
+  // cancelación e intento de DM privado) — el resto del agente ni lo mira.
+  senderId?: string;
 }
 
 const PENDING_TEXTS_KEY = "pendingTexts";
 const PENDING_REF_KEY = "pendingRef";
 const PENDING_VERTICAL_KEY = "pendingVerticalId";
+const PENDING_SENDER_KEY = "pendingSenderId";
 
 function sumUsage(a: LLMUsage, b: LLMUsage): LLMUsage {
   return { promptTokens: a.promptTokens + b.promptTokens, completionTokens: a.completionTokens + b.completionTokens };
@@ -59,9 +78,10 @@ export class ConversationAgent {
   ) {}
 
   async fetch(request: Request): Promise<Response> {
-    const { tenantId, channel, chatId, userText, verticalId, bufferSeconds } = (await request.json()) as ReplyRequest;
+    const { tenantId, channel, chatId, userText, verticalId, bufferSeconds, senderId } = (await request.json()) as ReplyRequest;
     const ref: ConversationRef = { tenantId, channel, chatId };
     const template = getVerticalTemplate(verticalId);
+    const resolvedSenderId = senderId ?? chatId;
 
     // Etapa 6 (CORE): mientras la conversación esté en handoff, el bot deja
     // de auto-responder — solo registra el mensaje para que lo vea un humano.
@@ -98,11 +118,19 @@ export class ConversationAgent {
       await this.state.storage.put(PENDING_TEXTS_KEY, pending);
       await this.state.storage.put(PENDING_REF_KEY, ref);
       await this.state.storage.put(PENDING_VERTICAL_KEY, verticalId);
+      // Backlog (padel, Fase 1): último remitente del lote gana — en un
+      // grupo, si dos personas distintas quedan en el mismo lote de 12s, la
+      // tool de torneo termina asociando la inscripción al último remitente
+      // conocido; no es perfecto, pero degrada bien: sin un senderId claro
+      // el aviso de promoción de lista de espera simplemente cae de vuelta a
+      // avisar en el grupo en vez de un DM privado (mismo comportamiento que
+      // ya tiene el fallback por diseño).
+      await this.state.storage.put(PENDING_SENDER_KEY, resolvedSenderId);
       await this.state.storage.setAlarm(Date.now() + bufferSeconds * 1000);
       return Response.json({ replyText: null });
     }
 
-    const replyText = await this.runAgentTurn(ref, verticalId, userText);
+    const replyText = await this.runAgentTurn(ref, verticalId, userText, resolvedSenderId);
     return Response.json({ replyText });
   }
 
@@ -113,9 +141,11 @@ export class ConversationAgent {
     const pending = await this.state.storage.get<string[]>(PENDING_TEXTS_KEY);
     const ref = await this.state.storage.get<ConversationRef>(PENDING_REF_KEY);
     const verticalId = await this.state.storage.get<string>(PENDING_VERTICAL_KEY);
+    const senderId = await this.state.storage.get<string>(PENDING_SENDER_KEY);
     await this.state.storage.delete(PENDING_TEXTS_KEY);
     await this.state.storage.delete(PENDING_REF_KEY);
     await this.state.storage.delete(PENDING_VERTICAL_KEY);
+    await this.state.storage.delete(PENDING_SENDER_KEY);
     if (!pending || pending.length === 0 || !ref || !verticalId) return;
 
     // Pudo pausarse mientras esperábamos (ej. un mensaje posterior en el
@@ -123,7 +153,7 @@ export class ConversationAgent {
     if (await isPaused(this.env.DB, ref)) return;
 
     const combinedText = pending.join("\n");
-    const replyText = await this.runAgentTurn(ref, verticalId, combinedText);
+    const replyText = await this.runAgentTurn(ref, verticalId, combinedText, senderId ?? ref.chatId);
     if (!replyText) return;
 
     // best-effort: para cuando dispara el alarm ya se borró el estado
@@ -145,7 +175,7 @@ export class ConversationAgent {
   // respuesta inmediata que para una encolada, `userText` ya viene
   // combinado si hubo buffer. Extraído a método propio para que fetch()
   // y alarm() lo compartan sin duplicar lógica.
-  private async runAgentTurn(ref: ConversationRef, verticalId: string, userText: string): Promise<string> {
+  private async runAgentTurn(ref: ConversationRef, verticalId: string, userText: string, senderId: string): Promise<string> {
     const { tenantId, channel } = ref;
     const template = getVerticalTemplate(verticalId);
 
@@ -180,14 +210,21 @@ export class ConversationAgent {
     const wantsCalendar =
       template.toolsEnabled.includes("checkAvailability") || template.toolsEnabled.includes("bookAppointment");
     if (wantsCalendar) {
-      const connection = await getValidAccessToken(
-        this.env.DB,
-        this.env.GOOGLE_OAUTH_CLIENT_ID,
-        this.env.GOOGLE_OAUTH_CLIENT_SECRET,
-        tenantId,
-      );
-      if (connection) {
-        calendarProvider = new GoogleCalendarProvider(connection.accessToken, connection.calendarId);
+      // ponytail: un refresh token revocado/expirado nunca debe tumbar todo
+      // el turno del agente (bloqueaba TODOS los canales del tenant) — se
+      // trata igual que "sin calendario conectado" (calendarProvider null).
+      try {
+        const connection = await getValidAccessToken(
+          this.env.DB,
+          this.env.GOOGLE_OAUTH_CLIENT_ID,
+          this.env.GOOGLE_OAUTH_CLIENT_SECRET,
+          tenantId,
+        );
+        if (connection) {
+          calendarProvider = new GoogleCalendarProvider(connection.accessToken, connection.calendarId);
+        }
+      } catch (err) {
+        console.error(`Calendar OAuth falló para tenant ${tenantId}:`, err);
       }
     }
 
@@ -211,21 +248,33 @@ export class ConversationAgent {
     const catalogChannelProvider = wantsCatalog ? getChannelProvider(channel) : null;
     const catalogExternalId = wantsCatalog ? await getChannelExternalId(this.env.DB, tenantId, channel) : null;
 
+    // Backlog de Agencia (padel, Fase 1: "Convocador Bot") — capacidad
+    // independiente del calendario/catálogo, sin dependencia OAuth como el
+    // calendario. channelProvider/externalId solo se resuelven si hace
+    // falta (los necesita el aviso de promoción de lista de espera).
+    const wantsTournamentRoster = template.toolsEnabled.includes("registerForTournament");
+    const tournamentChannelProvider = wantsTournamentRoster ? getChannelProvider(channel) : null;
+    const tournamentExternalId = wantsTournamentRoster ? await getChannelExternalId(this.env.DB, tenantId, channel) : null;
+
     const llm = new OpenAIProvider(this.env.OPENAI_API_KEY);
     const messages = buildMessages(systemPrompt, historyMessages, userText);
     const tools = [
       ...(calendarProvider ? [...buildCalendarTools(tenantSettings.staffMembers), RECORD_FEEDBACK_TOOL] : []),
       ...(wantsCatalog ? [SEARCH_CATALOG_TOOL] : []),
+      ...(wantsTournamentRoster
+        ? [CHECK_TOURNAMENT_STATUS_TOOL, REGISTER_FOR_TOURNAMENT_TOOL, CANCEL_TOURNAMENT_REGISTRATION_TOOL, CONFIRM_ATTENDANCE_TOOL]
+        : []),
     ];
 
     let completion = await llm.complete(messages, tools.length > 0 ? tools : undefined);
     let usage = completion.usage;
 
     // Una sola vuelta de tool-calling: si el modelo pidió herramientas, las
-    // ejecutamos contra el proveedor real (calendario y/o catálogo) y le
-    // devolvemos los resultados para que dé la respuesta final en texto. No
-    // se persisten los pasos intermedios en `messages`, solo el mensaje final.
-    if (completion.toolCalls.length > 0 && (calendarProvider || wantsCatalog)) {
+    // ejecutamos contra el proveedor real (calendario, catálogo y/o
+    // torneo) y le devolvemos los resultados para que dé la respuesta final
+    // en texto. No se persisten los pasos intermedios en `messages`, solo
+    // el mensaje final.
+    if (completion.toolCalls.length > 0 && (calendarProvider || wantsCatalog || wantsTournamentRoster)) {
       const toolResultMessages: LLMMessage[] = [];
       for (const toolCall of completion.toolCalls) {
         // Log de auditoría — sin esto, depurar "por qué dijo tal horario"
@@ -237,16 +286,31 @@ export class ConversationAgent {
             ? await executeFeedbackTool(this.env.DB, ref, toolCall.arguments)
             : toolCall.name === "searchCatalog"
               ? await executeSearchCatalogTool(this.env.DB, tenantId, toolCall.arguments, catalogChannelProvider, catalogExternalId, ref.chatId)
-              : calendarProvider
-                ? await executeCalendarTool(
-                    toolCall.name,
-                    toolCall.arguments,
-                    calendarProvider,
-                    tenantSettings.timezone,
-                    tenantSettings.businessHours,
-                    tenantSettings.staffMembers,
-                  )
-                : JSON.stringify({ error: `Tool desconocida: ${toolCall.name}` });
+              : toolCall.name === "checkTournamentStatus"
+                ? await executeCheckTournamentStatusTool(this.env.DB, ref, senderId, tenantSettings.timezone, toolCall.arguments)
+                : toolCall.name === "registerForTournament"
+                  ? await executeRegisterForTournamentTool(this.env.DB, ref, senderId, toolCall.arguments)
+                  : toolCall.name === "cancelTournamentRegistration"
+                    ? await executeCancelTournamentRegistrationTool(
+                        this.env.DB,
+                        ref,
+                        senderId,
+                        tournamentChannelProvider,
+                        tournamentExternalId,
+                        toolCall.arguments,
+                      )
+                    : toolCall.name === "confirmAttendance"
+                      ? await executeConfirmAttendanceTool(this.env.DB, ref, senderId, toolCall.arguments)
+                      : calendarProvider
+                        ? await executeCalendarTool(
+                            toolCall.name,
+                            toolCall.arguments,
+                            calendarProvider,
+                            tenantSettings.timezone,
+                            tenantSettings.businessHours,
+                            tenantSettings.staffMembers,
+                          )
+                        : JSON.stringify({ error: `Tool desconocida: ${toolCall.name}` });
         console.log("tool result", tenantId, toolCall.name, result);
         toolResultMessages.push({ role: "tool", content: result, toolCallId: toolCall.id });
 
